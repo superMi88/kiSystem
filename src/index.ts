@@ -188,7 +188,11 @@ app.post("/chat", async (req, res) => {
           },
           {
             name: "liste_programme",
-            description: "Gibt eine Liste aller registrierten Programme und deren Namen zurück.",
+            description: "Gibt eine Liste aller bereits registrierten Programme zurück.",
+          },
+          {
+            name: "scanne_system_nach_apps",
+            description: "Scannt den PC nach installierten Windows-Programmen und gibt deren Namen zurück.",
           }
         ] as any
       }]
@@ -200,7 +204,7 @@ app.post("/chat", async (req, res) => {
       history: chatHistory,
       systemInstruction: {
         role: "system",
-        parts: [{ text: "Du bist ein hilfreicher PC-Assistent. Du kannst das Licht steuern und Programme starten. Wenn der Benutzer ein Programm starten möchte, dessen Name nicht exakt übereinstimmt (z.B. 'Valo' statt 'Valorant'), nutze zuerst das Tool 'liste_programme', um den richtigen Namen zu finden. Antworte kurz und präzise." }]
+        parts: [{ text: "Du bist ein hilfreicher PC-Assistent. Du kannst das Licht steuern und Programme starten. Du hast Zugriff auf Tools zum Scannen des PCs nach installierten Apps (`scanne_system_nach_apps`) und zum Starten dieser Apps. Wenn der Nutzer nach Programmen fragt oder etwas starten will, das du nicht kennst, biete einen Scan an oder führe ihn direkt aus. Antworte kurz und präzise." }]
       }
     });
     
@@ -248,7 +252,15 @@ app.post("/chat", async (req, res) => {
           const args = call.args as { name: string };
           const appEntry = await prisma.appLauncher.findUnique({ where: { name: args.name } });
           if (appEntry) {
-            exec(`cmd /c start "" "${appEntry.path}"`, (err) => { if (err) console.error("Start-Fehler:", err); });
+            // Wenn der Pfad wie ein normaler Windows-Pfad aussieht (z.B. C:\...), 
+            // starten wir ihn direkt. Ansonsten nutzen wir den shell:AppsFolder (für AppIDs).
+            const isAbsolutePath = /^[a-zA-Z]:\\/.test(appEntry.path);
+            const startCommand = isAbsolutePath 
+              ? `cmd /c start "" "${appEntry.path}"`
+              : `cmd /c start "" "shell:AppsFolder\\${appEntry.path}"`;
+            
+            console.log(`Führe Start-Befehl aus: ${startCommand}`);
+            exec(startCommand, (err) => { if (err) console.error("Start-Fehler:", err); });
             toolResult = { status: "success", message: `${args.name} gestartet.` };
           } else {
             toolResult = { status: "error", message: `Programm '${args.name}' unbekannt.` };
@@ -256,6 +268,30 @@ app.post("/chat", async (req, res) => {
         } else if (call.name === "liste_programme") {
           const apps = await prisma.appLauncher.findMany();
           toolResult = { apps: apps.map(a => a.name) };
+        } else if (call.name === "scanne_system_nach_apps") {
+          console.log("Starte System-Scan nach Apps...");
+          const apps = await new Promise((resolve) => {
+            exec('powershell -Command "Get-StartApps | Select-Object Name, AppID | ConvertTo-Json"', (err, stdout) => {
+              if (err) return resolve({ error: "Scan fehlgeschlagen" });
+              try {
+                const rawApps = JSON.parse(stdout);
+                resolve(Array.isArray(rawApps) ? rawApps : [rawApps]);
+              } catch { resolve({ error: "Fehler beim Parsen der Programme" }); }
+            });
+          });
+          
+          if (Array.isArray(apps)) {
+            for (const app of apps) {
+              if (app.Name && app.AppID) {
+                await prisma.appLauncher.upsert({
+                  where: { name: app.Name },
+                  update: { path: app.AppID },
+                  create: { name: app.Name, path: app.AppID }
+                });
+              }
+            }
+          }
+          toolResult = { status: "success", message: `System-Scan abgeschlossen. ${Array.isArray(apps) ? apps.length : 0} Programme gefunden und registriert.` };
         }
       } catch (err) {
         toolResult = { status: "error", message: "Interner Tool-Fehler." };
