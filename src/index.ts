@@ -9,6 +9,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { PrismaClient } from "@prisma/client";
 import dotenv from "dotenv";
+import { exec } from "child_process";
 
 dotenv.config();
 
@@ -74,6 +75,49 @@ app.get("/sse", async (req, res) => {
   await server.connect(transport);
 });
 
+/**
+ * Conversations API
+ */
+app.get("/conversations", async (req, res) => {
+  const conversations = await prisma.conversation.findMany({
+    orderBy: { createdAt: 'desc' }
+  });
+  res.json(conversations);
+});
+
+app.get("/conversations/:id", async (req, res) => {
+  const messages = await prisma.chatMessage.findMany({
+    where: { conversationId: req.params.id },
+    orderBy: { createdAt: 'asc' }
+  });
+  res.json(messages);
+});
+
+/**
+ * App Launcher API
+ */
+app.post("/apps", async (req, res) => {
+  const { name, path } = req.body;
+  console.log("Empfange App-Registrierung:", name, path);
+  try {
+    const app = await prisma.appLauncher.upsert({
+      where: { name },
+      update: { path },
+      create: { name, path }
+    });
+    console.log("App erfolgreich gespeichert:", app);
+    res.json(app);
+  } catch (e: any) {
+    console.error("DB Fehler bei App-Registrierung:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/apps", async (req, res) => {
+  const apps = await prisma.appLauncher.findMany();
+  res.json(apps);
+});
+
 app.post("/messages", async (req, res) => {
   if (transport) {
     await transport.handlePostMessage(req, res);
@@ -86,18 +130,31 @@ app.post("/messages", async (req, res) => {
  * Gemini AI Integration
  */
 app.post("/chat", async (req, res) => {
-  const { message, audio } = req.body;
+  let { message, audio, conversationId } = req.body;
 
   try {
-    // Speichere Benutzer-Nachricht in DB (falls Text vorhanden)
-    if (message) {
+    // Erstelle neue Konversation, falls keine existiert
+    if (!conversationId) {
+      const title = message ? (message.substring(0, 30) + "...") : "Sprachnachricht";
+      const newConv = await prisma.conversation.create({
+        data: { title }
+      });
+      conversationId = newConv.id;
+    }
+
+    // Speichere Benutzer-Nachricht in DB (auch bei Audio)
+    if (message || audio) {
       await prisma.chatMessage.create({
-        data: { role: "user", text: message }
+        data: { 
+          role: "user", 
+          text: message || "🎤 Sprachnachricht", 
+          conversationId 
+        }
       });
     }
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-flash-latest",
+      model: "gemini-2.5-flash",
       tools: [{
         functionDeclarations: [
           {
@@ -117,74 +174,109 @@ app.post("/chat", async (req, res) => {
           {
             name: "pruefe_licht",
             description: "Gibt den aktuellen Status des Lichts zurück.",
+          },
+          {
+            name: "starte_programm",
+            description: "Startet ein registriertes Programm auf dem PC.",
+            parameters: {
+              type: SchemaType.OBJECT,
+              properties: {
+                name: { type: SchemaType.STRING, description: "Der Name des Programms" }
+              },
+              required: ["name"]
+            } as any
+          },
+          {
+            name: "liste_programme",
+            description: "Gibt eine Liste aller registrierten Programme und deren Namen zurück.",
           }
         ] as any
       }]
     });
 
-    const chat = model.startChat();
+    const chatHistory = conversationId ? (await prisma.chatMessage.findMany({ where: { conversationId }, orderBy: { createdAt: 'asc' } })).map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] })) : [];
+
+    const chat = model.startChat({
+      history: chatHistory,
+      systemInstruction: {
+        role: "system",
+        parts: [{ text: "Du bist ein hilfreicher PC-Assistent. Du kannst das Licht steuern und Programme starten. Wenn der Benutzer ein Programm starten möchte, dessen Name nicht exakt übereinstimmt (z.B. 'Valo' statt 'Valorant'), nutze zuerst das Tool 'liste_programme', um den richtigen Namen zu finden. Antworte kurz und präzise." }]
+      }
+    });
     
     // Baue die Nachricht für Gemini zusammen
     const promptParts: any[] = [];
     if (message) promptParts.push(message);
     if (audio) {
+      console.log("Empfange Audio-Daten (Base64 Länge):", audio.length);
       promptParts.push({
         inlineData: {
           data: audio,
-          mimeType: "audio/webm" // MediaRecorder nutzt meist webm
+          mimeType: "audio/webm"
         }
       });
     }
 
-    if (promptParts.length === 0) {
-      return res.status(400).json({ text: "Keine Daten empfangen." });
-    }
-
+    console.log("Sende Anfrage an Gemini mit", promptParts.length, "Teilen.");
     const result = await chat.sendMessage(promptParts);
     const response = result.response;
-    
     let aiText = "";
+    let currentResponse = response;
 
-    const calls = response.functionCalls();
-    if (calls && calls.length > 0) {
+    // Schleife für Tool-Chaining (falls Gemini mehrere Tools nacheinander aufrufen will)
+    let step = 0;
+    while (step < 5) {
+      const calls = currentResponse.functionCalls();
+      if (!calls || calls.length === 0) {
+        aiText = currentResponse.text();
+        break;
+      }
+
       const call = calls[0];
+      console.log(`KI ruft Tool auf (Schritt ${step + 1}):`, call.name, call.args);
+      
       let toolResult: any;
-
-      if (call.name === "schalte_licht") {
-        const args = call.args as { status: string };
-        const status = args.status;
-        await prisma.lichtStatus.upsert({
-          where: { id: 1 },
-          update: { status },
-          create: { id: 1, status },
-        });
-        toolResult = { status: "success", message: `Licht ist jetzt ${status}` };
-      } else if (call.name === "pruefe_licht") {
-        const entry = await prisma.lichtStatus.findUnique({ where: { id: 1 } });
-        toolResult = { status: entry?.status || "off" };
-      }
-
-      if (toolResult) {
-        const finalResult = await chat.sendMessage([{
-          functionResponse: {
-            name: call.name,
-            response: toolResult
+      try {
+        if (call.name === "schalte_licht") {
+          const args = call.args as { status: string };
+          await prisma.lichtStatus.upsert({ where: { id: 1 }, update: { status: args.status }, create: { id: 1, status: args.status } });
+          toolResult = { status: "success", message: `Licht ist ${args.status}` };
+        } else if (call.name === "pruefe_licht") {
+          const entry = await prisma.lichtStatus.findUnique({ where: { id: 1 } });
+          toolResult = { status: entry?.status || "off" };
+        } else if (call.name === "starte_programm") {
+          const args = call.args as { name: string };
+          const appEntry = await prisma.appLauncher.findUnique({ where: { name: args.name } });
+          if (appEntry) {
+            exec(`cmd /c start "" "${appEntry.path}"`, (err) => { if (err) console.error("Start-Fehler:", err); });
+            toolResult = { status: "success", message: `${args.name} gestartet.` };
+          } else {
+            toolResult = { status: "error", message: `Programm '${args.name}' unbekannt.` };
           }
-        }]);
-        aiText = finalResult.response.text();
+        } else if (call.name === "liste_programme") {
+          const apps = await prisma.appLauncher.findMany();
+          toolResult = { apps: apps.map(a => a.name) };
+        }
+      } catch (err) {
+        toolResult = { status: "error", message: "Interner Tool-Fehler." };
       }
-    } else {
-      aiText = response.text();
+
+      // Sende Tool-Ergebnis zurück an Gemini
+      const nextStep = await chat.sendMessage([{
+        functionResponse: { name: call.name, response: toolResult }
+      }]);
+      currentResponse = nextStep.response;
+      step++;
     }
 
     // Speichere KI-Antwort in DB
     if (aiText) {
       await prisma.chatMessage.create({
-        data: { role: "ai", text: aiText }
+        data: { role: "ai", text: aiText, conversationId }
       });
     }
 
-    res.json({ text: aiText });
+    res.json({ text: aiText, conversationId });
   } catch (error: any) {
     console.error("Detailed Error:", error);
     res.status(500).json({ text: `Fehler: ${error.message || "Unbekannter Fehler"}` });

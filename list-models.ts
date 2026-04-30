@@ -9,7 +9,14 @@ async function listModels() {
     // Es gibt keine direkte listModels Funktion im generischen SDK für v1, 
     // aber wir versuchen einfach ein paar bekannte Namen.
     console.log("Teste Zugriff auf Modelle...");
-    const models = ["gemini-flash-latest", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"];
+    const models = [
+      "gemini-1.5-flash-8b", 
+      "gemini-1.5-flash-8b-latest",
+      "gemini-2.0-flash-exp",
+      "gemini-1.5-flash", 
+      "gemini-1.5-pro",
+      "gemini-flash-latest"
+    ];
     
     for (const modelName of models) {
       try {

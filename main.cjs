@@ -33,14 +33,23 @@ function createWindow() {
     mainWindow.webContents.executeJavaScript('document.body.classList.add("active")');
   });
 
-  // Verstecken, wenn der Fokus verloren geht
+  // Fokus-Logik: Wir lassen die Klasse "active" einfach dauerhaft an, 
+  // sobald das Fenster offen ist. Nur der explizite Close-Befehl animiert es weg.
   mainWindow.on('blur', () => {
+    // Nichts tun - wir wollen, dass es sichtbar bleibt für Drag & Drop
+  });
+}
+
+// IPC zum Verstecken des Fensters
+const { ipcMain } = require('electron');
+ipcMain.on('hide-window', () => {
+  if (mainWindow) {
     mainWindow.webContents.executeJavaScript('document.body.classList.remove("active")');
     setTimeout(() => {
       mainWindow.hide();
-    }, 400); // Warte bis Animation fertig ist
-  });
-}
+    }, 400);
+  }
+});
 
 function createTray() {
   const iconPath = path.join(__dirname, 'public/icon.png'); 
