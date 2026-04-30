@@ -86,13 +86,15 @@ app.post("/messages", async (req, res) => {
  * Gemini AI Integration
  */
 app.post("/chat", async (req, res) => {
-  const { message } = req.body;
+  const { message, audio } = req.body;
 
   try {
-    // Save user message to DB
-    await prisma.chatMessage.create({
-      data: { role: "user", text: message }
-    });
+    // Speichere Benutzer-Nachricht in DB (falls Text vorhanden)
+    if (message) {
+      await prisma.chatMessage.create({
+        data: { role: "user", text: message }
+      });
+    }
 
     const model = genAI.getGenerativeModel({
       model: "gemini-flash-latest",
@@ -120,9 +122,25 @@ app.post("/chat", async (req, res) => {
       }]
     });
 
-
     const chat = model.startChat();
-    const result = await chat.sendMessage(message);
+    
+    // Baue die Nachricht für Gemini zusammen
+    const promptParts: any[] = [];
+    if (message) promptParts.push(message);
+    if (audio) {
+      promptParts.push({
+        inlineData: {
+          data: audio,
+          mimeType: "audio/webm" // MediaRecorder nutzt meist webm
+        }
+      });
+    }
+
+    if (promptParts.length === 0) {
+      return res.status(400).json({ text: "Keine Daten empfangen." });
+    }
+
+    const result = await chat.sendMessage(promptParts);
     const response = result.response;
     
     let aiText = "";
@@ -159,7 +177,7 @@ app.post("/chat", async (req, res) => {
       aiText = response.text();
     }
 
-    // Save AI response to DB
+    // Speichere KI-Antwort in DB
     if (aiText) {
       await prisma.chatMessage.create({
         data: { role: "ai", text: aiText }
@@ -169,18 +187,7 @@ app.post("/chat", async (req, res) => {
     res.json({ text: aiText });
   } catch (error: any) {
     console.error("Detailed Error:", error);
-    
-    let errorMessage = "Ein unerwarteter Fehler ist aufgetreten.";
-    
-    if (error.code?.startsWith('P')) {
-      errorMessage = "Datenbank-Fehler: Konnte keine Verbindung zu PostgreSQL herstellen. Läuft dein Docker-Container?";
-    } else if (error.message?.includes('API_KEY_INVALID') || error.message?.includes('API key not found')) {
-      errorMessage = "KI-Fehler: Der API-Key ist ungültig oder wurde nicht gefunden.";
-    } else {
-      errorMessage = `Fehler: ${error.message || "Unbekannter Fehler"}`;
-    }
-
-    res.status(500).json({ text: errorMessage });
+    res.status(500).json({ text: `Fehler: ${error.message || "Unbekannter Fehler"}` });
   }
 });
 
