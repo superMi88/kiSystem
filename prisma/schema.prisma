@@ -45,7 +45,6 @@ model Person {
   name      String           @unique
   notes     String?          // General information/biography
   facts     Fact[]
-  events    CalendarEvent[]
   memories  SemanticMemory[]
   createdAt DateTime         @default(now())
 }
@@ -57,17 +56,6 @@ model Fact {
   personId  Int
   person    Person   @relation(fields: [personId], references: [id])
   createdAt DateTime @default(now())
-}
-
-model CalendarEvent {
-  id          Int      @id @default(autoincrement())
-  title       String
-  date        DateTime
-  description String?
-  isBirthday  Boolean  @default(false)
-  personId    Int?
-  person      Person?  @relation(fields: [personId], references: [id])
-  createdAt   DateTime @default(now())
 }
 
 model SemanticMemory {

@@ -103,4 +103,40 @@ export class GoogleCalendarService {
 
     return res.data;
   }
+
+  async deleteEvent(eventId: string) {
+    const calendar = await this.getAuthenticatedClient();
+    if (!calendar) return null;
+
+    await calendar.events.delete({
+      calendarId: 'primary',
+      eventId: eventId,
+    });
+
+    return true;
+  }
+
+  async updateEvent(eventId: string, updates: { title?: string, date?: Date, description?: string }) {
+    const calendar = await this.getAuthenticatedClient();
+    if (!calendar) return null;
+
+    const requestBody: any = {};
+    if (updates.title) requestBody.summary = updates.title;
+    if (updates.description) requestBody.description = updates.description;
+    if (updates.date) {
+      const start = new Date(updates.date);
+      const end = new Date(updates.date);
+      end.setHours(end.getHours() + 1);
+      requestBody.start = { dateTime: start.toISOString() };
+      requestBody.end = { dateTime: end.toISOString() };
+    }
+
+    const res = await calendar.events.patch({
+      calendarId: 'primary',
+      eventId: eventId,
+      requestBody: requestBody,
+    });
+
+    return res.data;
+  }
 }

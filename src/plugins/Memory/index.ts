@@ -102,8 +102,8 @@ export const memoryPlugin: Plugin = {
         const { name } = args;
         const person = await prisma.person.findUnique({
           where: { name },
-          include: { facts: true, events: true }
-        });
+          include: { facts: true }
+        }) as any;
         
         if (!person) return { status: "error", message: `Person ${name} nicht gefunden.` };
         
@@ -115,8 +115,7 @@ export const memoryPlugin: Plugin = {
 
         return {
           name: person.name,
-          facts: person.facts.map(f => ({ content: f.content, category: f.category })),
-          events: person.events.map(e => ({ title: e.title, date: e.date, isBirthday: e.isBirthday })),
+          facts: person.facts.map((f: any) => ({ content: f.content, category: f.category })),
           langzeit_erinnerungen: memories.map(m => ({ text: m.content, datum: m.createdAt }))
         };
       }

@@ -34,20 +34,8 @@ export const calendarPlugin: Plugin = {
         } as any
       },
       handler: async (args, { prisma }) => {
-        const date = new Date(args.datum);
+        // Nur noch Google Termine abfragen
         const service = new GoogleCalendarService(prisma);
-        
-        // 1. Lokale Termine
-        const localEvents = await prisma.calendarEvent.findMany({
-          where: {
-            date: {
-              gte: new Date(date.setHours(0,0,0,0)),
-              lte: new Date(date.setHours(23,59,59,999))
-            }
-          }
-        });
-
-        // 2. Google Termine
         let googleEvents: any[] = [];
         try {
           googleEvents = await service.getEvents(new Date(args.datum)) || [];
@@ -60,8 +48,8 @@ export const calendarPlugin: Plugin = {
           type: "calendar_widget",
           date: args.datum,
           events: [
-            ...localEvents.map(e => ({ title: e.title, time: e.date, type: "local" })),
             ...googleEvents.map(e => ({ 
+              id: e.id, // ID für die KI mitsenden
               title: e.summary, 
               time: e.start?.dateTime || e.start?.date, 
               type: "google" 
@@ -86,37 +74,91 @@ export const calendarPlugin: Plugin = {
       },
       handler: async (args, { prisma }) => {
         const date = new Date(args.datum);
-        
-        // Versuche Uhrzeit aus Beschreibung zu extrahieren (z.B. "15:00")
-        if (args.beschreibung) {
-          const timeMatch = args.beschreibung.match(/(\d{1,2}):(\d{2})/);
-          if (timeMatch) {
-            date.setHours(parseInt(timeMatch[1]), parseInt(timeMatch[2]), 0, 0);
-          }
-        }
+        const service = new GoogleCalendarService(prisma);
 
-        // 1. Google Synchronisation
+        try {
+          await service.createEvent(args.titel, date, args.beschreibung);
+          // Hole sofort die aktualisierte Liste für das Widget
+          const updatedEvents = await service.getEvents(date) || [];
+          return { 
+            type: "calendar_widget",
+            date: args.datum.split('T')[0],
+            message: `Termin '${args.titel}' wurde erstellt.`,
+            events: updatedEvents.map(e => ({ id: e.id, title: e.summary, time: e.start?.dateTime || e.start?.date, type: "google" }))
+          };
+        } catch (e: any) {
+          return { status: "error", message: `Fehler: ${e.message}` };
+        }
+      }
+    },
+    {
+      definition: {
+        name: "loesche_termin",
+        description: "Löscht einen Termin aus dem Google Kalender.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            eventId: { type: SchemaType.STRING, description: "Die eindeutige ID des Google-Termins" },
+            datum: { type: SchemaType.STRING, description: "Das Datum des Termins (YYYY-MM-DD), um die Liste zu aktualisieren" }
+          },
+          required: ["eventId", "datum"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
         const service = new GoogleCalendarService(prisma);
         try {
-          const googleEvent = await service.createEvent(args.titel, date, args.beschreibung);
-          if (googleEvent) {
-            return { 
-              status: "success", 
-              message: `Termin '${args.titel}' wurde erfolgreich im Google Kalender erstellt.` 
-            };
-          }
-        } catch (e: any) {
-          console.error("Google Sync Fehler:", e);
+          await service.deleteEvent(args.eventId);
+          // Kurz warten, damit Google Zeit zum Löschen hat
+          await new Promise(resolve => setTimeout(resolve, 500));
+          const updatedEvents = await service.getEvents(new Date(args.datum)) || [];
           return { 
-            status: "error", 
-            message: `Fehler beim Speichern im Google Kalender: ${e.message}` 
+            type: "calendar_widget",
+            date: args.datum,
+            message: `Termin wurde gelöscht.`,
+            events: updatedEvents.map(e => ({ id: e.id, title: e.summary, time: e.start?.dateTime || e.start?.date, type: "google" }))
           };
+        } catch (e: any) {
+          return { status: "error", message: `Fehler beim Löschen: ${e.message}` };
         }
+      }
+    },
+    {
+      definition: {
+        name: "bearbeite_termin",
+        description: "Bearbeitet einen bestehenden Termin im Google Kalender.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            eventId: { type: SchemaType.STRING, description: "Die ID des zu bearbeitenden Termins" },
+            datum: { type: SchemaType.STRING, description: "Das aktuelle Datum des Termins (YYYY-MM-DD)" },
+            neuer_titel: { type: SchemaType.STRING, description: "Neuer Titel (optional)" },
+            neues_datum: { type: SchemaType.STRING, description: "Neues Datum/Uhrzeit im ISO-Format (optional)" },
+            neue_beschreibung: { type: SchemaType.STRING, description: "Neue Beschreibung (optional)" }
+          },
+          required: ["eventId", "datum"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const service = new GoogleCalendarService(prisma);
+        try {
+          const updates: any = {};
+          if (args.neuer_titel) updates.title = args.neuer_titel;
+          if (args.neue_beschreibung) updates.description = args.neue_beschreibung;
+          if (args.neues_datum) updates.date = new Date(args.neues_datum);
 
-        return { 
-          status: "error", 
-          message: "Konnte den Termin nicht erstellen. Hast du den Google Kalender verbunden?" 
-        };
+          await service.updateEvent(args.eventId, updates);
+          // Kurz warten für Google
+          await new Promise(resolve => setTimeout(resolve, 500));
+          const updatedEvents = await service.getEvents(new Date(args.neues_datum || args.datum)) || [];
+          return { 
+            type: "calendar_widget",
+            date: (args.neues_datum || args.datum).split('T')[0],
+            message: `Termin wurde aktualisiert.`,
+            events: updatedEvents.map(e => ({ id: e.id, title: e.summary, time: e.start?.dateTime || e.start?.date, type: "google" }))
+          };
+        } catch (e: any) {
+          return { status: "error", message: `Fehler beim Bearbeiten: ${e.message}` };
+        }
       }
     }
   ],
