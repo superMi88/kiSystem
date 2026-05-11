@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
-const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+const embeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" }, { apiVersion: "v1beta" });
 
 export const memoryPlugin: Plugin = {
   name: "Memory",
@@ -42,7 +42,7 @@ export const memoryPlugin: Plugin = {
 
         await prisma.$executeRawUnsafe(
           `INSERT INTO "SemanticMemory" (content, embedding, metadata, "personId", "createdAt") 
-           VALUES ($1, $2::vector, $3, $4, NOW())`,
+           VALUES ($1, $2::vector, $3::jsonb, $4, NOW())`,
           text,
           `[${embedding.join(",")}]`,
           JSON.stringify({ kontext, source: "chat" }),

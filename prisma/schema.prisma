@@ -61,7 +61,7 @@ model Fact {
 model SemanticMemory {
   id        Int                     @id @default(autoincrement())
   content   String
-  embedding Unsupported("vector(768)")
+  embedding Unsupported("vector(3072)")
   metadata  Json?                   // { source: "chat", conversationId: "..." }
   personId  Int?
   person    Person?                 @relation(fields: [personId], references: [id])
