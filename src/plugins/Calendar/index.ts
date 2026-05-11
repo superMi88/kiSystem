@@ -73,26 +73,50 @@ export const calendarPlugin: Plugin = {
     {
       definition: {
         name: "fuege_termin_hinzu",
-        description: "Fügt einen neuen lokalen Termin hinzu.",
+        description: "Fügt einen neuen Termin hinzu und synchronisiert ihn mit Google Calendar.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
-            titel: { type: SchemaType.STRING, description: "Titel" },
-            datum: { type: SchemaType.STRING, description: "Datum (YYYY-MM-DD)" },
-            beschreibung: { type: SchemaType.STRING, description: "Beschreibung" }
+            titel: { type: SchemaType.STRING, description: "Titel des Termins" },
+            datum: { type: SchemaType.STRING, description: "Datum (YYYY-MM-DD) oder ISO-String" },
+            beschreibung: { type: SchemaType.STRING, description: "Beschreibung (optional, kann Uhrzeit enthalten)" }
           },
           required: ["titel", "datum"]
         } as any
       },
       handler: async (args, { prisma }) => {
-        await prisma.calendarEvent.create({
-          data: {
-            title: args.titel,
-            date: new Date(args.datum),
-            description: args.beschreibung
+        const date = new Date(args.datum);
+        
+        // Versuche Uhrzeit aus Beschreibung zu extrahieren (z.B. "15:00")
+        if (args.beschreibung) {
+          const timeMatch = args.beschreibung.match(/(\d{1,2}):(\d{2})/);
+          if (timeMatch) {
+            date.setHours(parseInt(timeMatch[1]), parseInt(timeMatch[2]), 0, 0);
           }
-        });
-        return { status: "success", message: `Termin '${args.titel}' gespeichert.` };
+        }
+
+        // 1. Google Synchronisation
+        const service = new GoogleCalendarService(prisma);
+        try {
+          const googleEvent = await service.createEvent(args.titel, date, args.beschreibung);
+          if (googleEvent) {
+            return { 
+              status: "success", 
+              message: `Termin '${args.titel}' wurde erfolgreich im Google Kalender erstellt.` 
+            };
+          }
+        } catch (e: any) {
+          console.error("Google Sync Fehler:", e);
+          return { 
+            status: "error", 
+            message: `Fehler beim Speichern im Google Kalender: ${e.message}` 
+          };
+        }
+
+        return { 
+          status: "error", 
+          message: "Konnte den Termin nicht erstellen. Hast du den Google Kalender verbunden?" 
+        };
       }
     }
   ],

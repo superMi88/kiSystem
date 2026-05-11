@@ -14,7 +14,10 @@ export class GoogleCalendarService {
   constructor(private prisma: PrismaClient) {}
 
   getAuthUrl() {
-    const scopes = ['https://www.googleapis.com/auth/calendar.readonly'];
+    const scopes = [
+      'https://www.googleapis.com/auth/calendar.readonly',
+      'https://www.googleapis.com/auth/calendar.events'
+    ];
     return oauth2Client.generateAuthUrl({
       access_type: 'offline',
       scope: scopes,
@@ -41,7 +44,7 @@ export class GoogleCalendarService {
     return tokens;
   }
 
-  async getEvents(date: Date) {
+  private async getAuthenticatedClient() {
     const authRecord = await this.prisma.googleAuth.findUnique({ where: { id: 1 } });
     if (!authRecord) return null;
 
@@ -50,8 +53,12 @@ export class GoogleCalendarService {
       refresh_token: authRecord.refreshToken,
       expiry_date: Number(authRecord.expiryDate)
     });
+    return google.calendar({ version: 'v3', auth: oauth2Client });
+  }
 
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+  async getEvents(date: Date) {
+    const calendar = await this.getAuthenticatedClient();
+    if (!calendar) return null;
     
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
@@ -68,5 +75,32 @@ export class GoogleCalendarService {
     });
 
     return res.data.items || [];
+  }
+
+  async createEvent(title: string, date: Date, description?: string) {
+    const calendar = await this.getAuthenticatedClient();
+    if (!calendar) return null;
+
+    const start = new Date(date);
+    const end = new Date(date);
+    // Wenn keine Uhrzeit angegeben ist (nur Datum), setzen wir es auf 12:00
+    if (start.getHours() === 0 && start.getMinutes() === 0) {
+      start.setHours(12, 0, 0, 0);
+      end.setHours(13, 0, 0, 0);
+    } else {
+      end.setHours(start.getHours() + 1);
+    }
+
+    const res = await calendar.events.insert({
+      calendarId: 'primary',
+      requestBody: {
+        summary: title,
+        description: description,
+        start: { dateTime: start.toISOString() },
+        end: { dateTime: end.toISOString() },
+      },
+    });
+
+    return res.data;
   }
 }

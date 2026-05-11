@@ -157,20 +157,27 @@ app.post("/chat", async (req, res) => {
       });
     }
 
+    const now = new Date();
+    const dateString = now.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const timeString = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
-      tools: [{ functionDeclarations: pluginManager.getGeminiTools() } as any]
+      tools: [{ functionDeclarations: pluginManager.getGeminiTools() } as any],
+      systemInstruction: {
+        role: "system",
+        parts: [{ text: `Du bist ein hilfreicher PC-Assistent. 
+Heute ist ${dateString}, es ist ${timeString} Uhr. 
+Nutze dieses Datum als Basis für relative Zeitangaben wie 'heute', 'morgen' oder 'nächste Woche'. 
+Wenn ein Benutzer eine Uhrzeit nennt, verwende beim Erstellen von Terminen bitte das volle ISO-Format (YYYY-MM-DDTHH:mm:ss).
+Antworte kurz und präzise.` }]
+      }
     });
-
 
     const chatHistory = conversationId ? (await prisma.chatMessage.findMany({ where: { conversationId }, orderBy: { createdAt: 'asc' } })).map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] })) : [];
 
     const chat = model.startChat({
-      history: chatHistory,
-      systemInstruction: {
-        role: "system",
-        parts: [{ text: "Du bist ein hilfreicher PC-Assistent. Du hast Zugriff auf verschiedene Plugins. Antworte kurz und präzise." }]
-      }
+      history: chatHistory
     });
     
     // Baue die Nachricht für Gemini zusammen
