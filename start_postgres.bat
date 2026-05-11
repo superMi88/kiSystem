@@ -20,7 +20,7 @@ if %errorlevel% equ 0 (
         -e POSTGRES_PASSWORD=%DB_PASSWORD% ^
         -e POSTGRES_DB=%DB_NAME% ^
         -p %DB_PORT%:5432 ^
-        -d postgres:latest
+        -d pgvector/pgvector:pg16
 )
 
 echo.

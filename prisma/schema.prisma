@@ -2,14 +2,15 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
 }
-
 
 model LichtStatus {
   id        Int      @id @default(1)
@@ -37,5 +38,53 @@ model AppLauncher {
   id    Int    @id @default(autoincrement())
   name  String @unique
   path  String
+}
+
+model Person {
+  id        Int              @id @default(autoincrement())
+  name      String           @unique
+  notes     String?          // General information/biography
+  facts     Fact[]
+  events    CalendarEvent[]
+  memories  SemanticMemory[]
+  createdAt DateTime         @default(now())
+}
+
+model Fact {
+  id        Int      @id @default(autoincrement())
+  content   String
+  category  String?  // e.g., "game", "hobby", "personal"
+  personId  Int
+  person    Person   @relation(fields: [personId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model CalendarEvent {
+  id          Int      @id @default(autoincrement())
+  title       String
+  date        DateTime
+  description String?
+  isBirthday  Boolean  @default(false)
+  personId    Int?
+  person      Person?  @relation(fields: [personId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model SemanticMemory {
+  id        Int                     @id @default(autoincrement())
+  content   String
+  embedding Unsupported("vector(768)")
+  metadata  Json?                   // { source: "chat", conversationId: "..." }
+  personId  Int?
+  person    Person?                 @relation(fields: [personId], references: [id])
+  createdAt DateTime                @default(now())
+}
+
+model GoogleAuth {
+  id           Int      @id @default(1)
+  accessToken  String
+  refreshToken String
+  expiryDate   BigInt
+  createdAt    DateTime @default(now())
 }
 

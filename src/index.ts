@@ -11,10 +11,13 @@ import { PrismaClient } from "@prisma/client";
 import dotenv from "dotenv";
 import { exec } from "child_process";
 
+import { PluginManager } from "./plugins/index.js";
+
 dotenv.config();
 
 const prisma = new PrismaClient();
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
+const pluginManager = new PluginManager(prisma);
 
 const app = express();
 app.use(cors());
@@ -27,48 +30,22 @@ const server = new Server(
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
-    {
-      name: "schalte_licht",
-      description: "Schaltet das Licht ein oder aus.",
-      inputSchema: {
-        type: "object",
-        properties: { status: { type: "string", enum: ["on", "off"] } },
-        required: ["status"],
-      },
-    },
-    {
-      name: "pruefe_licht",
-      description: "Prüft den aktuellen Status des Lichts.",
-      inputSchema: { type: "object", properties: {} },
-    },
-  ],
+  tools: pluginManager.getMCPTools(),
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   try {
-    if (name === "schalte_licht") {
-      const status = args?.status as string;
-      await prisma.lichtStatus.upsert({
-        where: { id: 1 },
-        update: { status },
-        create: { id: 1, status },
-      });
-      return { content: [{ type: "text", text: `Licht wurde auf '${status}' gesetzt.` }] };
-    }
-    if (name === "pruefe_licht") {
-      const entry = await prisma.lichtStatus.findUnique({ where: { id: 1 } });
-      const status = entry?.status || "off";
-      return { content: [{ type: "text", text: `Status: licht=${status}` }] };
-    }
-    throw new Error(`Tool nicht gefunden: ${name}`);
+    const result = await pluginManager.executeTool(name, args);
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
   } catch (error) {
     return { isError: true, content: [{ type: "text", text: `Fehler: ${(error as Error).message}` }] };
   }
 });
 
 let transport: SSEServerTransport | null = null;
+// ... (rest of the express setup remains similar, but the chat loop needs update)
+
 
 app.get("/sse", async (req, res) => {
   transport = new SSEServerTransport("/messages", res);
@@ -118,13 +95,40 @@ app.get("/apps", async (req, res) => {
   res.json(apps);
 });
 
+app.get("/alerts", async (req, res) => {
+  const alerts = await pluginManager.getAllAlerts();
+  res.json(alerts);
+});
+
 app.post("/messages", async (req, res) => {
+
   if (transport) {
     await transport.handlePostMessage(req, res);
   } else {
     res.status(400).send("Keine aktive SSE Verbindung");
   }
 });
+
+/**
+ * Google Auth Callback
+ */
+app.get("/auth/google/callback", async (req, res) => {
+  const { code } = req.query;
+  if (code) {
+    try {
+      // Wir nutzen eine temporäre Instanz des Service zum Speichern
+      const { GoogleCalendarService } = await import("./plugins/Calendar/googleService.js");
+      const googleService = new GoogleCalendarService(prisma);
+      await googleService.saveTokens(code as string);
+      res.send("<h1>Erfolg!</h1><p>Dein Google Kalender ist jetzt verbunden. Du kannst dieses Fenster schließen.</p>");
+    } catch (e: any) {
+      res.status(500).send("Fehler beim Speichern der Tokens: " + e.message);
+    }
+  } else {
+    res.status(400).send("Kein Code erhalten.");
+  }
+});
+
 
 /**
  * Gemini AI Integration
@@ -142,7 +146,7 @@ app.post("/chat", async (req, res) => {
       conversationId = newConv.id;
     }
 
-    // Speichere Benutzer-Nachricht in DB (auch bei Audio)
+    // Speichere Benutzer-Nachricht in DB
     if (message || audio) {
       await prisma.chatMessage.create({
         data: { 
@@ -155,48 +159,9 @@ app.post("/chat", async (req, res) => {
 
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
-      tools: [{
-        functionDeclarations: [
-          {
-            name: "schalte_licht",
-            description: "Schaltet das Licht ein oder aus.",
-            parameters: {
-              type: SchemaType.OBJECT,
-              properties: { 
-                status: { 
-                  type: SchemaType.STRING, 
-                  description: "Der Status ('on' oder 'off')"
-                } 
-              },
-              required: ["status"],
-            } as any,
-          },
-          {
-            name: "pruefe_licht",
-            description: "Gibt den aktuellen Status des Lichts zurück.",
-          },
-          {
-            name: "starte_programm",
-            description: "Startet ein registriertes Programm auf dem PC.",
-            parameters: {
-              type: SchemaType.OBJECT,
-              properties: {
-                name: { type: SchemaType.STRING, description: "Der Name des Programms" }
-              },
-              required: ["name"]
-            } as any
-          },
-          {
-            name: "liste_programme",
-            description: "Gibt eine Liste aller bereits registrierten Programme zurück.",
-          },
-          {
-            name: "scanne_system_nach_apps",
-            description: "Scannt den PC nach installierten Windows-Programmen und gibt deren Namen zurück.",
-          }
-        ] as any
-      }]
+      tools: [{ functionDeclarations: pluginManager.getGeminiTools() } as any]
     });
+
 
     const chatHistory = conversationId ? (await prisma.chatMessage.findMany({ where: { conversationId }, orderBy: { createdAt: 'asc' } })).map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] })) : [];
 
@@ -204,7 +169,7 @@ app.post("/chat", async (req, res) => {
       history: chatHistory,
       systemInstruction: {
         role: "system",
-        parts: [{ text: "Du bist ein hilfreicher PC-Assistent. Du kannst das Licht steuern und Programme starten. Du hast Zugriff auf Tools zum Scannen des PCs nach installierten Apps (`scanne_system_nach_apps`) und zum Starten dieser Apps. Wenn der Nutzer nach Programmen fragt oder etwas starten will, das du nicht kennst, biete einen Scan an oder führe ihn direkt aus. Antworte kurz und präzise." }]
+        parts: [{ text: "Du bist ein hilfreicher PC-Assistent. Du hast Zugriff auf verschiedene Plugins. Antworte kurz und präzise." }]
       }
     });
     
@@ -226,8 +191,9 @@ app.post("/chat", async (req, res) => {
     const response = result.response;
     let aiText = "";
     let currentResponse = response;
+    let widgetData: any = null;
 
-    // Schleife für Tool-Chaining (falls Gemini mehrere Tools nacheinander aufrufen will)
+    // Schleife für Tool-Chaining
     let step = 0;
     while (step < 5) {
       const calls = currentResponse.functionCalls();
@@ -241,59 +207,13 @@ app.post("/chat", async (req, res) => {
       
       let toolResult: any;
       try {
-        if (call.name === "schalte_licht") {
-          const args = call.args as { status: string };
-          await prisma.lichtStatus.upsert({ where: { id: 1 }, update: { status: args.status }, create: { id: 1, status: args.status } });
-          toolResult = { status: "success", message: `Licht ist ${args.status}` };
-        } else if (call.name === "pruefe_licht") {
-          const entry = await prisma.lichtStatus.findUnique({ where: { id: 1 } });
-          toolResult = { status: entry?.status || "off" };
-        } else if (call.name === "starte_programm") {
-          const args = call.args as { name: string };
-          const appEntry = await prisma.appLauncher.findUnique({ where: { name: args.name } });
-          if (appEntry) {
-            // Wenn der Pfad wie ein normaler Windows-Pfad aussieht (z.B. C:\...), 
-            // starten wir ihn direkt. Ansonsten nutzen wir den shell:AppsFolder (für AppIDs).
-            const isAbsolutePath = /^[a-zA-Z]:\\/.test(appEntry.path);
-            const startCommand = isAbsolutePath 
-              ? `cmd /c start "" "${appEntry.path}"`
-              : `cmd /c start "" "shell:AppsFolder\\${appEntry.path}"`;
-            
-            console.log(`Führe Start-Befehl aus: ${startCommand}`);
-            exec(startCommand, (err) => { if (err) console.error("Start-Fehler:", err); });
-            toolResult = { status: "success", message: `${args.name} gestartet.` };
-          } else {
-            toolResult = { status: "error", message: `Programm '${args.name}' unbekannt.` };
-          }
-        } else if (call.name === "liste_programme") {
-          const apps = await prisma.appLauncher.findMany();
-          toolResult = { apps: apps.map(a => a.name) };
-        } else if (call.name === "scanne_system_nach_apps") {
-          console.log("Starte System-Scan nach Apps...");
-          const apps = await new Promise((resolve) => {
-            exec('powershell -Command "Get-StartApps | Select-Object Name, AppID | ConvertTo-Json"', (err, stdout) => {
-              if (err) return resolve({ error: "Scan fehlgeschlagen" });
-              try {
-                const rawApps = JSON.parse(stdout);
-                resolve(Array.isArray(rawApps) ? rawApps : [rawApps]);
-              } catch { resolve({ error: "Fehler beim Parsen der Programme" }); }
-            });
-          });
-          
-          if (Array.isArray(apps)) {
-            for (const app of apps) {
-              if (app.Name && app.AppID) {
-                await prisma.appLauncher.upsert({
-                  where: { name: app.Name },
-                  update: { path: app.AppID },
-                  create: { name: app.Name, path: app.AppID }
-                });
-              }
-            }
-          }
-          toolResult = { status: "success", message: `System-Scan abgeschlossen. ${Array.isArray(apps) ? apps.length : 0} Programme gefunden und registriert.` };
+        toolResult = await pluginManager.executeTool(call.name, call.args);
+        // Falls das Tool ein Widget zurückgibt, speichern wir es für das Frontend
+        if (toolResult && toolResult.type) {
+          widgetData = toolResult;
         }
       } catch (err) {
+        console.error("Tool-Fehler:", err);
         toolResult = { status: "error", message: "Interner Tool-Fehler." };
       }
 
@@ -312,7 +232,8 @@ app.post("/chat", async (req, res) => {
       });
     }
 
-    res.json({ text: aiText, conversationId });
+    res.json({ text: aiText, conversationId, widget: widgetData });
+
   } catch (error: any) {
     console.error("Detailed Error:", error);
     res.status(500).json({ text: `Fehler: ${error.message || "Unbekannter Fehler"}` });

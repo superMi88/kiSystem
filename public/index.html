@@ -305,10 +305,107 @@
 
         #mic-btn:hover { background: rgba(255,255,255,0.15); }
         #send-btn:active { transform: scale(0.95); }
+
+        /* Widget Stile */
+        .widget {
+            width: 100%;
+            margin-top: 10px;
+            padding: 15px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .calendar-widget h4 {
+            margin: 0 0 10px 0;
+            color: var(--accent);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .event-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .event-item:last-child { border-bottom: none; }
+
+        .event-type {
+            font-size: 0.55rem;
+            padding: 2px 5px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            font-weight: 800;
+        }
+
+        .type-google { background: #4285f4; color: white; }
+        .type-local { background: var(--accent); color: #11111b; }
+
+        .event-title { font-size: 0.85rem; flex: 1; }
+        .event-time { font-size: 0.75rem; opacity: 0.6; }
+
+        .auth-btn {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 10px 20px;
+            background: var(--accent);
+            color: #11111b;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .auth-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(137, 180, 250, 0.3); }
+
+        /* Notification Bar Stile */
+        .notification-bar {
+            width: 100%;
+            padding: 10px 15px;
+            background: rgba(137, 180, 250, 0.1);
+            border-bottom: 1px solid rgba(137, 180, 250, 0.2);
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        .notification-bar.active { display: flex; }
+        .notification-text { font-size: 0.8rem; font-weight: 500; color: var(--accent); }
+        .notification-action {
+            padding: 4px 10px;
+            background: var(--accent);
+            color: #11111b;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
     <div class="side-panel-container">
+        <!-- Notification Bar -->
+        <div id="notification-bar" class="notification-bar glass-card">
+            <span class="notification-text" id="notification-text"></span>
+            <a href="#" class="notification-action" id="notification-action"></a>
+        </div>
+
         <!-- Drop Zone Overlay -->
         <div id="drop-zone">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
@@ -384,8 +481,36 @@
         const sendBtn = document.getElementById('send-btn');
         const micBtn = document.getElementById('mic-btn');
         const statusEl = document.getElementById('status');
+        const notificationBar = document.getElementById('notification-bar');
+        const notificationText = document.getElementById('notification-text');
+        const notificationAction = document.getElementById('notification-action');
         const btnOn = document.getElementById('btn-on');
         const btnOff = document.getElementById('btn-off');
+
+        async function loadAlerts() {
+            try {
+                const res = await fetch('/alerts');
+                const alerts = await res.json();
+                
+                if (alerts.length > 0) {
+                    const alert = alerts[0]; // Wir zeigen erstmal nur den ersten an
+                    notificationText.textContent = alert.message;
+                    if (alert.actionLabel && alert.actionUrl) {
+                        notificationAction.textContent = alert.actionLabel;
+                        notificationAction.href = alert.actionUrl;
+                        notificationAction.target = "_blank";
+                        notificationAction.style.display = 'inline-block';
+                    } else {
+                        notificationAction.style.display = 'none';
+                    }
+                    notificationBar.classList.add('active');
+                } else {
+                    notificationBar.classList.remove('active');
+                }
+            } catch (e) {
+                console.error("Fehler beim Laden der Alerts:", e);
+            }
+        }
 
         // Nav Elemente
         const navNew = document.getElementById('nav-new');
@@ -642,7 +767,7 @@
                 });
                 const data = await res.json();
                 currentConversationId = data.conversationId;
-                addMessage(data.text, false);
+                addMessage(data.text, false, data.widget);
                 updateStatus();
                 userInput.placeholder = "Nachricht an Gemini...";
             } catch (e) {
@@ -652,12 +777,51 @@
 
         micBtn.onclick = () => isRecording ? stopRecording() : startRecording();
 
-        function addMessage(text, isUser) {
+        function addMessage(text, isUser, widget = null) {
             const msg = document.createElement('div');
             msg.className = `message ${isUser ? 'user' : 'ai'}`;
             msg.textContent = text;
             chatBox.appendChild(msg);
+
+            if (widget) {
+                renderWidget(widget, chatBox);
+            }
+
             chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function renderWidget(data, container) {
+            const widgetDiv = document.createElement('div');
+            widgetDiv.className = 'widget';
+
+            if (data.type === 'calendar_widget') {
+                widgetDiv.classList.add('calendar-widget');
+                const dateStr = new Date(data.date).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long' });
+                let html = `<h4>📅 Termine für ${dateStr}</h4>`;
+                
+                if (data.events.length === 0) {
+                    html += `<p style="font-size:0.8rem; opacity:0.6;">Keine Termine für diesen Tag.</p>`;
+                } else {
+                    data.events.forEach(ev => {
+                        const time = ev.time ? new Date(ev.time).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : 'Ganztägig';
+                        html += `
+                            <div class="event-item">
+                                <span class="event-type type-${ev.type}">${ev.type}</span>
+                                <span class="event-title">${ev.title}</span>
+                                <span class="event-time">${time}</span>
+                            </div>
+                        `;
+                    });
+                }
+                widgetDiv.innerHTML = html;
+            } else if (data.status === 'auth_required') {
+                widgetDiv.innerHTML = `
+                    <p style="font-size:0.85rem; margin:0;">${data.message}</p>
+                    <a href="${data.url}" target="_blank" class="auth-btn">Google Kalender verbinden</a>
+                `;
+            }
+
+            container.appendChild(widgetDiv);
         }
 
         async function sendMessage() {
@@ -678,12 +842,13 @@
                 });
                 const data = await res.json();
                 currentConversationId = data.conversationId;
-                addMessage(data.text, false);
+                addMessage(data.text, false, data.widget);
                 updateStatus();
             } catch (e) {
                 addMessage("Fehler beim Senden der Nachricht.", false);
             }
         }
+
 
         async function updateStatus() {
             try {
@@ -717,6 +882,9 @@
         btnOff.onclick = () => fetch('/messages', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "schalte_licht", arguments: {status: 'off'} }}) }).then(updateStatus);
 
         updateStatus();
+        loadAlerts();
+        setInterval(loadAlerts, 60000); // Jede Minute prüfen
+
     </script>
 </body>
 </html>
