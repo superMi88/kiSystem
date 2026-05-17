@@ -208,7 +208,8 @@ export const calendarPlugin: Plugin = {
           tasks: tasks.map(t => ({
             id: t.id,
             title: t.title,
-            due: t.due
+            due: t.due,
+            listTitle: t.listTitle
           }))
         }
       }

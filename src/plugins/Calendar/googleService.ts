@@ -79,15 +79,37 @@ export class GoogleCalendarService {
     const end = endDate ? new Date(endDate) : new Date(date);
     end.setHours(23, 59, 59, 999);
 
-    const res = await calendar.events.list({
-      calendarId: 'primary',
-      timeMin: startOfDay.toISOString(),
-      timeMax: end.toISOString(),
-      singleEvents: true,
-      orderBy: 'startTime',
-    });
+    const allEvents = [];
+    try {
+      const calendarListRes = await calendar.calendarList.list();
+      const calendars = calendarListRes.data.items || [];
+      
+      for (const cal of calendars) {
+        if (!cal.id) continue;
+        const res = await calendar.events.list({
+          calendarId: cal.id,
+          timeMin: startOfDay.toISOString(),
+          timeMax: end.toISOString(),
+          singleEvents: true,
+          orderBy: 'startTime',
+        });
+        if (res.data.items) {
+          allEvents.push(...res.data.items);
+        }
+      }
+      
+      // Sort all combined events by start time
+      allEvents.sort((a, b) => {
+        const timeA = new Date(a.start?.dateTime || a.start?.date || 0).getTime();
+        const timeB = new Date(b.start?.dateTime || b.start?.date || 0).getTime();
+        return timeA - timeB;
+      });
+      
+    } catch(e) {
+      console.warn("Fehler beim Abrufen aller Kalender:", e);
+    }
 
-    return res.data.items || [];
+    return allEvents;
   }
 
   async getIncompleteTasks() {
@@ -103,12 +125,16 @@ export class GoogleCalendarService {
         if (!list.id) continue;
         const res = await tasksClient.tasks.list({
           tasklist: list.id,
+          maxResults: 100,
           showCompleted: false,
-          showHidden: false
+          showHidden: true
         });
         const items = res.data.items || [];
-        allTasks.push(...items.filter(t => t.status === 'needsAction'));
+        allTasks.push(...items.filter(t => t.status === 'needsAction').map(t => ({...t, listTitle: list.title})));
       }
+      
+      console.log(`Geladene Aufgaben (insgesamt ${allTasks.length}):`, allTasks.map(t => t.title).join(", "));
+      
       return allTasks;
     } catch (e: any) {
       console.warn(`Konnte Aufgaben nicht abrufen (Möglicherweise fehlt die Berechtigung): ${e.message}`);

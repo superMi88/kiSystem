@@ -12,6 +12,7 @@ import dotenv from "dotenv";
 import { exec } from "child_process";
 
 import { PluginManager } from "./plugins/index.js";
+import { getSettings, saveSettings } from "./settings.js";
 
 dotenv.config();
 
@@ -104,6 +105,28 @@ app.get("/alerts", async (req, res) => {
 app.get("/widgets", async (req, res) => {
   const widgets = await pluginManager.getAllTopWidgets();
   res.json(widgets);
+});
+
+/**
+ * Settings API
+ */
+app.get("/settings", (req, res) => {
+  res.json(getSettings());
+});
+
+app.post("/settings", (req, res) => {
+  const { hotkey, disabledPlugins } = req.body;
+  const current = getSettings();
+  const updated = {
+    hotkey: hotkey !== undefined ? hotkey : current.hotkey,
+    disabledPlugins: disabledPlugins !== undefined ? disabledPlugins : current.disabledPlugins
+  };
+  saveSettings(updated);
+  res.json(updated);
+});
+
+app.get("/settings/plugins", (req, res) => {
+  res.json(pluginManager.getPluginsInfo());
 });
 
 app.post("/messages", async (req, res) => {

@@ -5,6 +5,7 @@ import { appLauncherPlugin } from "./AppLauncher/index.js";
 import { memoryPlugin } from "./Memory/index.js";
 import { calendarPlugin } from "./Calendar/index.js";
 import { imageGeneratorPlugin } from "./ImageGenerator/index.js";
+import { getSettings } from "../settings.js";
 
 export class PluginManager {
   private plugins: Plugin[] = [];
@@ -30,27 +31,70 @@ export class PluginManager {
     console.log(`Plugin geladen: ${plugin.name} (${plugin.tools.length} Tools)`);
   }
 
-  getGeminiTools() {
-    return Array.from(this.toolsMap.values()).map(t => t.definition);
-  }
-
-  getMCPTools() {
-    return Array.from(this.toolsMap.values()).map(t => ({
-      name: t.definition.name,
-      description: t.definition.description,
-      inputSchema: t.definition.parameters || { type: "object", properties: {} }
+  getPluginsInfo() {
+    const settings = getSettings();
+    const disabled = settings.disabledPlugins || [];
+    return this.plugins.map(p => ({
+      name: p.name,
+      description: p.description,
+      enabled: !disabled.includes(p.name)
     }));
   }
 
+  getGeminiTools() {
+    const settings = getSettings();
+    const disabled = settings.disabledPlugins || [];
+    
+    const activeTools: any[] = [];
+    for (const plugin of this.plugins) {
+      if (disabled.includes(plugin.name)) continue;
+      for (const tool of plugin.tools) {
+        activeTools.push(tool.definition);
+      }
+    }
+    return activeTools;
+  }
+
+  getMCPTools() {
+    const settings = getSettings();
+    const disabled = settings.disabledPlugins || [];
+    
+    const activeTools: any[] = [];
+    for (const plugin of this.plugins) {
+      if (disabled.includes(plugin.name)) continue;
+      for (const tool of plugin.tools) {
+        activeTools.push({
+          name: tool.definition.name,
+          description: tool.definition.description,
+          inputSchema: tool.definition.parameters || { type: "object", properties: {} }
+        });
+      }
+    }
+    return activeTools;
+  }
+
   async executeTool(name: string, args: any) {
-    const tool = this.toolsMap.get(name);
+    const settings = getSettings();
+    const disabled = settings.disabledPlugins || [];
+    
+    const plugin = this.plugins.find(p => p.tools.some(t => t.definition.name === name));
+    if (!plugin) throw new Error(`Tool ${name} nicht gefunden.`);
+    if (disabled.includes(plugin.name)) {
+      throw new Error(`Das Plugin '${plugin.name}' ist deaktiviert.`);
+    }
+
+    const tool = plugin.tools.find(t => t.definition.name === name);
     if (!tool) throw new Error(`Tool ${name} nicht gefunden.`);
     return await tool.handler(args, { prisma: this.prisma });
   }
 
   async getAllAlerts() {
+    const settings = getSettings();
+    const disabled = settings.disabledPlugins || [];
+    
     const alerts = [];
     for (const plugin of this.plugins) {
+      if (disabled.includes(plugin.name)) continue;
       if (plugin.getAlerts) {
         try {
           const pluginAlerts = await plugin.getAlerts({ prisma: this.prisma });
@@ -64,8 +108,12 @@ export class PluginManager {
   }
 
   async getAllTopWidgets() {
+    const settings = getSettings();
+    const disabled = settings.disabledPlugins || [];
+    
     const widgets = [];
     for (const plugin of this.plugins) {
+      if (disabled.includes(plugin.name)) continue;
       if (plugin.getTopWidgets) {
         try {
           const pluginWidgets = await plugin.getTopWidgets({ prisma: this.prisma });
@@ -78,4 +126,5 @@ export class PluginManager {
     return widgets;
   }
 }
+
 

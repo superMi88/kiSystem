@@ -1,6 +1,92 @@
-const { app, BrowserWindow, Tray, Menu, screen, ipcMain } = require('electron');
+const { app, BrowserWindow, Tray, Menu, screen, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
+const fs = require('fs');
+
+const settingsPath = path.join(__dirname, 'settings.json');
+
+function getSettings() {
+  try {
+    if (fs.existsSync(settingsPath)) {
+      return JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    }
+  } catch (e) {
+    console.error('Fehler beim Lesen der Einstellungen:', e);
+  }
+  return { hotkey: 'Ctrl+Shift+Space', disabledPlugins: [] };
+}
+
+function registerGlobalHotkey() {
+  const settings = getSettings();
+  const hotkey = settings.hotkey || 'Ctrl+Shift+Space';
+  
+  // Zuerst alle entregistrieren, um Konflikte zu vermeiden
+  globalShortcut.unregisterAll();
+  
+  console.log(`Versuche globalen Hotkey zu registrieren: ${hotkey}`);
+  try {
+    const ret = globalShortcut.register(hotkey, () => {
+      console.log(`Hotkey ${hotkey} gedrückt!`);
+      if (mainWindow) {
+        if (mainWindow.isVisible()) {
+          hideWindowWithAnimation();
+        } else {
+          mainWindow.show();
+        }
+      }
+    });
+    
+    if (!ret) {
+      console.error(`Hotkey-Registrierung fehlgeschlagen für: ${hotkey}`);
+    } else {
+      console.log(`Hotkey erfolgreich registriert!`);
+    }
+  } catch (err) {
+    console.error(`Fehler bei Hotkey-Registrierung:`, err);
+  }
+}
+
+// IPC für Hotkey Neu-Registrierung
+ipcMain.on('reload-hotkey', () => {
+  console.log('Neu-Registrierung des Hotkeys angefordert...');
+  registerGlobalHotkey();
+});
+
+// IPC zum Testen von Hotkeys vor dem Speichern
+ipcMain.handle('register-hotkey-test', async (event, hotkey) => {
+  try {
+    console.log(`Testen des Hotkeys: ${hotkey}`);
+    
+    // Falls leer oder ungültig
+    if (!hotkey) {
+      return { success: false, error: 'Keine Tastenkombination angegeben.' };
+    }
+
+    // Prüfen ob bereits registriert
+    const isRegistered = globalShortcut.isRegistered(hotkey);
+    if (isRegistered) {
+      // Wenn es unser eigener Hotkey ist, ist es in Ordnung
+      const currentHotkey = getSettings().hotkey;
+      if (hotkey.toLowerCase() === currentHotkey.toLowerCase()) {
+        return { success: true };
+      }
+      return { success: false, error: 'Tastenkombination ist bereits belegt.' };
+    }
+    
+    // Versuchsweise registrieren und sofort wieder freigeben
+    const success = globalShortcut.register(hotkey, () => {});
+    if (success) {
+      globalShortcut.unregister(hotkey);
+      // Den regulären Hotkey wiederherstellen
+      registerGlobalHotkey();
+      return { success: true };
+    } else {
+      return { success: false, error: 'Tastenkombination konnte nicht registriert werden.' };
+    }
+  } catch (err) {
+    return { success: false, error: err.message || 'Ungültige Tastenkombination.' };
+  }
+});
 
 let mainWindow;
 let tray;
@@ -196,6 +282,7 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
   createDropZoneWindow();
+  registerGlobalHotkey(); // Globaler Hotkey registrieren beim Start
 
   // Automatisch anzeigen beim Start für bessere Rückmeldung
   setTimeout(() => {
@@ -206,6 +293,11 @@ app.whenReady().then(() => {
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on('will-quit', () => {
+  // Alle globalen Hotkeys entregistrieren
+  globalShortcut.unregisterAll();
 });
 
 app.on('window-all-closed', function () {

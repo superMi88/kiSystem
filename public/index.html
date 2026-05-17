@@ -477,6 +477,194 @@
             align-items: center;
             gap: 5px;
         }
+
+        /* Settings Button */
+        .settings-btn {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 100;
+            transition: all 0.2s;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .settings-btn:hover { 
+            background: rgba(255, 255, 255, 0.15); 
+            border-color: var(--accent); 
+            color: var(--accent);
+            transform: rotate(45deg);
+        }
+
+        /* Settings Modal */
+        #settings-modal {
+            display: none;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--card);
+            border: 1px solid var(--accent);
+            padding: 25px;
+            border-radius: 12px;
+            z-index: 300;
+            width: 85%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 0 35px rgba(0,0,0,0.9);
+            backdrop-filter: blur(20px);
+        }
+        #settings-modal.active { display: block; animation: modalFadeIn 0.3s ease-out; }
+        
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: translate(-50%, -45%); }
+            to { opacity: 1; transform: translate(-50%, -50%); }
+        }
+
+        #settings-modal h3 { color: var(--accent); margin-top: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 20px; }
+        
+        .settings-group {
+            text-align: left;
+            margin-bottom: 20px;
+        }
+        .settings-group > label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+        }
+        
+        .hotkey-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .hotkey-display {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text);
+            padding: 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            width: 100%;
+        }
+        .hotkey-display:hover {
+            background: rgba(137, 180, 250, 0.1);
+            border-color: var(--accent);
+        }
+        .hotkey-display.recording {
+            background: rgba(243, 139, 168, 0.1);
+            border-color: var(--off);
+            color: var(--off);
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.8; }
+            50% { opacity: 0.4; }
+            100% { opacity: 0.8; }
+        }
+
+        .hotkey-tip {
+            font-size: 0.65rem;
+            opacity: 0.5;
+            font-style: italic;
+            display: block;
+            margin-top: 4px;
+        }
+
+        .plugins-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 250px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+        
+        .plugin-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .plugin-item:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255,255,255,0.1);
+        }
+        
+        .plugin-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            max-width: 75%;
+        }
+        .plugin-name-label {
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: var(--text);
+        }
+        .plugin-desc-label {
+            font-size: 0.7rem;
+            opacity: 0.6;
+        }
+        
+        /* Premium Custom Toggle Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 38px;
+            height: 20px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255, 255, 255, 0.1);
+            transition: .3s;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 2px;
+            bottom: 2px;
+            background-color: var(--text);
+            transition: .3s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: var(--on);
+        }
+        input:checked + .slider:before {
+            transform: translateX(18px);
+            background-color: #11111b;
+        }
     </style>
 </head>
 <body>
@@ -504,8 +692,39 @@
             </div>
         </div>
 
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="glass-card">
+            <h3>Einstellungen</h3>
+            
+            <div class="settings-group">
+                <label>Globaler Hotkey</label>
+                <div class="hotkey-container">
+                    <button id="hotkey-btn" class="hotkey-display">Ctrl+Shift+Space</button>
+                    <span class="hotkey-tip">Klicken und neue Tasten drücken, dann Speichern</span>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <label>Plugins aktivieren/deaktivieren</label>
+                <div id="plugins-list" class="plugins-list">
+                    <!-- Plugins werden dynamisch geladen -->
+                </div>
+            </div>
+
+            <div class="modal-btns">
+                <button class="cancel" id="settings-cancel">Abbrechen</button>
+                <button class="save" id="settings-save">Speichern</button>
+            </div>
+        </div>
+
         <!-- Obere Kachel: Navigation & Lichtsteuerung -->
         <div class="top-panel glass-card">
+            <div id="open-settings" class="settings-btn" title="Einstellungen">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+            </div>
             <div id="close-panel" class="close-btn" title="Schließen">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </div>
@@ -566,6 +785,7 @@
         const notificationAction = document.getElementById('notification-action');
         const topWidgetsContainer = document.getElementById('top-widgets-container');
 
+        let wasAlertActive = false;
         async function loadAlerts() {
             try {
                 const res = await fetch('/alerts');
@@ -583,8 +803,14 @@
                         notificationAction.style.display = 'none';
                     }
                     notificationBar.classList.add('active');
+                    wasAlertActive = true;
                 } else {
                     notificationBar.classList.remove('active');
+                    if (wasAlertActive) {
+                        wasAlertActive = false;
+                        // Notification ist weg (z.B. Login erfolgreich), also Widgets aktualisieren
+                        loadTopWidgets();
+                    }
                 }
             } catch (e) {
                 console.error("Fehler beim Laden der Alerts:", e);
@@ -606,7 +832,147 @@
         const modalSave = document.getElementById('modal-save');
         const modalCancel = document.getElementById('modal-cancel');
 
+        // Settings Elemente
+        const openSettings = document.getElementById('open-settings');
+        const settingsModal = document.getElementById('settings-modal');
+        const settingsCancel = document.getElementById('settings-cancel');
+        const settingsSave = document.getElementById('settings-save');
+        const hotkeyBtn = document.getElementById('hotkey-btn');
+        const pluginsList = document.getElementById('plugins-list');
+
         const { ipcRenderer, webUtils } = require('electron');
+
+        let currentHotkey = 'Ctrl+Shift+Space';
+        let tempHotkey = '';
+        let recordingHotkey = false;
+
+        // Settings laden
+        async function loadSettings() {
+            try {
+                const res = await fetch('/settings');
+                const settings = await res.json();
+                currentHotkey = settings.hotkey || 'Ctrl+Shift+Space';
+                tempHotkey = currentHotkey;
+                hotkeyBtn.textContent = currentHotkey;
+                
+                const pRes = await fetch('/settings/plugins');
+                const plugins = await pRes.json();
+                renderPluginsSettings(plugins);
+            } catch (e) {
+                console.error("Fehler beim Laden der Einstellungen:", e);
+            }
+        }
+
+        function renderPluginsSettings(plugins) {
+            pluginsList.innerHTML = '';
+            plugins.forEach(p => {
+                const item = document.createElement('div');
+                item.className = 'plugin-item';
+                item.innerHTML = `
+                    <div class="plugin-info">
+                        <span class="plugin-name-label">${p.name}</span>
+                        <span class="plugin-desc-label">${p.description}</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" class="plugin-checkbox" data-plugin-name="${p.name}" ${p.enabled ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                `;
+                pluginsList.appendChild(item);
+            });
+        }
+
+        openSettings.onclick = () => {
+            loadSettings();
+            settingsModal.classList.add('active');
+        };
+
+        settingsCancel.onclick = () => {
+            recordingHotkey = false;
+            hotkeyBtn.classList.remove('recording');
+            settingsModal.classList.remove('active');
+        };
+
+        settingsSave.onclick = async () => {
+            recordingHotkey = false;
+            hotkeyBtn.classList.remove('recording');
+            
+            const disabledPlugins = [];
+            document.querySelectorAll('.plugin-checkbox').forEach(cb => {
+                if (!cb.checked) {
+                    disabledPlugins.push(cb.dataset.pluginName);
+                }
+            });
+            
+            try {
+                const res = await fetch('/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        hotkey: tempHotkey,
+                        disabledPlugins: disabledPlugins
+                    })
+                });
+                
+                if (res.ok) {
+                    ipcRenderer.send('reload-hotkey');
+                    settingsModal.classList.remove('active');
+                    loadTopWidgets(); // Top-Widgets sofort neu laden
+                    
+                    addMessage("✅ Einstellungen erfolgreich gespeichert.", false);
+                } else {
+                    alert("Fehler beim Speichern der Einstellungen.");
+                }
+            } catch (err) {
+                alert("Speichern-Fehler: " + err.message);
+            }
+        };
+
+        hotkeyBtn.onclick = () => {
+            recordingHotkey = true;
+            hotkeyBtn.classList.add('recording');
+            hotkeyBtn.textContent = 'Bitte Tasten drücken...';
+        };
+
+        document.addEventListener('keydown', async (e) => {
+            if (!recordingHotkey) return;
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            let parts = [];
+            if (e.ctrlKey) parts.push('Ctrl');
+            if (e.altKey) parts.push('Alt');
+            if (e.shiftKey) parts.push('Shift');
+            if (e.metaKey) parts.push('Cmd');
+            
+            const key = e.key;
+            if (key !== 'Control' && key !== 'Alt' && key !== 'Shift' && key !== 'Meta' && key !== 'CapsLock') {
+                let keyName = key;
+                if (keyName === ' ') keyName = 'Space';
+                else if (keyName.length === 1) keyName = keyName.toUpperCase();
+                parts.push(keyName);
+            }
+            
+            if (parts.length > 0) {
+                const hotkeyStr = parts.join('+');
+                tempHotkey = hotkeyStr;
+                hotkeyBtn.textContent = hotkeyStr;
+                
+                if (key !== 'Control' && key !== 'Alt' && key !== 'Shift' && key !== 'Meta') {
+                    recordingHotkey = false;
+                    hotkeyBtn.classList.remove('recording');
+                    
+                    // Testen über IPC
+                    const testResult = await ipcRenderer.invoke('register-hotkey-test', hotkeyStr);
+                    if (!testResult.success) {
+                        alert("Hotkey Fehler: " + testResult.error);
+                        tempHotkey = currentHotkey;
+                        hotkeyBtn.textContent = currentHotkey;
+                    }
+                }
+            }
+        });
 
         let currentConversationId = null;
         let pendingAppPath = null;
@@ -1106,8 +1472,24 @@
                         if (widget.data.tasks.length === 0) {
                             html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 0;">Keine offenen Aufgaben.</p>`;
                         } else {
+                            const groupedTasks = {};
                             widget.data.tasks.forEach(t => {
-                                html += `<div style="font-size: 0.8rem; margin-bottom: 5px; display: flex; align-items: center; gap: 5px;"><input type="checkbox" disabled style="width: 12px; margin: 0;"> ${t.title}</div>`;
+                                const listName = t.listTitle || "Meine Aufgaben";
+                                if (!groupedTasks[listName]) groupedTasks[listName] = [];
+                                groupedTasks[listName].push(t);
+                            });
+
+                            Object.keys(groupedTasks).forEach(listName => {
+                                html += `<div style="font-weight: 600; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin: 12px 0 6px 0; text-transform: uppercase; letter-spacing: 0.5px;">${listName}</div>`;
+                                html += `<div style="display: flex; flex-direction: column; gap: 4px;">`;
+                                groupedTasks[listName].forEach(t => {
+                                    html += `
+                                        <label style="font-size: 0.8rem; display: flex; align-items: flex-start; gap: 8px; padding: 4px 6px; border-radius: 6px; background: rgba(255,255,255,0.05); transition: background 0.2s;">
+                                            <input type="checkbox" disabled style="margin-top: 3px; accent-color: var(--accent);">
+                                            <span style="flex: 1; line-height: 1.4;">${t.title}</span>
+                                        </label>`;
+                                });
+                                html += `</div>`;
                             });
                         }
                         
@@ -1117,6 +1499,9 @@
                     
                     topWidgetsContainer.appendChild(widgetDiv);
                 });
+                
+                // Sofort prüfen, ob ein Widget (wie Calendar) Fehler geworfen hat und Authentifizierung fordert
+                loadAlerts();
             } catch (e) {
                 console.error("Fehler beim Laden der Top-Widgets:", e);
             }
@@ -1144,8 +1529,7 @@
         userInput.onkeypress = (e) => { if (e.key === 'Enter') sendMessage(); };
 
         loadTopWidgets();
-        loadAlerts();
-        setInterval(loadAlerts, 60000); // Jede Minute prüfen
+        setInterval(loadAlerts, 3000); // Alle 3 Sekunden prüfen
 
     </script>
 </body>
