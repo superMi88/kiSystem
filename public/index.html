@@ -638,6 +638,13 @@
             ipcRenderer.send('hide-window');
         };
 
+        // Schließen wenn auf den transparenten Hintergrund (außerhalb der Kacheln) geklickt wird
+        document.addEventListener('click', (e) => {
+            if (e.target === document.body || e.target.classList.contains('side-panel-container')) {
+                ipcRenderer.send('hide-window');
+            }
+        });
+
         // Drag & Drop Logik
         const handleDrag = (e) => {
             e.preventDefault();

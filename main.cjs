@@ -57,6 +57,7 @@ function createWindow() {
     console.log('Fenster wird angezeigt...');
     // Wir stellen sicher, dass die Klasse erst nach dem Show gesetzt wird
     mainWindow.webContents.executeJavaScript('document.body.classList.add("active")');
+    mainWindow.focus(); // Fokus erzwingen, damit das blur-Event später zuverlässig feuert
   });
 
   mainWindow.on('hide', () => {
