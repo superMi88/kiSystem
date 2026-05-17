@@ -1,9 +1,10 @@
-const { app, BrowserWindow, Tray, Menu, screen } = require('electron');
+const { app, BrowserWindow, Tray, Menu, screen, ipcMain } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
 
 let mainWindow;
 let tray;
+let dropZoneWindow;
 
 function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
@@ -54,7 +55,7 @@ function createWindow() {
   // Animation Trigger
   mainWindow.on('show', () => {
     console.log('Fenster wird angezeigt...');
-    // Wir senden es verzögert, falls die Seite noch lädt
+    // Wir stellen sicher, dass die Klasse erst nach dem Show gesetzt wird
     mainWindow.webContents.executeJavaScript('document.body.classList.add("active")');
   });
 
@@ -62,17 +63,93 @@ function createWindow() {
     console.log('Fenster versteckt.');
     mainWindow.webContents.executeJavaScript('document.body.classList.remove("active")');
   });
+
+  // Schließen wenn man außerhalb klickt (Fokus verliert)
+  mainWindow.on('blur', () => {
+    console.log('Fokus verloren, verstecke Fenster...');
+    hideWindowWithAnimation();
+  });
+}
+
+function createDropZoneWindow() {
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+
+  dropZoneWindow = new BrowserWindow({
+    width: 100,
+    height: height, // Ganze Höhe
+    x: width - 100,
+    y: 0,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    focusable: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+
+  // Höchste Ebene für Sichtbarkeit
+  dropZoneWindow.setAlwaysOnTop(true, 'screen-saver');
+
+  dropZoneWindow.loadFile(path.join(__dirname, 'public/dropzone.html'));
+  
+  if (isDev) {
+    dropZoneWindow.webContents.openDevTools({ mode: 'detach' });
+  }
+
+  dropZoneWindow.showInactive();
+  
+  // Verhindere, dass das Fenster Fokus klaut
+  dropZoneWindow.setIgnoreMouseEvents(false);
+}
+
+// IPC für DropZone-Größe
+ipcMain.on('resize-dropzone', (event, expand) => {
+  if (dropZoneWindow) {
+    const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+    if (expand) {
+      dropZoneWindow.setBounds({
+        width: 250, // Breiter beim Ausklappen
+        height: height,
+        x: width - 250,
+        y: 0
+      });
+    } else {
+      dropZoneWindow.setBounds({
+        width: 100,
+        height: height,
+        x: width - 100,
+        y: 0
+      });
+    }
+  }
+});
+
+function hideWindowWithAnimation() {
+  if (mainWindow && mainWindow.isVisible()) {
+    mainWindow.webContents.executeJavaScript('document.body.classList.remove("active")');
+    setTimeout(() => {
+      if (mainWindow) mainWindow.hide();
+    }, 400); // 400ms entspricht der CSS Transition
+  }
 }
 
 // IPC zum Verstecken des Fensters
-const { ipcMain } = require('electron');
 ipcMain.on('hide-window', () => {
+  console.log('Verstecke Fenster über IPC...');
+  hideWindowWithAnimation();
+});
+
+ipcMain.on('files-dropped', (event, filePaths) => {
+  console.log('Dateien im DropZone empfangen:', filePaths);
   if (mainWindow) {
-    console.log('Verstecke Fenster über IPC...');
-    mainWindow.webContents.executeJavaScript('document.body.classList.remove("active")');
-    setTimeout(() => {
-      mainWindow.hide();
-    }, 400);
+    if (!mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+    mainWindow.webContents.send('process-dropped-files', filePaths);
   }
 });
 
@@ -86,7 +163,9 @@ function createTray() {
     const contextMenu = Menu.buildFromTemplate([
       { label: 'Anzeigen', click: () => {
           console.log('Tray Menu: Anzeigen geklickt');
-          mainWindow.show();
+          if (mainWindow && !mainWindow.isVisible()) {
+            mainWindow.show();
+          }
         }
       },
       { type: 'separator' },
@@ -102,7 +181,7 @@ function createTray() {
     tray.on('click', () => {
       console.log('Tray Icon geklickt.');
       if (mainWindow.isVisible()) {
-        mainWindow.hide();
+        hideWindowWithAnimation();
       } else {
         mainWindow.show();
       }
@@ -115,6 +194,7 @@ function createTray() {
 app.whenReady().then(() => {
   createWindow();
   createTray();
+  createDropZoneWindow();
 
   // Automatisch anzeigen beim Start für bessere Rückmeldung
   setTimeout(() => {

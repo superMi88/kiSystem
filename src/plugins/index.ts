@@ -4,6 +4,7 @@ import { lightPlugin } from "./LightControl/index.js";
 import { appLauncherPlugin } from "./AppLauncher/index.js";
 import { memoryPlugin } from "./Memory/index.js";
 import { calendarPlugin } from "./Calendar/index.js";
+import { imageGeneratorPlugin } from "./ImageGenerator/index.js";
 
 export class PluginManager {
   private plugins: Plugin[] = [];
@@ -15,6 +16,7 @@ export class PluginManager {
     this.registerPlugin(appLauncherPlugin);
     this.registerPlugin(memoryPlugin);
     this.registerPlugin(calendarPlugin);
+    this.registerPlugin(imageGeneratorPlugin);
   }
 
   registerPlugin(plugin: Plugin) {

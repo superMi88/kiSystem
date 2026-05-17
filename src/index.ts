@@ -21,7 +21,8 @@ const pluginManager = new PluginManager(prisma);
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static('public'));
 
 const server = new Server(
@@ -134,7 +135,8 @@ app.get("/auth/google/callback", async (req, res) => {
  * Gemini AI Integration
  */
 app.post("/chat", async (req, res) => {
-  let { message, audio, conversationId } = req.body;
+  let { message, audio, attachments, conversationId } = req.body;
+  console.log("Chat Request Body:", { message, hasAudio: !!audio, attachmentsCount: attachments?.length, conversationId });
 
   try {
     // Erstelle neue Konversation, falls keine existiert
@@ -147,11 +149,11 @@ app.post("/chat", async (req, res) => {
     }
 
     // Speichere Benutzer-Nachricht in DB
-    if (message || audio) {
+    if (message || audio || (attachments && attachments.length > 0)) {
       await prisma.chatMessage.create({
         data: { 
           role: "user", 
-          text: message || "🎤 Sprachnachricht", 
+          text: message || (attachments && attachments.length > 0 ? "🖼️ Bild-Anhang" : "🎤 Sprachnachricht"), 
           conversationId 
         }
       });
@@ -161,8 +163,9 @@ app.post("/chat", async (req, res) => {
     const dateString = now.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     const timeString = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 
+    const modelName = process.env.GEMINI_MODEL || "gemini-flash-latest";
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: modelName,
       tools: [{ functionDeclarations: pluginManager.getGeminiTools() } as any],
       systemInstruction: {
         role: "system",
@@ -182,7 +185,11 @@ Antworte kurz und präzise.` }]
     
     // Baue die Nachricht für Gemini zusammen
     const promptParts: any[] = [];
-    if (message) promptParts.push(message);
+    if (message) {
+      promptParts.push(message);
+    } else if (attachments && attachments.length > 0) {
+      promptParts.push("Analysiere diesen Anhang."); // Default prompt if only image is sent
+    }
     if (audio) {
       console.log("Empfange Audio-Daten (Base64 Länge):", audio.length);
       promptParts.push({
@@ -193,7 +200,26 @@ Antworte kurz und präzise.` }]
       });
     }
 
+    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+      console.log(`Verarbeite ${attachments.length} Anhänge für Gemini...`);
+      attachments.forEach((att: any, index: number) => {
+        if (att.base64 && att.mimeType) {
+          promptParts.push({
+            inlineData: {
+              data: att.base64,
+              mimeType: att.mimeType
+            }
+          });
+        } else {
+          console.warn(`Anhang ${index} ist unvollständig:`, { hasBase64: !!att.base64, mimeType: att.mimeType });
+        }
+      });
+    }
+
     console.log("Sende Anfrage an Gemini mit", promptParts.length, "Teilen.");
+    if (promptParts.length === 0) {
+      throw new Error("Kein Inhalt (Text oder Bilder) zum Senden vorhanden.");
+    }
     const result = await chat.sendMessage(promptParts);
     const response = result.response;
     let aiText = "";
@@ -215,6 +241,8 @@ Antworte kurz und präzise.` }]
       let toolResult: any;
       try {
         toolResult = await pluginManager.executeTool(call.name, call.args);
+        console.log("Tool Ergebnis empfangen:", { name: call.name, hasWidget: !!toolResult?.type });
+        
         // Falls das Tool ein Widget zurückgibt, speichern wir es für das Frontend
         if (toolResult && toolResult.type) {
           widgetData = toolResult;
@@ -224,9 +252,14 @@ Antworte kurz und präzise.` }]
         toolResult = { status: "error", message: "Interner Tool-Fehler." };
       }
 
-      // Sende Tool-Ergebnis zurück an Gemini
+      // Sende Tool-Ergebnis zurück an Gemini (ohne die riesigen Base64-Daten)
+      let responseToGemini = toolResult;
+      if (toolResult && toolResult.type === 'image_widget' && toolResult.url.startsWith('data:')) {
+        responseToGemini = { ...toolResult, url: "[BILD_DATEN_GESENDET]" };
+      }
+
       const nextStep = await chat.sendMessage([{
-        functionResponse: { name: call.name, response: toolResult }
+        functionResponse: { name: call.name, response: responseToGemini }
       }]);
       currentResponse = nextStep.response;
       step++;

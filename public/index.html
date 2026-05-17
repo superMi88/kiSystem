@@ -34,16 +34,17 @@
             flex-direction: column;
             height: 100vh;
             padding: var(--gap);
-            width: 400px;
-            float: right;
-            transform: translateX(110%);
+            width: 100%;
+            transform: translateX(100%);
             opacity: 0;
             transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: none; /* Keine Klicks während es versteckt ist */
         }
 
         body.active .side-panel-container {
             transform: translateX(0);
             opacity: 1;
+            pointer-events: auto;
         }
 
         /* Gemeinsame Kachel-Stile */
@@ -306,6 +307,40 @@
         #mic-btn:hover { background: rgba(255,255,255,0.15); }
         #send-btn:active { transform: scale(0.95); }
 
+        /* Attachment Preview Area */
+        .attachments-bar {
+            padding: 5px 20px;
+            display: none;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.1);
+            overflow-x: auto;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .attachments-bar.active { display: flex; }
+        .attachment-chip {
+            background: rgba(137, 180, 250, 0.15);
+            border: 1px solid rgba(137, 180, 250, 0.3);
+            border-radius: 6px;
+            padding: 4px 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.75rem;
+            color: var(--accent);
+            white-space: nowrap;
+        }
+        .attachment-chip img {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            object-fit: cover;
+        }
+        .attachment-chip .remove {
+            cursor: pointer;
+            opacity: 0.6;
+        }
+        .attachment-chip .remove:hover { opacity: 1; color: var(--off); }
+
         /* Widget Stile */
         .widget {
             width: 100%;
@@ -396,6 +431,52 @@
         }
 
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Image Widget Stile */
+        .image-widget {
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex-shrink: 0; /* Verhindert das Schrumpfen */
+            margin: 10px 0;
+            width: calc(100% - 20px);
+        }
+        .generated-image {
+            width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        .generated-image:hover {
+            transform: scale(1.02);
+        }
+        .image-caption {
+            font-size: 0.75rem;
+            opacity: 0.6;
+            font-style: italic;
+        }
+        .image-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .image-btn {
+            background: rgba(137, 180, 250, 0.2);
+            border: 1px solid rgba(137, 180, 250, 0.3);
+            color: var(--accent);
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
     </style>
 </head>
 <body>
@@ -451,6 +532,10 @@
         <div id="chat-section" class="bottom-section glass-card">
             <div class="chat-area" id="chat-box">
                 <div class="message ai">Hallo! Ich bin dein Gemini-Lichtassistent. Wie kann ich dir helfen?</div>
+            </div>
+
+            <div id="attachments-bar" class="attachments-bar">
+                <!-- Dateianhänge kommen hierher -->
             </div>
 
             <div class="input-area">
@@ -621,6 +706,91 @@
             } catch (e) {
                 console.error("Registrierungs-Fehler:", e);
                 addMessage("Fehler beim Registrieren.", false);
+            }
+        }
+
+        // Anhänge Logik
+        let attachedFiles = [];
+        const attachmentsBar = document.getElementById('attachments-bar');
+
+        ipcRenderer.on('process-dropped-files', async (event, filePaths) => {
+            console.log("Verarbeite gedroppte Dateien:", filePaths);
+            for (const path of filePaths) {
+                await addAttachment(path);
+            }
+        });
+
+        async function addAttachment(filePath) {
+            const fs = require('fs');
+            const path = require('path');
+            
+            try {
+                const stats = fs.statSync(filePath);
+                if (stats.isDirectory()) return;
+
+                const fileName = path.basename(filePath);
+                const ext = path.extname(filePath).toLowerCase();
+                const buffer = fs.readFileSync(filePath);
+                const base64 = buffer.toString('base64');
+                
+                let mimeType = 'application/octet-stream';
+                if (ext === '.png') mimeType = 'image/png';
+                else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
+                else if (ext === '.webp') mimeType = 'image/webp';
+                else if (ext === '.gif') mimeType = 'image/gif';
+                else if (ext === '.pdf') mimeType = 'application/pdf';
+                else if (ext === '.txt' || ext === '.md' || ext === '.ts' || ext === '.js') mimeType = 'text/plain';
+                else if (ext === '.mp3') mimeType = 'audio/mpeg';
+                else if (ext === '.wav') mimeType = 'audio/wav';
+                else if (ext === '.mp4') mimeType = 'video/mp4';
+
+                const attachment = {
+                    name: fileName,
+                    path: filePath,
+                    base64: base64,
+                    mimeType: mimeType,
+                    isImage: mimeType.startsWith('image/')
+                };
+
+                console.log("Anhang hinzugefügt:", fileName, mimeType);
+                attachedFiles.push(attachment);
+                renderAttachments();
+            } catch (err) {
+                console.error("Fehler beim Lesen der Datei:", err);
+            }
+        }
+
+        function renderAttachments() {
+            attachmentsBar.innerHTML = '';
+            if (attachedFiles.length > 0) {
+                attachmentsBar.classList.add('active');
+                attachedFiles.forEach((file, index) => {
+                    const chip = document.createElement('div');
+                    chip.className = 'attachment-chip';
+                    
+                    if (file.isImage) {
+                        const img = document.createElement('img');
+                        img.src = `data:${file.mimeType};base64,${file.base64}`;
+                        chip.appendChild(img);
+                    }
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = file.name;
+                    chip.appendChild(nameSpan);
+
+                    const removeBtn = document.createElement('span');
+                    removeBtn.className = 'remove';
+                    removeBtn.innerHTML = '&times;';
+                    removeBtn.onclick = () => {
+                        attachedFiles.splice(index, 1);
+                        renderAttachments();
+                    };
+                    chip.appendChild(removeBtn);
+
+                    attachmentsBar.appendChild(chip);
+                });
+            } else {
+                attachmentsBar.classList.remove('active');
             }
         }
 
@@ -819,6 +989,12 @@
                     <p style="font-size:0.85rem; margin:0;">${data.message}</p>
                     <a href="${data.url}" target="_blank" class="auth-btn">Google Kalender verbinden</a>
                 `;
+            } else if (data.type === 'image_widget') {
+                widgetDiv.classList.add('image-widget');
+                widgetDiv.innerHTML = `
+                    <img src="${data.url}" class="generated-image" alt="${data.prompt}">
+                    <div class="image-caption">"${data.prompt}"</div>
+                `;
             }
 
             container.appendChild(widgetDiv);
@@ -826,10 +1002,15 @@
 
         async function sendMessage() {
             const text = userInput.value.trim();
-            if (!text) return;
+            if (!text && attachedFiles.length === 0) return;
 
-            addMessage(text, true);
+            addMessage(text || (attachedFiles.length + " Anhänge"), true);
             userInput.value = '';
+
+            const attachmentsToSend = [...attachedFiles];
+            console.log("Sende Nachricht mit Anhängen:", attachmentsToSend.length);
+            attachedFiles = [];
+            renderAttachments();
 
             try {
                 const res = await fetch('/chat', {
@@ -837,6 +1018,7 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ 
                         message: text,
+                        attachments: attachmentsToSend,
                         conversationId: currentConversationId 
                     })
                 });

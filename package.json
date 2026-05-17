@@ -6,7 +6,7 @@
     "build": "tsc",
     "start": "node build/index.js",
     "electron": "electron .",
-    "dev": "concurrently \"npm start\" \"electron .\""
+    "dev": "npm run build && concurrently \"npm start\" \"electron .\""
   },
   "main": "main.cjs",
   "dependencies": {
