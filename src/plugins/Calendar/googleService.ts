@@ -16,7 +16,8 @@ export class GoogleCalendarService {
   getAuthUrl() {
     const scopes = [
       'https://www.googleapis.com/auth/calendar.readonly',
-      'https://www.googleapis.com/auth/calendar.events'
+      'https://www.googleapis.com/auth/calendar.events',
+      'https://www.googleapis.com/auth/tasks'
     ];
     return oauth2Client.generateAuthUrl({
       access_type: 'offline',
@@ -56,25 +57,67 @@ export class GoogleCalendarService {
     return google.calendar({ version: 'v3', auth: oauth2Client });
   }
 
-  async getEvents(date: Date) {
+  private async getAuthenticatedTasksClient() {
+    const authRecord = await this.prisma.googleAuth.findUnique({ where: { id: 1 } });
+    if (!authRecord) return null;
+
+    oauth2Client.setCredentials({
+      access_token: authRecord.accessToken,
+      refresh_token: authRecord.refreshToken,
+      expiry_date: Number(authRecord.expiryDate)
+    });
+    return google.tasks({ version: 'v1', auth: oauth2Client });
+  }
+
+  async getEvents(date: Date, endDate?: Date) {
     const calendar = await this.getAuthenticatedClient();
     if (!calendar) return null;
     
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
     
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+    const end = endDate ? new Date(endDate) : new Date(date);
+    end.setHours(23, 59, 59, 999);
 
     const res = await calendar.events.list({
       calendarId: 'primary',
       timeMin: startOfDay.toISOString(),
-      timeMax: endOfDay.toISOString(),
+      timeMax: end.toISOString(),
       singleEvents: true,
       orderBy: 'startTime',
     });
 
     return res.data.items || [];
+  }
+
+  async getIncompleteTasks() {
+    try {
+      const tasksClient = await this.getAuthenticatedTasksClient();
+      if (!tasksClient) return [];
+
+      const taskLists = await tasksClient.tasklists.list();
+      const lists = taskLists.data.items || [];
+      const allTasks = [];
+
+      for (const list of lists) {
+        if (!list.id) continue;
+        const res = await tasksClient.tasks.list({
+          tasklist: list.id,
+          showCompleted: false,
+          showHidden: false
+        });
+        const items = res.data.items || [];
+        allTasks.push(...items.filter(t => t.status === 'needsAction'));
+      }
+      return allTasks;
+    } catch (e: any) {
+      console.warn(`Konnte Aufgaben nicht abrufen (Möglicherweise fehlt die Berechtigung): ${e.message}`);
+      if (e.message && e.message.includes('insufficient authentication scopes')) {
+        console.log('Lösche veraltete Tokens, um Neu-Authentifizierung zu erzwingen...');
+        await this.prisma.googleAuth.delete({ where: { id: 1 } }).catch(() => {});
+      }
+      return [];
+    }
   }
 
   async createEvent(title: string, date: Date, description?: string) {

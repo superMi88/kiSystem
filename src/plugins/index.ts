@@ -62,5 +62,20 @@ export class PluginManager {
     }
     return alerts;
   }
+
+  async getAllTopWidgets() {
+    const widgets = [];
+    for (const plugin of this.plugins) {
+      if (plugin.getTopWidgets) {
+        try {
+          const pluginWidgets = await plugin.getTopWidgets({ prisma: this.prisma });
+          widgets.push(...pluginWidgets);
+        } catch (e) {
+          console.error(`Fehler beim Laden der Top-Widgets von ${plugin.name}:`, e);
+        }
+      }
+    }
+    return widgets;
+  }
 }
 

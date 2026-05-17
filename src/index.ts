@@ -101,6 +101,11 @@ app.get("/alerts", async (req, res) => {
   res.json(alerts);
 });
 
+app.get("/widgets", async (req, res) => {
+  const widgets = await pluginManager.getAllTopWidgets();
+  res.json(widgets);
+});
+
 app.post("/messages", async (req, res) => {
 
   if (transport) {

@@ -175,6 +175,44 @@ export const calendarPlugin: Plugin = {
       }];
     }
     return [];
+  },
+  getTopWidgets: async ({ prisma }) => {
+    const auth = await prisma.googleAuth.findUnique({ where: { id: 1 } });
+    if (!auth) return [];
+
+    const service = new GoogleCalendarService(prisma);
+    const today = new Date();
+    const inThreeDays = new Date();
+    inThreeDays.setDate(today.getDate() + 3);
+
+    let events: any[] = [];
+    let tasks: any[] = [];
+
+    try {
+      events = await service.getEvents(today, inThreeDays) || [];
+      tasks = await service.getIncompleteTasks() || [];
+    } catch (e) {
+      console.warn("Fehler beim Abrufen von Kalender-Widget-Daten:", e);
+    }
+
+    return [
+      {
+        pluginName: "Calendar",
+        type: "calendar_overview",
+        data: {
+          events: events.map(e => ({
+            id: e.id,
+            title: e.summary,
+            time: e.start?.dateTime || e.start?.date
+          })),
+          tasks: tasks.map(t => ({
+            id: t.id,
+            title: t.title,
+            due: t.due
+          }))
+        }
+      }
+    ];
   }
 };
 

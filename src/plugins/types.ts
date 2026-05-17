@@ -19,9 +19,16 @@ export interface PluginAlert {
   actionUrl?: string;
 }
 
+export interface PluginWidget {
+  pluginName: string;
+  type: "light_control" | "calendar_overview" | "custom";
+  data: any;
+}
+
 export interface Plugin {
   name: string;
   description: string;
   tools: PluginTool[];
   getAlerts?: (context: { prisma: PrismaClient }) => Promise<PluginAlert[]>;
+  getTopWidgets?: (context: { prisma: PrismaClient }) => Promise<PluginWidget[]>;
 }

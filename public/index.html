@@ -520,12 +520,7 @@
                 </button>
             </div>
 
-            <h1>LICHT STEUERUNG</h1>
-            <div class="controls">
-                <button id="btn-on" class="tool">EIN</button>
-                <button id="btn-off" class="tool">AUS</button>
-            </div>
-            <div id="status" style="font-size: 0.75rem; opacity: 0.6;">Verbinde...</div>
+            <div id="top-widgets-container"></div>
         </div>
 
         <!-- Untere Kachel: Chat-System -->
@@ -569,8 +564,7 @@
         const notificationBar = document.getElementById('notification-bar');
         const notificationText = document.getElementById('notification-text');
         const notificationAction = document.getElementById('notification-action');
-        const btnOn = document.getElementById('btn-on');
-        const btnOff = document.getElementById('btn-off');
+        const topWidgetsContainer = document.getElementById('top-widgets-container');
 
         async function loadAlerts() {
             try {
@@ -954,10 +948,47 @@
 
         micBtn.onclick = () => isRecording ? stopRecording() : startRecording();
 
-        function addMessage(text, isUser, widget = null) {
+        function addMessage(text, isUser, widget = null, attachments = []) {
             const msg = document.createElement('div');
             msg.className = `message ${isUser ? 'user' : 'ai'}`;
-            msg.textContent = text;
+            
+            if (attachments && attachments.length > 0) {
+                const attachmentsDiv = document.createElement('div');
+                attachmentsDiv.style.display = 'flex';
+                attachmentsDiv.style.flexWrap = 'wrap';
+                attachmentsDiv.style.gap = '8px';
+                attachmentsDiv.style.marginBottom = text ? '8px' : '0';
+                
+                attachments.forEach(file => {
+                    if (file.isImage) {
+                        const img = document.createElement('img');
+                        img.src = `data:${file.mimeType};base64,${file.base64}`;
+                        img.style.maxWidth = '100%';
+                        img.style.maxHeight = '150px';
+                        img.style.borderRadius = '6px';
+                        img.style.objectFit = 'contain';
+                        img.style.border = '1px solid rgba(255,255,255,0.1)';
+                        attachmentsDiv.appendChild(img);
+                    } else {
+                        const fileChip = document.createElement('div');
+                        fileChip.style.background = 'rgba(0,0,0,0.2)';
+                        fileChip.style.padding = '6px 10px';
+                        fileChip.style.borderRadius = '6px';
+                        fileChip.style.fontSize = '0.75rem';
+                        fileChip.style.border = '1px solid rgba(255,255,255,0.1)';
+                        fileChip.textContent = '📎 ' + file.name;
+                        attachmentsDiv.appendChild(fileChip);
+                    }
+                });
+                msg.appendChild(attachmentsDiv);
+            }
+            
+            if (text) {
+                const textDiv = document.createElement('div');
+                textDiv.textContent = text;
+                msg.appendChild(textDiv);
+            }
+
             chatBox.appendChild(msg);
 
             if (widget) {
@@ -1011,10 +1042,10 @@
             const text = userInput.value.trim();
             if (!text && attachedFiles.length === 0) return;
 
-            addMessage(text || (attachedFiles.length + " Anhänge"), true);
+            const attachmentsToSend = [...attachedFiles];
+            addMessage(text, true, null, attachmentsToSend);
             userInput.value = '';
 
-            const attachmentsToSend = [...attachedFiles];
             console.log("Sende Nachricht mit Anhängen:", attachmentsToSend.length);
             attachedFiles = [];
             renderAttachments();
@@ -1032,45 +1063,87 @@
                 const data = await res.json();
                 currentConversationId = data.conversationId;
                 addMessage(data.text, false, data.widget);
-                updateStatus();
+                loadTopWidgets();
             } catch (e) {
                 addMessage("Fehler beim Senden der Nachricht.", false);
             }
         }
 
 
-        async function updateStatus() {
+        async function loadTopWidgets() {
             try {
-                const res = await fetch('/messages', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        jsonrpc: "2.0", id: 1, method: "tools/call",
-                        params: { name: "pruefe_licht", arguments: {} }
-                    })
-                });
-                const data = await res.json();
-                const text = data.result.content[0].text;
-                statusEl.textContent = text;
+                const res = await fetch('/widgets');
+                const widgets = await res.json();
+                topWidgetsContainer.innerHTML = '';
                 
-                if (text.includes('on')) {
-                    btnOn.classList.add('active-on');
-                    btnOff.classList.remove('active-off');
-                } else {
-                    btnOff.classList.add('active-off');
-                    btnOn.classList.remove('active-on');
-                }
+                widgets.forEach(widget => {
+                    const widgetDiv = document.createElement('div');
+                    widgetDiv.style.marginBottom = '15px';
+                    
+                    if (widget.type === 'light_control') {
+                        widgetDiv.innerHTML = `
+                            <h1>LICHT STEUERUNG</h1>
+                            <div class="controls">
+                                <button class="tool ${widget.data.status === 'on' ? 'active-on' : ''}" onclick="callTool('schalte_licht', {status: 'on'})">EIN</button>
+                                <button class="tool ${widget.data.status === 'off' ? 'active-off' : ''}" onclick="callTool('schalte_licht', {status: 'off'})">AUS</button>
+                            </div>
+                            <div style="font-size: 0.75rem; opacity: 0.6;">Status: ${widget.data.status === 'on' ? 'An' : 'Aus'}</div>
+                        `;
+                    } else if (widget.type === 'calendar_overview') {
+                        let html = `<h1>GOOGLE KALENDER</h1><div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">`;
+                        
+                        html += `<h4 style="margin: 0 0 10px 0; color: var(--accent); font-size: 0.8rem;">Termine (nächste 3 Tage)</h4>`;
+                        if (widget.data.events.length === 0) {
+                            html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 0 0 10px 0;">Keine Termine.</p>`;
+                        } else {
+                            widget.data.events.forEach(ev => {
+                                const timeStr = ev.time ? new Date(ev.time).toLocaleString('de-DE', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : 'Ganztägig';
+                                html += `<div style="font-size: 0.8rem; margin-bottom: 5px; display: flex; justify-content: space-between;"><span>${ev.title}</span><span style="opacity: 0.6;">${timeStr}</span></div>`;
+                            });
+                        }
+
+                        html += `<h4 style="margin: 15px 0 10px 0; color: var(--accent); font-size: 0.8rem;">Offene Aufgaben</h4>`;
+                        if (widget.data.tasks.length === 0) {
+                            html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 0;">Keine offenen Aufgaben.</p>`;
+                        } else {
+                            widget.data.tasks.forEach(t => {
+                                html += `<div style="font-size: 0.8rem; margin-bottom: 5px; display: flex; align-items: center; gap: 5px;"><input type="checkbox" disabled style="width: 12px; margin: 0;"> ${t.title}</div>`;
+                            });
+                        }
+                        
+                        html += `</div>`;
+                        widgetDiv.innerHTML = html;
+                    }
+                    
+                    topWidgetsContainer.appendChild(widgetDiv);
+                });
             } catch (e) {
-                statusEl.textContent = "Offline";
+                console.error("Fehler beim Laden der Top-Widgets:", e);
             }
         }
 
+        async function callTool(name, args) {
+            try {
+                await fetch('/messages', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        jsonrpc: "2.0", id: Date.now(), method: "tools/call",
+                        params: { name, arguments: args }
+                    })
+                });
+                loadTopWidgets();
+            } catch(e) {
+                console.error("Tool Call Error:", e);
+            }
+        }
+
+        window.callTool = callTool;
+
         sendBtn.onclick = sendMessage;
         userInput.onkeypress = (e) => { if (e.key === 'Enter') sendMessage(); };
-        btnOn.onclick = () => fetch('/messages', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "schalte_licht", arguments: {status: 'on'} }}) }).then(updateStatus);
-        btnOff.onclick = () => fetch('/messages', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "schalte_licht", arguments: {status: 'off'} }}) }).then(updateStatus);
 
-        updateStatus();
+        loadTopWidgets();
         loadAlerts();
         setInterval(loadAlerts, 60000); // Jede Minute prüfen
 

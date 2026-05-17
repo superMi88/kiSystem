@@ -40,5 +40,15 @@ export const lightPlugin: Plugin = {
         return { status: entry?.status || "off" };
       }
     }
-  ]
+  ],
+  getTopWidgets: async ({ prisma }) => {
+    const entry = await prisma.lichtStatus.findUnique({ where: { id: 1 } });
+    return [
+      {
+        pluginName: "LightControl",
+        type: "light_control",
+        data: { status: entry?.status || "off" }
+      }
+    ];
+  }
 };
