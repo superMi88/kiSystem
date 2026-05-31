@@ -130,7 +130,7 @@ export class GoogleCalendarService {
           showHidden: true
         });
         const items = res.data.items || [];
-        allTasks.push(...items.filter(t => t.status === 'needsAction').map(t => ({...t, listTitle: list.title})));
+        allTasks.push(...items.filter(t => t.status === 'needsAction').map(t => ({...t, listTitle: list.title, tasklistId: list.id})));
       }
       
       console.log(`Geladene Aufgaben (insgesamt ${allTasks.length}):`, allTasks.map(t => t.title).join(", "));
@@ -204,6 +204,21 @@ export class GoogleCalendarService {
       calendarId: 'primary',
       eventId: eventId,
       requestBody: requestBody,
+    });
+
+    return res.data;
+  }
+
+  async completeTask(tasklistId: string, taskId: string) {
+    const tasksClient = await this.getAuthenticatedTasksClient();
+    if (!tasksClient) throw new Error("Google Tasks Client nicht authentifiziert.");
+
+    const res = await tasksClient.tasks.patch({
+      tasklist: tasklistId,
+      task: taskId,
+      requestBody: {
+        status: 'completed'
+      }
     });
 
     return res.data;

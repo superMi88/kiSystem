@@ -203,10 +203,12 @@ export const calendarPlugin: Plugin = {
           events: events.map(e => ({
             id: e.id,
             title: e.summary,
-            time: e.start?.dateTime || e.start?.date
+            time: e.start?.dateTime || e.start?.date,
+            recurring: !!e.recurringEventId
           })),
           tasks: tasks.map(t => ({
             id: t.id,
+            tasklistId: t.tasklistId,
             title: t.title,
             due: t.due,
             listTitle: t.listTitle

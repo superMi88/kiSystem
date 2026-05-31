@@ -107,6 +107,22 @@ app.get("/widgets", async (req, res) => {
   res.json(widgets);
 });
 
+app.post("/tasks/complete", async (req, res) => {
+  const { tasklistId, taskId } = req.body;
+  if (!tasklistId || !taskId) {
+    return res.status(400).json({ error: "tasklistId und taskId sind erforderlich." });
+  }
+  try {
+    const { GoogleCalendarService } = await import("./plugins/Calendar/googleService.js");
+    const googleService = new GoogleCalendarService(prisma);
+    await googleService.completeTask(tasklistId, taskId);
+    res.json({ success: true, message: "Aufgabe erfolgreich erledigt." });
+  } catch (e: any) {
+    console.error("Fehler beim Erledigen der Aufgabe:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 /**
  * Settings API
  */

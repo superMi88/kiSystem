@@ -1,4 +1,6 @@
 {
   "hotkey": "Home",
-  "disabledPlugins": []
+  "disabledPlugins": [
+    "LightControl"
+  ]
 }

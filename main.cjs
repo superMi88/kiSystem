@@ -16,6 +16,35 @@ function getSettings() {
   return { hotkey: 'Ctrl+Shift+Space', disabledPlugins: [] };
 }
 
+let isHiding = false;
+
+function toggleWindow() {
+  if (!mainWindow) return;
+  
+  if (isHiding) {
+    // Wenn das Fenster gerade schließt, brechen wir das Schließen ab,
+    // zeigen es sofort wieder an und stellen die aktive Klasse wieder her.
+    console.log('Abbruch des Schließens. Zeige beide Fenster sofort wieder an.');
+    isHiding = false;
+    mainWindow.show();
+    if (pluginsWindow) pluginsWindow.show();
+    mainWindow.webContents.executeJavaScript('document.body.classList.add("active")');
+    if (pluginsWindow) pluginsWindow.webContents.executeJavaScript('document.body.classList.add("active")');
+    return;
+  }
+  
+  if (mainWindow.isVisible()) {
+    hideWindowWithAnimation();
+  } else {
+    mainWindow.show();
+    if (pluginsWindow) pluginsWindow.show();
+    setTimeout(() => {
+      if (mainWindow) mainWindow.webContents.executeJavaScript('document.body.classList.add("active")');
+      if (pluginsWindow) pluginsWindow.webContents.executeJavaScript('document.body.classList.add("active")');
+    }, 50);
+  }
+}
+
 function registerGlobalHotkey() {
   const settings = getSettings();
   const hotkey = settings.hotkey || 'Ctrl+Shift+Space';
@@ -27,13 +56,7 @@ function registerGlobalHotkey() {
   try {
     const ret = globalShortcut.register(hotkey, () => {
       console.log(`Hotkey ${hotkey} gedrückt!`);
-      if (mainWindow) {
-        if (mainWindow.isVisible()) {
-          hideWindowWithAnimation();
-        } else {
-          mainWindow.show();
-        }
-      }
+      toggleWindow();
     });
     
     if (!ret) {
@@ -50,6 +73,8 @@ function registerGlobalHotkey() {
 ipcMain.on('reload-hotkey', () => {
   console.log('Neu-Registrierung des Hotkeys angefordert...');
   registerGlobalHotkey();
+  if (mainWindow) mainWindow.webContents.send('settings-updated');
+  if (pluginsWindow) pluginsWindow.webContents.send('settings-updated');
 });
 
 // IPC zum Testen von Hotkeys vor dem Speichern
@@ -89,14 +114,15 @@ ipcMain.handle('register-hotkey-test', async (event, hotkey) => {
 });
 
 let mainWindow;
+let pluginsWindow;
 let tray;
-let dropZoneWindow;
 
 function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   
-  console.log('Erstelle Fenster...');
+  console.log('Erstelle beide Fenster...');
 
+  // 1. Chat-Fenster (Rechts, 450px)
   mainWindow = new BrowserWindow({
     width: 450,
     height: height,
@@ -105,7 +131,24 @@ function createWindow() {
     frame: false,
     transparent: true,
     alwaysOnTop: true,
-    skipTaskbar: false, // Auf false gesetzt, damit man sieht, ob es da ist
+    skipTaskbar: false,
+    show: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+
+  // 2. Plugins-Fenster (Links, 450px)
+  pluginsWindow = new BrowserWindow({
+    width: 450,
+    height: height,
+    x: 0,
+    y: 0,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: false,
     show: false,
     webPreferences: {
       nodeIntegration: true,
@@ -116,14 +159,18 @@ function createWindow() {
   // Öffne DevTools im Entwicklungsmodus
   if (isDev) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
+    pluginsWindow.webContents.openDevTools({ mode: 'detach' });
   }
 
-  // Lade die URL des Express-Servers mit Retry-Logik
+  // Lade die URL des Express-Servers mit Retry-Logik und verschiedenen Hashes
   const loadURL = () => {
-    mainWindow.loadURL('http://localhost:3001').then(() => {
-      console.log('Erfolgreich geladen!');
+    Promise.all([
+      mainWindow.loadURL('http://localhost:3001/#chat'),
+      pluginsWindow.loadURL('http://localhost:3001/#plugins')
+    ]).then(() => {
+      console.log('Beide Fenster erfolgreich geladen!');
     }).catch(err => {
-      console.log('Server noch nicht bereit (Port 3001), versuche es in 1 Sekunde erneut...');
+      console.log('Server noch nicht bereit, versuche es erneut...');
       setTimeout(loadURL, 1000);
     });
   };
@@ -132,94 +179,68 @@ function createWindow() {
 
   // Wenn der Inhalt fertig geladen ist
   mainWindow.webContents.on('did-finish-load', () => {
-    console.log('Inhalt geladen.');
+    console.log('Chat-Inhalt geladen.');
     if (mainWindow.isVisible()) {
       mainWindow.webContents.executeJavaScript('document.body.classList.add("active")');
     }
   });
 
-  // Animation Trigger
+  pluginsWindow.webContents.on('did-finish-load', () => {
+    console.log('Plugins-Inhalt geladen.');
+    if (pluginsWindow.isVisible()) {
+      pluginsWindow.webContents.executeJavaScript('document.body.classList.add("active")');
+    }
+  });
+
+  // Animation Trigger für Chat
   mainWindow.on('show', () => {
-    console.log('Fenster wird angezeigt...');
-    // Wir stellen sicher, dass die Klasse erst nach dem Show gesetzt wird
+    console.log('Chat-Fenster wird angezeigt...');
     mainWindow.webContents.executeJavaScript('document.body.classList.add("active")');
-    mainWindow.focus(); // Fokus erzwingen, damit das blur-Event später zuverlässig feuert
+    mainWindow.focus();
   });
 
   mainWindow.on('hide', () => {
-    console.log('Fenster versteckt.');
+    console.log('Chat-Fenster versteckt.');
     mainWindow.webContents.executeJavaScript('document.body.classList.remove("active")');
   });
 
-  // Schließen wenn man außerhalb klickt (Fokus verliert)
-  mainWindow.on('blur', () => {
-    console.log('Fokus verloren, verstecke Fenster...');
-    hideWindowWithAnimation();
-  });
-}
-
-function createDropZoneWindow() {
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
-
-  dropZoneWindow = new BrowserWindow({
-    width: 100,
-    height: height, // Ganze Höhe
-    x: width - 100,
-    y: 0,
-    frame: false,
-    transparent: true,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    resizable: false,
-    focusable: false,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
-    }
+  // Animation Trigger für Plugins
+  pluginsWindow.on('show', () => {
+    console.log('Plugins-Fenster wird angezeigt...');
+    pluginsWindow.webContents.executeJavaScript('document.body.classList.add("active")');
   });
 
-  // Höchste Ebene für Sichtbarkeit
-  dropZoneWindow.setAlwaysOnTop(true, 'screen-saver');
+  pluginsWindow.on('hide', () => {
+    console.log('Plugins-Fenster versteckt.');
+    pluginsWindow.webContents.executeJavaScript('document.body.classList.remove("active")');
+  });
 
-  dropZoneWindow.loadFile(path.join(__dirname, 'public/dropzone.html'));
-  
-  if (isDev) {
-    dropZoneWindow.webContents.openDevTools({ mode: 'detach' });
-  }
+  // Schließen wenn man außerhalb klickt (Fokus verliert an Fremdanwendung)
+  const handleBlur = () => {
+    setTimeout(() => {
+      const focusedWin = BrowserWindow.getFocusedWindow();
+      if (focusedWin !== mainWindow && focusedWin !== pluginsWindow) {
+        console.log('Fokus verloren an externe App, verstecke beide Fenster...');
+        hideWindowWithAnimation();
+      }
+    }, 100);
+  };
 
-  dropZoneWindow.showInactive();
-  
-  // Verhindere, dass das Fenster Fokus klaut
-  dropZoneWindow.setIgnoreMouseEvents(false);
+  mainWindow.on('blur', handleBlur);
+  pluginsWindow.on('blur', handleBlur);
 }
-
-// IPC für DropZone-Größe
-ipcMain.on('resize-dropzone', (event, expand) => {
-  if (dropZoneWindow) {
-    const { width, height } = screen.getPrimaryDisplay().workAreaSize;
-    if (expand) {
-      dropZoneWindow.setBounds({
-        width: 250, // Breiter beim Ausklappen
-        height: height,
-        x: width - 250,
-        y: 0
-      });
-    } else {
-      dropZoneWindow.setBounds({
-        width: 100,
-        height: height,
-        x: width - 100,
-        y: 0
-      });
-    }
-  }
-});
 
 function hideWindowWithAnimation() {
-  if (mainWindow && mainWindow.isVisible()) {
+  if (mainWindow && mainWindow.isVisible() && !isHiding) {
+    isHiding = true;
     mainWindow.webContents.executeJavaScript('document.body.classList.remove("active")');
+    if (pluginsWindow) pluginsWindow.webContents.executeJavaScript('document.body.classList.remove("active")');
     setTimeout(() => {
-      if (mainWindow) mainWindow.hide();
+      if (isHiding) {
+        if (mainWindow) mainWindow.hide();
+        if (pluginsWindow) pluginsWindow.hide();
+      }
+      isHiding = false;
     }, 400); // 400ms entspricht der CSS Transition
   }
 }
@@ -228,16 +249,6 @@ function hideWindowWithAnimation() {
 ipcMain.on('hide-window', () => {
   console.log('Verstecke Fenster über IPC...');
   hideWindowWithAnimation();
-});
-
-ipcMain.on('files-dropped', (event, filePaths) => {
-  console.log('Dateien im DropZone empfangen:', filePaths);
-  if (mainWindow) {
-    if (!mainWindow.isVisible()) {
-      mainWindow.show();
-    }
-    mainWindow.webContents.send('process-dropped-files', filePaths);
-  }
 });
 
 function createTray() {
@@ -253,10 +264,17 @@ function createTray() {
           if (mainWindow && !mainWindow.isVisible()) {
             mainWindow.show();
           }
+          if (pluginsWindow && !pluginsWindow.isVisible()) {
+            pluginsWindow.show();
+          }
         }
       },
       { type: 'separator' },
-      { label: 'DevTools öffnen', click: () => mainWindow.webContents.openDevTools({ mode: 'detach' }) },
+      { label: 'DevTools öffnen', click: () => {
+          if (mainWindow) mainWindow.webContents.openDevTools({ mode: 'detach' });
+          if (pluginsWindow) pluginsWindow.webContents.openDevTools({ mode: 'detach' });
+        }
+      },
       { type: 'separator' },
       { label: 'Beenden', click: () => app.quit() }
     ]);
@@ -267,11 +285,7 @@ function createTray() {
     // Klick auf das Icon toggelt das Fenster
     tray.on('click', () => {
       console.log('Tray Icon geklickt.');
-      if (mainWindow.isVisible()) {
-        hideWindowWithAnimation();
-      } else {
-        mainWindow.show();
-      }
+      toggleWindow();
     });
   } catch (err) {
     console.error('Fehler beim Erstellen des Tray-Icons:', err);
@@ -281,7 +295,6 @@ function createTray() {
 app.whenReady().then(() => {
   createWindow();
   createTray();
-  createDropZoneWindow();
   registerGlobalHotkey(); // Globaler Hotkey registrieren beim Start
 
   // Automatisch anzeigen beim Start für bessere Rückmeldung
