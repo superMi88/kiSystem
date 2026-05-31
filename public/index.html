@@ -829,6 +829,8 @@
     </div>
 
     <script>
+        const escapeHtml = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
         // Routing basierend auf URL-Hash
         const isPluginsView = window.location.hash === '#plugins';
         if (isPluginsView) {
@@ -1368,6 +1370,8 @@
                 currentConversationId = data.conversationId;
                 addMessage(data.text, false, data.widget);
                 updateStatus();
+                loadTopWidgets();
+                ipcRenderer.send('widgets-updated');
                 userInput.placeholder = "Nachricht an Gemini...";
             } catch (e) {
                 addMessage("Fehler bei der Audio-Verarbeitung.", false);
@@ -1492,6 +1496,7 @@
                 currentConversationId = data.conversationId;
                 addMessage(data.text, false, data.widget);
                 loadTopWidgets();
+                ipcRenderer.send('widgets-updated');
             } catch (e) {
                 addMessage("Fehler beim Senden der Nachricht.", false);
             }
@@ -1559,6 +1564,29 @@
                         
                         html += `</div>`;
                         widgetDiv.innerHTML = html;
+                    } else if (widget.type === 'timer_list') {
+                        let html = `<h1>TIMER & WECKER</h1><div class="timer-list-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%;">`;
+                        if (widget.data.timers.length === 0) {
+                            html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 0; padding: 10px; text-align: center; background: rgba(0,0,0,0.15); border-radius: 8px;">Keine aktiven Timer.</p>`;
+                        } else {
+                            widget.data.timers.forEach(t => {
+                                html += `
+                                    <div class="timer-card" id="timer-card-${t.id}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" style="padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); transition: all 0.3s; position: relative;">
+                                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+                                            <span style="font-size: 0.85rem; font-weight: bold; color: var(--text);">${escapeHtml(t.title)}</span>
+                                            <button onclick="callTool('loesche_timer', {id: ${t.id}})" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Timer löschen">✖</button>
+                                        </div>
+                                        <div class="timer-countdown" style="font-family: monospace; font-size: 1.1rem; font-weight: bold; color: var(--accent); margin-bottom: 6px;">--:--:--</div>
+                                        <div class="timer-progress-bg" style="width: 100%; height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; margin-bottom: 4px;">
+                                            <div class="timer-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--on)); border-radius: 2px; transition: width 0.5s linear;"></div>
+                                        </div>
+                                        <div style="font-size: 0.65rem; opacity: 0.4;">Bis: ${new Date(t.expiresAt).toLocaleTimeString('de-DE', {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</div>
+                                    </div>
+                                `;
+                            });
+                        }
+                        html += `</div>`;
+                        widgetDiv.innerHTML = html;
                     }
                     
                     topWidgetsContainer.appendChild(widgetDiv);
@@ -1573,15 +1601,13 @@
 
         async function callTool(name, args) {
             try {
-                await fetch('/messages', {
+                await fetch('/api/tools/call', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        jsonrpc: "2.0", id: Date.now(), method: "tools/call",
-                        params: { name, arguments: args }
-                    })
+                    body: JSON.stringify({ name, arguments: args })
                 });
                 loadTopWidgets();
+                ipcRenderer.send('widgets-updated');
             } catch(e) {
                 console.error("Tool Call Error:", e);
             }
@@ -1613,6 +1639,7 @@
                     // Kurze Verzögerung für die visuelle Rückmeldung
                     setTimeout(() => {
                         loadTopWidgets();
+                        ipcRenderer.send('widgets-updated');
                     }, 600);
                 } else {
                     throw new Error("Fehler beim Erledigen");
@@ -1639,8 +1666,96 @@
             loadTopWidgets();
         });
 
+        ipcRenderer.on('reload-widgets', () => {
+            console.log('Empfange reload-widgets Event. Lade Widgets neu...');
+            loadTopWidgets();
+        });
+
         loadTopWidgets();
         setInterval(loadAlerts, 3000); // Alle 3 Sekunden prüfen
+
+        function playAlarmBeep() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                function beep(freq, duration, delay) {
+                    setTimeout(() => {
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+                        osc.start();
+                        osc.stop(audioCtx.currentTime + duration);
+                    }, delay);
+                }
+                beep(880, 0.15, 0);
+                beep(880, 0.15, 200);
+            } catch (e) {
+                console.error("Audio beep error:", e);
+            }
+        }
+
+        function updateAllCountdowns() {
+            document.querySelectorAll('.timer-card').forEach(card => {
+                const createdTime = new Date(card.dataset.created).getTime();
+                const expiresTime = new Date(card.dataset.expires).getTime();
+                const now = Date.now();
+                const total = expiresTime - createdTime;
+                const remaining = expiresTime - now;
+
+                const countdownEl = card.querySelector('.timer-countdown');
+                const progressBar = card.querySelector('.timer-progress-bar');
+
+                if (remaining <= 0) {
+                    countdownEl.textContent = "ABGELAUFEN!";
+                    countdownEl.style.color = "var(--off)";
+                    progressBar.style.width = "100%";
+                    progressBar.style.background = "var(--off)";
+                    card.style.borderColor = "rgba(243, 139, 168, 0.4)";
+                    card.style.background = "rgba(243, 139, 168, 0.05)";
+                    card.style.animation = "pulse 1.5s infinite";
+                    
+                    if (!card.querySelector('.dismiss-btn')) {
+                        const dismissBtn = document.createElement('button');
+                        dismissBtn.className = 'dismiss-btn';
+                        dismissBtn.textContent = 'Bestätigen';
+                        dismissBtn.style.cssText = "margin-top: 8px; width: 100%; padding: 6px 8px; background: var(--off); color: #11111b; border: none; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: bold; transition: all 0.2s;";
+                        dismissBtn.onmouseover = () => { dismissBtn.style.filter = 'brightness(1.1)'; };
+                        dismissBtn.onmouseout = () => { dismissBtn.style.filter = 'none'; };
+                        dismissBtn.onclick = () => callTool('quittiere_timer', { id: parseInt(card.id.split('-').pop()) });
+                        card.appendChild(dismissBtn);
+                        
+                        playAlarmBeep();
+                        const alarmInterval = setInterval(() => {
+                            if (document.getElementById(card.id) && card.querySelector('.dismiss-btn')) {
+                                playAlarmBeep();
+                            } else {
+                                clearInterval(alarmInterval);
+                            }
+                        }, 3000);
+                    }
+                } else {
+                    const secs = Math.floor((remaining / 1000) % 60);
+                    const mins = Math.floor((remaining / 1000 / 60) % 60);
+                    const hours = Math.floor((remaining / 1000 / 60 / 60) % 24);
+                    const days = Math.floor(remaining / 1000 / 60 / 60 / 24);
+
+                    let timeStr = "";
+                    if (days > 0) timeStr += `${days}d `;
+                    timeStr += `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+                    countdownEl.textContent = timeStr;
+
+                    const elapsed = now - createdTime;
+                    const percent = Math.min(100, Math.max(0, (elapsed / total) * 100));
+                    progressBar.style.width = `${percent}%`;
+                }
+            });
+        }
+
+        setInterval(updateAllCountdowns, 500);
 
     </script>
 </body>

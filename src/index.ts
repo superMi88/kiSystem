@@ -107,6 +107,16 @@ app.get("/widgets", async (req, res) => {
   res.json(widgets);
 });
 
+app.post("/api/tools/call", async (req, res) => {
+  const { name, arguments: args } = req.body;
+  try {
+    const result = await pluginManager.executeTool(name, args);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post("/tasks/complete", async (req, res) => {
   const { tasklistId, taskId } = req.body;
   if (!tasklistId || !taskId) {
@@ -214,9 +224,10 @@ app.post("/chat", async (req, res) => {
       systemInstruction: {
         role: "system",
         parts: [{ text: `Du bist ein hilfreicher PC-Assistent. 
-Heute ist ${dateString}, es ist ${timeString} Uhr. 
-Nutze dieses Datum als Basis für relative Zeitangaben wie 'heute', 'morgen' oder 'nächste Woche'. 
-Wenn ein Benutzer eine Uhrzeit nennt, verwende beim Erstellen von Terminen bitte das volle ISO-Format (YYYY-MM-DDTHH:mm:ss).
+Heute ist ${dateString}, es ist ${timeString} Uhr (deutsche Lokalzeit, Mitteleuropäische Sommerzeit, UTC+2). 
+Nutze dieses Datum als Basis für relative Zeitangaben.
+Wenn du relative Timer erstellst (z.B. "in 15 Minuten" oder "für 10 Sekunden"), benutze im Tool 'erstelle_timer' bevorzugt den Parameter 'sekunden'.
+Für feste Uhrzeiten (z. B. "morgen um 17 Uhr") berechne die Ablaufzeit im lokalen Format unter Berücksichtigung des Offsets '+02:00' (z. B. YYYY-MM-DDTHH:mm:ss+02:00) und gib diesen String an 'erstelle_timer' oder 'fuege_termin_hinzu'.
 Antworte kurz und präzise.` }]
       }
     });

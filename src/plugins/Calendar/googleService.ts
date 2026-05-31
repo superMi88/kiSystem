@@ -105,8 +105,12 @@ export class GoogleCalendarService {
         return timeA - timeB;
       });
       
-    } catch(e) {
+    } catch(e: any) {
       console.warn("Fehler beim Abrufen aller Kalender:", e);
+      if (e.message && (e.message.includes('invalid_grant') || e.message.includes('Token has been expired or revoked'))) {
+        console.log('Lösche ungültige GoogleAuth Tokens (invalid_grant) aus der DB...');
+        await this.prisma.googleAuth.delete({ where: { id: 1 } }).catch(() => {});
+      }
     }
 
     return allEvents;
@@ -138,8 +142,8 @@ export class GoogleCalendarService {
       return allTasks;
     } catch (e: any) {
       console.warn(`Konnte Aufgaben nicht abrufen (Möglicherweise fehlt die Berechtigung): ${e.message}`);
-      if (e.message && e.message.includes('insufficient authentication scopes')) {
-        console.log('Lösche veraltete Tokens, um Neu-Authentifizierung zu erzwingen...');
+      if (e.message && (e.message.includes('insufficient authentication scopes') || e.message.includes('invalid_grant') || e.message.includes('Token has been expired or revoked'))) {
+        console.log('Lösche veraltete/ungültige Tokens, um Neu-Authentifizierung zu erzwingen...');
         await this.prisma.googleAuth.delete({ where: { id: 1 } }).catch(() => {});
       }
       return [];

@@ -77,6 +77,14 @@ ipcMain.on('reload-hotkey', () => {
   if (pluginsWindow) pluginsWindow.webContents.send('settings-updated');
 });
 
+// IPC zur Widget-Synchronisation
+ipcMain.on('widgets-updated', () => {
+  console.log('Widgets wurden aktualisiert. Benachrichtige alle Fenster...');
+  if (mainWindow) mainWindow.webContents.send('reload-widgets');
+  if (pluginsWindow) pluginsWindow.webContents.send('reload-widgets');
+});
+
+
 // IPC zum Testen von Hotkeys vor dem Speichern
 ipcMain.handle('register-hotkey-test', async (event, hotkey) => {
   try {
@@ -157,10 +165,10 @@ function createWindow() {
   });
 
   // Öffne DevTools im Entwicklungsmodus
-  if (isDev) {
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
-    pluginsWindow.webContents.openDevTools({ mode: 'detach' });
-  }
+  // if (isDev) {
+  //   mainWindow.webContents.openDevTools({ mode: 'detach' });
+  //   pluginsWindow.webContents.openDevTools({ mode: 'detach' });
+  // }
 
   // Lade die URL des Express-Servers mit Retry-Logik und verschiedenen Hashes
   const loadURL = () => {
