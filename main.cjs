@@ -173,9 +173,10 @@ function createWindow() {
   // Lade die URL des Express-Servers mit Retry-Logik und verschiedenen Hashes
   const loadURL = () => {
     const settings = getSettings();
-    const serverUrl = settings.serverUrl || 'http://localhost:3001';
+    const isTesting = settings.testing === true;
+    const serverUrl = isTesting ? 'http://localhost:3001' : (settings.serverUrl || 'http://localhost:3001');
     
-    console.log(`Lade URLs von Server: ${serverUrl}`);
+    console.log(`Lade URLs von Server (testing=${isTesting}): ${serverUrl}`);
     Promise.all([
       mainWindow.loadURL(`${serverUrl}/#chat`),
       pluginsWindow.loadURL(`${serverUrl}/#plugins`)
@@ -323,10 +324,15 @@ app.whenReady().then(() => {
 app.on('login', (event, webContents, details, authInfo, callback) => {
   event.preventDefault();
   const settings = getSettings();
-  if (settings.serverUser && settings.serverPassword) {
+  const isTesting = settings.testing === true;
+  if (!isTesting && settings.serverUser && settings.serverPassword) {
     callback(settings.serverUser, settings.serverPassword);
   } else {
-    console.error('Basic Auth Zugangsdaten fehlen in settings.json.');
+    if (isTesting) {
+      console.log('Testing Modus aktiv: Überspringe Basic Auth.');
+    } else {
+      console.error('Basic Auth Zugangsdaten fehlen in settings.json.');
+    }
     callback('', '');
   }
 });
