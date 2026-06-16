@@ -47,6 +47,13 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
+            # NVM und globale Pfade laden, da ssh-action eine non-interactive Shell nutzt
+            export NVM_DIR="$HOME/.nvm"
+            if [ -s "$NVM_DIR/nvm.sh" ]; then
+              . "$NVM_DIR/nvm.sh"
+            fi
+            export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.npm-global/bin:$PATH"
+
             cd /home/kisystem
             echo "${{ secrets.ENV_FILE_CONTENT }}" > .env
             npm install --omit=dev
