@@ -6,6 +6,7 @@ const settingsPath = path.join(process.cwd(), "settings.json");
 export interface Settings {
   hotkey: string;
   disabledPlugins: string[];
+  autostart?: boolean;
 }
 
 export function getSettings(): Settings {
@@ -20,7 +21,8 @@ export function getSettings(): Settings {
   // Standard-Einstellungen falls keine Datei vorhanden ist
   const defaultSettings: Settings = {
     hotkey: "Ctrl+Shift+Space",
-    disabledPlugins: []
+    disabledPlugins: [],
+    autostart: false
   };
   
   // Datei erstellen, falls sie nicht existiert

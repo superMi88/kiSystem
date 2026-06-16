@@ -142,11 +142,12 @@ app.get("/settings", (req, res) => {
 });
 
 app.post("/settings", (req, res) => {
-  const { hotkey, disabledPlugins } = req.body;
+  const { hotkey, disabledPlugins, autostart } = req.body;
   const current = getSettings();
   const updated = {
     hotkey: hotkey !== undefined ? hotkey : current.hotkey,
-    disabledPlugins: disabledPlugins !== undefined ? disabledPlugins : current.disabledPlugins
+    disabledPlugins: disabledPlugins !== undefined ? disabledPlugins : current.disabledPlugins,
+    autostart: autostart !== undefined ? autostart : current.autostart
   };
   saveSettings(updated);
   res.json(updated);

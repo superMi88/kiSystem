@@ -13,7 +13,21 @@ function getSettings() {
   } catch (e) {
     console.error('Fehler beim Lesen der Einstellungen:', e);
   }
-  return { hotkey: 'Ctrl+Shift+Space', disabledPlugins: [] };
+  return { hotkey: 'Ctrl+Shift+Space', disabledPlugins: [], autostart: false };
+}
+
+function updateAutostartSetting() {
+  const settings = getSettings();
+  const autostart = settings.autostart === true;
+  console.log(`Konfiguriere Autostart: ${autostart}`);
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: autostart,
+      path: app.getPath('exe')
+    });
+  } catch (err) {
+    console.error('Fehler beim Festlegen des Autostarts:', err);
+  }
 }
 
 let isHiding = false;
@@ -73,6 +87,7 @@ function registerGlobalHotkey() {
 ipcMain.on('reload-hotkey', () => {
   console.log('Neu-Registrierung des Hotkeys angefordert...');
   registerGlobalHotkey();
+  updateAutostartSetting();
   if (mainWindow) mainWindow.webContents.send('settings-updated');
   if (pluginsWindow) pluginsWindow.webContents.send('settings-updated');
 });
@@ -309,6 +324,7 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
   registerGlobalHotkey(); // Globaler Hotkey registrieren beim Start
+  updateAutostartSetting(); // Autostart konfigurieren beim Start
 
   // Automatisch anzeigen beim Start für bessere Rückmeldung
   setTimeout(() => {
