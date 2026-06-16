@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#89b4fa">
     <title>Gemini Mobile Light</title>
+    <link rel="manifest" href="/manifest.json">
     <style>
         :root {
             --bg: transparent;
@@ -959,6 +961,15 @@
 
     <script>
         const escapeHtml = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+        // PWA Service Worker Registrierung
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('Service Worker registriert:', reg))
+                    .catch(err => console.error('Service Worker Fehler:', err));
+            });
+        }
 
         let ipcRenderer = null;
         let webUtils = null;

@@ -1,0 +1,16 @@
+{
+  "name": "Gemini Mobile Light",
+  "short_name": "Gemini Light",
+  "start_url": "/#chat",
+  "display": "standalone",
+  "background_color": "#11111b",
+  "theme_color": "#89b4fa",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
