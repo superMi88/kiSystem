@@ -960,12 +960,35 @@
     <script>
         const escapeHtml = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+        let ipcRenderer = null;
+        let webUtils = null;
+        let isElectron = false;
+
+        try {
+            if (typeof require !== 'undefined') {
+                const electron = require('electron');
+                ipcRenderer = electron.ipcRenderer;
+                webUtils = electron.webUtils;
+                isElectron = true;
+            }
+        } catch (e) {
+            console.log("Nicht in Electron-Umgebung gestartet. Nutze Web-Modus.");
+        }
+
         // Routing basierend auf URL-Hash
         const isPluginsView = window.location.hash === '#plugins';
         if (isPluginsView) {
             document.body.classList.add('view-plugins');
         } else {
             document.body.classList.add('view-chat');
+        }
+
+        // Wenn wir nicht in Electron laufen, machen wir die Seite direkt aktiv/sichtbar
+        if (!isElectron) {
+            document.body.classList.add('active');
+            // Auf Handys/Webbrowsern wollen wir auch keinen transparenten Hintergrund
+            document.documentElement.style.setProperty('background', '#11111b', 'important');
+            document.body.style.setProperty('background', '#11111b', 'important');
         }
 
         const chatBox = document.getElementById('chat-box');
@@ -1034,7 +1057,7 @@
         const hotkeyBtn = document.getElementById('hotkey-btn');
         const pluginsList = document.getElementById('plugins-list');
 
-        const { ipcRenderer, webUtils } = require('electron');
+
 
         let currentHotkey = 'Ctrl+Shift+Space';
         let tempHotkey = '';
@@ -1784,7 +1807,9 @@
                 currentConversationId = data.conversationId;
                 addMessage(data.text, false, data.widget);
                 loadTopWidgets();
-                ipcRenderer.send('widgets-updated');
+                if (isElectron && ipcRenderer) {
+                    ipcRenderer.send('widgets-updated');
+                }
             } catch (e) {
                 clearInterval(pollInterval);
                 thinkingDiv.remove();
@@ -2106,7 +2131,9 @@
                     // Kurze Verzögerung für die visuelle Rückmeldung
                     setTimeout(() => {
                         loadTopWidgets();
-                        ipcRenderer.send('widgets-updated');
+                        if (isElectron && ipcRenderer) {
+                            ipcRenderer.send('widgets-updated');
+                        }
                     }, 600);
                 } else {
                     throw new Error("Fehler beim Erledigen");
@@ -2157,15 +2184,17 @@
         });
         userInput.addEventListener('input', autoResizeInput);
 
-        ipcRenderer.on('settings-updated', () => {
-            console.log('Empfange settings-updated Event. Lade Widgets neu...');
-            loadTopWidgets();
-        });
+        if (isElectron && ipcRenderer) {
+            ipcRenderer.on('settings-updated', () => {
+                console.log('Empfange settings-updated Event. Lade Widgets neu...');
+                loadTopWidgets();
+            });
 
-        ipcRenderer.on('reload-widgets', () => {
-            console.log('Empfange reload-widgets Event. Lade Widgets neu...');
-            loadTopWidgets();
-        });
+            ipcRenderer.on('reload-widgets', () => {
+                console.log('Empfange reload-widgets Event. Lade Widgets neu...');
+                loadTopWidgets();
+            });
+        }
 
         loadTopWidgets();
         setInterval(loadAlerts, 3000); // Alle 3 Sekunden prüfen
