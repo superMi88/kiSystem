@@ -44,3 +44,6 @@ dev.db
 scratch/
 tmp/
 temp/
+
+# Local configuration
+settings.json
