@@ -1,11 +1,12 @@
 import { PrismaClient } from "@prisma/client";
 import { Plugin, PluginTool } from "./types.js";
-import { lightPlugin } from "./LightControl/index.js";
 import { appLauncherPlugin } from "./AppLauncher/index.js";
 import { memoryPlugin } from "./Memory/index.js";
 import { calendarPlugin } from "./Calendar/index.js";
 import { imageGeneratorPlugin } from "./ImageGenerator/index.js";
 import { timerPlugin } from "./Timer/index.js";
+import { notesPlugin } from "./Notes/index.js";
+import { tasksPlugin } from "./Tasks/index.js";
 import { getSettings } from "../settings.js";
 
 export class PluginManager {
@@ -14,12 +15,13 @@ export class PluginManager {
 
   constructor(private prisma: PrismaClient) {
     // Hier werden die Plugins registriert
-    this.registerPlugin(lightPlugin);
     this.registerPlugin(appLauncherPlugin);
     this.registerPlugin(memoryPlugin);
     this.registerPlugin(calendarPlugin);
     this.registerPlugin(imageGeneratorPlugin);
     this.registerPlugin(timerPlugin);
+    this.registerPlugin(notesPlugin);
+    this.registerPlugin(tasksPlugin);
   }
 
   registerPlugin(plugin: Plugin) {

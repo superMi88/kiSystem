@@ -227,4 +227,31 @@ export class GoogleCalendarService {
 
     return res.data;
   }
+
+  async createTask(title: string, notes?: string, due?: Date, tasklistId?: string) {
+    const tasksClient = await this.getAuthenticatedTasksClient();
+    if (!tasksClient) throw new Error("Google Tasks Client nicht authentifiziert.");
+
+    let targetListId = tasklistId;
+    if (!targetListId) {
+      const listsRes = await tasksClient.tasklists.list();
+      const lists = listsRes.data.items || [];
+      if (lists.length === 0 || !lists[0].id) {
+        throw new Error("Keine Google Tasks Aufgabenliste gefunden.");
+      }
+      targetListId = lists[0].id;
+    }
+
+    const res = await tasksClient.tasks.insert({
+      tasklist: targetListId,
+      requestBody: {
+        title: title,
+        notes: notes,
+        due: due ? due.toISOString() : undefined
+      }
+    });
+
+    return res.data;
+  }
 }
+

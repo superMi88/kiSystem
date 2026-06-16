@@ -118,14 +118,15 @@ app.post("/api/tools/call", async (req, res) => {
 });
 
 app.post("/tasks/complete", async (req, res) => {
-  const { tasklistId, taskId } = req.body;
-  if (!tasklistId || !taskId) {
-    return res.status(400).json({ error: "tasklistId und taskId sind erforderlich." });
+  const { taskId } = req.body;
+  if (!taskId) {
+    return res.status(400).json({ error: "taskId ist erforderlich." });
   }
   try {
-    const { GoogleCalendarService } = await import("./plugins/Calendar/googleService.js");
-    const googleService = new GoogleCalendarService(prisma);
-    await googleService.completeTask(tasklistId, taskId);
+    await prisma.task.update({
+      where: { id: Number(taskId) },
+      data: { completed: true }
+    });
     res.json({ success: true, message: "Aufgabe erfolgreich erledigt." });
   } catch (e: any) {
     console.error("Fehler beim Erledigen der Aufgabe:", e);
@@ -184,6 +185,12 @@ app.get("/auth/google/callback", async (req, res) => {
   }
 });
 
+let activeTools: { name: string; args: any }[] = [];
+
+app.get("/chat/active-tools", (req, res) => {
+  res.json(activeTools);
+});
+
 
 /**
  * Gemini AI Integration
@@ -193,6 +200,7 @@ app.post("/chat", async (req, res) => {
   console.log("Chat Request Body:", { message, hasAudio: !!audio, attachmentsCount: attachments?.length, conversationId });
 
   try {
+    activeTools = [];
     // Erstelle neue Konversation, falls keine existiert
     if (!conversationId) {
       const title = message ? (message.substring(0, 30) + "...") : "Sprachnachricht";
@@ -228,7 +236,16 @@ Heute ist ${dateString}, es ist ${timeString} Uhr (deutsche Lokalzeit, Mitteleur
 Nutze dieses Datum als Basis für relative Zeitangaben.
 Wenn du relative Timer erstellst (z.B. "in 15 Minuten" oder "für 10 Sekunden"), benutze im Tool 'erstelle_timer' bevorzugt den Parameter 'sekunden'.
 Für feste Uhrzeiten (z. B. "morgen um 17 Uhr") berechne die Ablaufzeit im lokalen Format unter Berücksichtigung des Offsets '+02:00' (z. B. YYYY-MM-DDTHH:mm:ss+02:00) und gib diesen String an 'erstelle_timer' oder 'fuege_termin_hinzu'.
-Antworte kurz und präzise.` }]
+
+Du hast Zugriff auf ein dreistufiges Gedächtnissystem für Personen:
+1. Biografie (notes): Kompakte Zusammenfassung über die Person. Lesen per 'hole_person_info', Schreiben/Aktualisieren per 'aktualisiere_person_biografie'.
+2. Strukturierte Fakten (Fact-Tabelle): Einzelne atomare Details (z.B. Lieblingsfarbe, Hobbys, Geburtstag). Lesen per 'hole_person_info', Hinzufügen per 'fuege_person_fakt_hinzu', Löschen per 'loesche_person_fakt' (benötigt die faktId).
+3. Semantisches Langzeitgedächtnis (SemanticMemory-Tabelle): Unstrukturierte Erlebnisse, Treffen und Chats mit Vektorsuche. Speichern per 'erinnere_dich', Suchen per 'suche_im_gedaechtnis'.
+
+WICHTIGE VERHALTENSREGELN:
+- Die Biografie und die Fakten enthalten NICHT alle Informationen! Gehe nie davon aus, dass das Profil vollständig ist.
+- Wenn der Benutzer nach einer Person fragt (z.B. 'weißt du was über curly oder laphi?'), musst du IMMER sowohl 'suche_im_gedaechtnis' (semantische Suche mit dem Namen) als auch 'hole_person_info' (Biografie & Fakten) aufrufen, um alle relevanten Informationen aus beiden Speicherstufen zu vereinen.
+- Sei bei Antworten präzise, hilfsbereit und antworte auf Deutsch.` }]
       }
     });
 
@@ -280,44 +297,85 @@ Antworte kurz und präzise.` }]
     let aiText = "";
     let currentResponse = response;
     let widgetData: any = null;
+    const executedTools: { name: string; args: any }[] = [];
 
     // Schleife für Tool-Chaining
     let step = 0;
-    while (step < 5) {
+    const MAX_STEPS = 5;
+    while (step < MAX_STEPS) {
       const calls = currentResponse.functionCalls();
       if (!calls || calls.length === 0) {
         aiText = currentResponse.text();
         break;
       }
 
-      const call = calls[0];
-      console.log(`KI ruft Tool auf (Schritt ${step + 1}):`, call.name, call.args);
+      console.log(`KI ruft ${calls.length} Tools auf (Schritt ${step + 1}):`);
       
-      let toolResult: any;
-      try {
-        toolResult = await pluginManager.executeTool(call.name, call.args);
-        console.log("Tool Ergebnis empfangen:", { name: call.name, hasWidget: !!toolResult?.type });
+      const functionResponses = [];
+      for (const call of calls) {
+        let toolResult: any;
+        executedTools.push({ name: call.name, args: call.args });
+        activeTools.push({ name: call.name, args: call.args });
         
-        // Falls das Tool ein Widget zurückgibt, speichern wir es für das Frontend
-        if (toolResult && toolResult.type) {
-          widgetData = toolResult;
+        // Wenn wir das Limit erreichen, verweigern wir weitere Aufrufe und zwingen das Modell zu einer Antwort
+        if (step === MAX_STEPS - 1) {
+          console.log(`  - Tool-Limit erreicht. Verweigere Ausführung für: ${call.name}`);
+          toolResult = { 
+            status: "limit_reached", 
+            message: "Such-Limit für diese Runde erreicht. Bitte fasse alle bisher gesammelten Informationen kurz zusammen und antworte dem Benutzer direkt." 
+          };
+        } else {
+          console.log(`  - Rufe Tool auf: ${call.name}`, call.args);
+          try {
+            toolResult = await pluginManager.executeTool(call.name, call.args);
+            console.log("    Tool Ergebnis empfangen:", { name: call.name, hasWidget: !!toolResult?.type });
+            
+            if (toolResult && toolResult.type) {
+              widgetData = toolResult;
+            }
+          } catch (err) {
+            console.error("    Tool-Fehler:", err);
+            toolResult = { status: "error", message: "Interner Tool-Fehler." };
+          }
         }
-      } catch (err) {
-        console.error("Tool-Fehler:", err);
-        toolResult = { status: "error", message: "Interner Tool-Fehler." };
+
+        // Sende Tool-Ergebnis zurück an Gemini (ohne die riesigen Base64-Daten)
+        let responseToGemini = toolResult;
+        if (toolResult && toolResult.type === 'image_widget' && toolResult.url.startsWith('data:')) {
+          responseToGemini = { ...toolResult, url: "[BILD_DATEN_GESENDET]" };
+        }
+
+        functionResponses.push({
+          functionResponse: { name: call.name, response: responseToGemini }
+        });
       }
 
-      // Sende Tool-Ergebnis zurück an Gemini (ohne die riesigen Base64-Daten)
-      let responseToGemini = toolResult;
-      if (toolResult && toolResult.type === 'image_widget' && toolResult.url.startsWith('data:')) {
-        responseToGemini = { ...toolResult, url: "[BILD_DATEN_GESENDET]" };
-      }
-
-      const nextStep = await chat.sendMessage([{
-        functionResponse: { name: call.name, response: responseToGemini }
-      }]);
+      const nextStep = await chat.sendMessage(functionResponses);
       currentResponse = nextStep.response;
       step++;
+    }
+
+    // Falls die Schleife das Limit erreicht hat und kein Text generiert wurde:
+    if (!aiText) {
+      try {
+        aiText = currentResponse.text();
+      } catch (e) {
+        aiText = "Ich habe die gewünschten Informationen gesucht, konnte aber keine passende Antwort zusammenfassen.";
+      }
+    }
+
+    // Prepend tool calls info to the message
+    if (executedTools.length > 0) {
+      const toolSummaries = executedTools.map(t => {
+        const argsStr = Object.entries(t.args || {})
+          .map(([k, v]) => {
+            const val = typeof v === 'string' ? `"${v}"` : JSON.stringify(v);
+            return `${k}: ${val}`;
+          })
+          .join(", ");
+        return `🔧 *Greife auf Tool zu:* \`${t.name}(${argsStr})\``;
+      }).join("\n");
+      aiText = `${toolSummaries}\n\n${aiText}`;
     }
 
     // Speichere KI-Antwort in DB

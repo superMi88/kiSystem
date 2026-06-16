@@ -89,7 +89,7 @@ export const memoryPlugin: Plugin = {
     {
       definition: {
         name: "hole_person_info",
-        description: "Ruft alle strukturierten und unstrukturierten Informationen über eine Person ab.",
+        description: "Ruft alle strukturierten (Biografie, Fakten) und unstrukturierten Informationen über eine Person ab.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
@@ -105,7 +105,9 @@ export const memoryPlugin: Plugin = {
           include: { facts: true }
         }) as any;
         
-        if (!person) return { status: "error", message: `Person ${name} nicht gefunden.` };
+        if (!person) {
+          return { status: "not_found", message: `Person ${name} existiert noch nicht im System.` };
+        }
         
         const memories = await prisma.semanticMemory.findMany({
           where: { personId: person.id },
@@ -115,9 +117,90 @@ export const memoryPlugin: Plugin = {
 
         return {
           name: person.name,
-          facts: person.facts.map((f: any) => ({ content: f.content, category: f.category })),
+          biografie: person.notes || "",
+          facts: person.facts.map((f: any) => ({ id: f.id, content: f.content, category: f.category })),
           langzeit_erinnerungen: memories.map(m => ({ text: m.content, datum: m.createdAt }))
         };
+      }
+    },
+    {
+      definition: {
+        name: "aktualisiere_person_biografie",
+        description: "Aktualisiert die Biografie / allgemeine Notizen (notes) einer Person. Dies dient als zentrale, kompakte Zusammenfassung der Person.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            name: { type: SchemaType.STRING, description: "Name der Person" },
+            biografie: { type: SchemaType.STRING, description: "Die neue vollständige Biografie / allgemeine Informationen der Person." }
+          },
+          required: ["name", "biografie"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const { name, biografie } = args;
+        await prisma.person.upsert({
+          where: { name },
+          update: { notes: biografie },
+          create: { name, notes: biografie }
+        });
+        return { status: "success", message: `Biografie von ${name} wurde aktualisiert.` };
+      }
+    },
+    {
+      definition: {
+        name: "fuege_person_fakt_hinzu",
+        description: "Fügt einen strukturierten Fakt (Fact) für eine Person hinzu (z.B. Lieblingsfarbe, Hobbys, Geburtstag).",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            name: { type: SchemaType.STRING, description: "Name der Person" },
+            inhalt: { type: SchemaType.STRING, description: "Der Fakt (z.B. 'Spielt gerne Volleyball' oder 'Hat eine Katze namens Luna')" },
+            kategorie: { type: SchemaType.STRING, description: "Optional: Kategorie des Fakts (z.B. 'hobby', 'vorliebe', 'kontakt', 'geburtstag')" }
+          },
+          required: ["name", "inhalt"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const { name, inhalt, kategorie } = args;
+        const person = await prisma.person.upsert({
+          where: { name },
+          update: {},
+          create: { name }
+        });
+        const fact = await prisma.fact.create({
+          data: {
+            content: inhalt,
+            category: kategorie || null,
+            personId: person.id
+          }
+        });
+        return { status: "success", message: `Fakt wurde hinzugefügt (ID: ${fact.id}).` };
+      }
+    },
+    {
+      definition: {
+        name: "loesche_person_fakt",
+        description: "Löscht einen strukturierten Fakt einer Person anhand seiner ID.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            faktId: { type: SchemaType.INTEGER, description: "Die ID des Fakts, der gelöscht werden soll (erhält man über hole_person_info)." }
+          },
+          required: ["faktId"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const { faktId } = args;
+        const fact = await prisma.fact.findUnique({
+          where: { id: faktId }
+        });
+        if (!fact) {
+          return { status: "error", message: `Fakt mit ID ${faktId} wurde nicht gefunden.` };
+        }
+        await prisma.fact.delete({
+          where: { id: faktId }
+        });
+        return { status: "success", message: `Fakt mit ID ${faktId} wurde gelöscht.` };
       }
     }
   ]

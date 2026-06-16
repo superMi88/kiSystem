@@ -1,30 +1,67 @@
 import { Plugin } from "../types.js";
 import { SchemaType } from "@google/generative-ai";
-import { GoogleCalendarService } from "./googleService.js";
+
+function getOccurrences(pattern: any, startRange: Date, endRange: Date, overrides: any[]): any[] {
+  const occurrences: any[] = [];
+  const originalStart = new Date(pattern.originalStart);
+  const originalEnd = new Date(pattern.originalEnd);
+  const durationMs = originalEnd.getTime() - originalStart.getTime();
+  const recurrenceType = pattern.recurrenceType; // "DAILY" | "WEEKLY" | "MONTHLY"
+  const recurrenceEnd = pattern.recurrenceEnd ? new Date(pattern.recurrenceEnd) : null;
+
+  let currentStart = new Date(originalStart);
+  const limitDate = recurrenceEnd && recurrenceEnd < endRange ? recurrenceEnd : endRange;
+
+  let loops = 0;
+  while (currentStart <= limitDate && loops < 366) {
+    loops++;
+    const occurrenceEnd = new Date(currentStart.getTime() + durationMs);
+
+    if (occurrenceEnd >= startRange && currentStart <= endRange) {
+      const occurrenceStartMs = currentStart.getTime();
+      const override = overrides.find((o: any) => 
+        o.recurrenceId === pattern.id && 
+        o.originalOccurrenceDate && 
+        new Date(o.originalOccurrenceDate).getTime() === occurrenceStartMs
+      );
+
+      if (!override) {
+        occurrences.push({
+          id: `rec-${pattern.id}-${occurrenceStartMs}`,
+          title: pattern.title,
+          description: pattern.description,
+          start: new Date(currentStart),
+          end: occurrenceEnd,
+          isAllDay: pattern.isAllDay,
+          isRecurring: true,
+          recurrenceId: pattern.id,
+          originalOccurrenceDate: new Date(currentStart)
+        });
+      }
+    }
+
+    if (recurrenceType === 'DAILY') {
+      currentStart.setDate(currentStart.getDate() + 1);
+    } else if (recurrenceType === 'WEEKLY') {
+      currentStart.setDate(currentStart.getDate() + 7);
+    } else if (recurrenceType === 'MONTHLY') {
+      currentStart.setMonth(currentStart.getMonth() + 1);
+    } else {
+      break;
+    }
+  }
+
+  return occurrences;
+}
 
 export const calendarPlugin: Plugin = {
   name: "Calendar",
-  description: "Verwaltet lokale Termine und synchronisiert mit Google Calendar.",
+  description: "Verwaltet Termine und wiederkehrende Muster in der lokalen Datenbank.",
   tools: [
     {
       definition: {
-        name: "verbinde_google_kalender",
-        description: "Generiert einen Link, um das System mit deinem Google Kalender zu verbinden.",
-      },
-      handler: async (_, { prisma }) => {
-        const service = new GoogleCalendarService(prisma);
-        const url = service.getAuthUrl();
-        return { 
-          status: "auth_required", 
-          message: "Klicke auf den Link, um deinen Google Kalender zu verbinden.",
-          url 
-        };
-      }
-    },
-    {
-      definition: {
         name: "was_steht_an",
-        description: "Zeigt alle Termine für einen bestimmten Tag an (Lokale & Google Termine).",
+        description: "Zeigt alle Termine für einen bestimmten Tag an.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
@@ -34,57 +71,241 @@ export const calendarPlugin: Plugin = {
         } as any
       },
       handler: async (args, { prisma }) => {
-        // Nur noch Google Termine abfragen
-        const service = new GoogleCalendarService(prisma);
-        let googleEvents: any[] = [];
-        try {
-          googleEvents = await service.getEvents(new Date(args.datum)) || [];
-        } catch (e) {
-          console.error("Google Calendar Fehler:", e);
+        const startOfDay = new Date(args.datum);
+        startOfDay.setHours(0, 0, 0, 0);
+        
+        const endOfDay = new Date(args.datum);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        // 1. Fetch normal events and override events that overlap the day and are not completely hidden/deleted
+        const dbEvents = await prisma.event.findMany({
+          where: {
+            isDeleted: false,
+            start: { lte: endOfDay },
+            end: { gte: startOfDay }
+          }
+        });
+
+        // 2. Fetch all recurrence patterns that could occur on this day
+        const dbPatterns = await prisma.recurrencePattern.findMany({
+          where: {
+            originalStart: { lte: endOfDay },
+            OR: [
+              { recurrenceEnd: null },
+              { recurrenceEnd: { gte: startOfDay } }
+            ]
+          }
+        });
+
+        // 3. Fetch overrides for check
+        const patternIds = dbPatterns.map(p => p.id);
+        const overrides = patternIds.length > 0 ? await prisma.event.findMany({
+          where: { recurrenceId: { in: patternIds } }
+        }) : [];
+
+        // 4. Expand recurring events
+        const occurrences: any[] = [];
+        for (const pattern of dbPatterns) {
+          occurrences.push(...getOccurrences(pattern, startOfDay, endOfDay, overrides));
         }
 
-        // Rückgabe als spezielles "Widget" Format
+        // 5. Combine and project properties
+        const allEvents = [
+          ...dbEvents.map(e => ({
+            id: String(e.id),
+            title: e.title,
+            description: e.description || "",
+            start: e.start,
+            end: e.end,
+            isAllDay: e.isAllDay,
+            isRecurring: e.recurrenceId !== null,
+            recurrenceId: e.recurrenceId,
+            originalOccurrenceDate: e.originalOccurrenceDate,
+            isCancelled: e.isCancelled,
+            cancellationReason: e.cancellationReason || null,
+            originalStart: e.originalStart,
+            originalEnd: e.originalEnd
+          })),
+          ...occurrences.map(o => ({
+            id: o.id,
+            title: o.title,
+            description: o.description || "",
+            start: o.start,
+            end: o.end,
+            isAllDay: o.isAllDay,
+            isRecurring: true,
+            recurrenceId: o.recurrenceId,
+            originalOccurrenceDate: o.originalOccurrenceDate,
+            isCancelled: false,
+            cancellationReason: null,
+            originalStart: null,
+            originalEnd: null
+          }))
+        ];
+
+        allEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
+
         return {
           type: "calendar_widget",
           date: args.datum,
-          events: [
-            ...googleEvents.map(e => ({ 
-              id: e.id, // ID für die KI mitsenden
-              title: e.summary, 
-              time: e.start?.dateTime || e.start?.date, 
-              type: "google" 
-            }))
-          ]
+          events: allEvents.map(e => ({
+            id: e.id,
+            title: e.title,
+            time: e.start.toISOString(),
+            endTime: e.end.toISOString(),
+            type: "local",
+            description: e.description,
+            isAllDay: e.isAllDay,
+            isRecurring: e.isRecurring,
+            recurrenceId: e.recurrenceId,
+            originalOccurrenceDate: e.originalOccurrenceDate ? e.originalOccurrenceDate.toISOString() : null,
+            isCancelled: e.isCancelled,
+            cancellationReason: e.cancellationReason,
+            originalStart: e.originalStart ? e.originalStart.toISOString() : null,
+            originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null
+          }))
         };
       }
     },
     {
       definition: {
         name: "fuege_termin_hinzu",
-        description: "Fügt einen neuen Termin hinzu und synchronisiert ihn mit Google Calendar.",
+        description: "Fügt einen neuen Termin zum Kalender hinzu. Kann optional wiederkehrend oder ganztägig sein.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
             titel: { type: SchemaType.STRING, description: "Titel des Termins" },
-            datum: { type: SchemaType.STRING, description: "Datum (YYYY-MM-DD) oder ISO-String" },
-            beschreibung: { type: SchemaType.STRING, description: "Beschreibung (optional, kann Uhrzeit enthalten)" }
+            datum: { type: SchemaType.STRING, description: "Datum/Startzeit (YYYY-MM-DD oder ISO-String)" },
+            enddatum: { type: SchemaType.STRING, description: "Enddatum/-uhrzeit (YYYY-MM-DD oder ISO-String) (optional)" },
+            beschreibung: { type: SchemaType.STRING, description: "Beschreibung (optional)" },
+            ganztaegig: { type: SchemaType.BOOLEAN, description: "Ob der Termin ganztägig ist (optional)" },
+            wiederkehrend: { type: SchemaType.BOOLEAN, description: "Ob der Termin sich wiederholt (optional)" },
+            wiederholungsTyp: { type: SchemaType.STRING, description: "Typ der Wiederholung: 'DAILY', 'WEEKLY' oder 'MONTHLY' (optional)" },
+            wiederholungsEnde: { type: SchemaType.STRING, description: "Enddatum der Wiederholung YYYY-MM-DD (optional)" }
           },
           required: ["titel", "datum"]
         } as any
       },
       handler: async (args, { prisma }) => {
-        const date = new Date(args.datum);
-        const service = new GoogleCalendarService(prisma);
+        const start = new Date(args.datum);
+        const end = args.enddatum ? new Date(args.enddatum) : new Date(start.getTime() + 60 * 60 * 1000);
+
+        const isRecurring = !!args.wiederkehrend;
+        const recurrenceType = args.wiederholungsTyp || "WEEKLY";
+        const recurrenceEnd = args.wiederholungsEnde ? new Date(args.wiederholungsEnde) : null;
+        const isAllDay = !!args.ganztaegig;
 
         try {
-          await service.createEvent(args.titel, date, args.beschreibung);
-          // Hole sofort die aktualisierte Liste für das Widget
-          const updatedEvents = await service.getEvents(date) || [];
+          if (isRecurring) {
+            await prisma.recurrencePattern.create({
+              data: {
+                title: args.titel,
+                description: args.beschreibung || null,
+                originalStart: start,
+                originalEnd: end,
+                isAllDay,
+                recurrenceType,
+                recurrenceEnd
+              }
+            });
+          } else {
+            await prisma.event.create({
+              data: {
+                title: args.titel,
+                description: args.beschreibung || null,
+                start,
+                end,
+                isAllDay
+              }
+            });
+          }
+
+          const startOfDay = new Date(start);
+          startOfDay.setHours(0, 0, 0, 0);
+          const endOfDay = new Date(start);
+          endOfDay.setHours(23, 59, 59, 999);
+
+          // Return updated widget list
+          const dbEvents = await prisma.event.findMany({
+            where: {
+              isDeleted: false,
+              start: { lte: endOfDay },
+              end: { gte: startOfDay }
+            }
+          });
+
+          const dbPatterns = await prisma.recurrencePattern.findMany({
+            where: {
+              originalStart: { lte: endOfDay },
+              OR: [
+                { recurrenceEnd: null },
+                { recurrenceEnd: { gte: startOfDay } }
+              ]
+            }
+          });
+
+          const patternIds = dbPatterns.map(p => p.id);
+          const overrides = patternIds.length > 0 ? await prisma.event.findMany({
+            where: { recurrenceId: { in: patternIds } }
+          }) : [];
+
+          const occurrences: any[] = [];
+          for (const pattern of dbPatterns) {
+            occurrences.push(...getOccurrences(pattern, startOfDay, endOfDay, overrides));
+          }
+
+          const allEvents = [
+            ...dbEvents.map(e => ({
+              id: String(e.id),
+              title: e.title,
+              start: e.start,
+              end: e.end,
+              isAllDay: e.isAllDay,
+              isRecurring: e.recurrenceId !== null,
+              recurrenceId: e.recurrenceId,
+              originalOccurrenceDate: e.originalOccurrenceDate,
+              isCancelled: e.isCancelled,
+              cancellationReason: e.cancellationReason || null,
+              originalStart: e.originalStart,
+              originalEnd: e.originalEnd
+            })),
+            ...occurrences.map(o => ({
+              id: o.id,
+              title: o.title,
+              start: o.start,
+              end: o.end,
+              isAllDay: o.isAllDay,
+              isRecurring: true,
+              recurrenceId: o.recurrenceId,
+              originalOccurrenceDate: o.originalOccurrenceDate,
+              isCancelled: false,
+              cancellationReason: null,
+              originalStart: null,
+              originalEnd: null
+            }))
+          ];
+
+          allEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
+
           return { 
             type: "calendar_widget",
             date: args.datum.split('T')[0],
             message: `Termin '${args.titel}' wurde erstellt.`,
-            events: updatedEvents.map(e => ({ id: e.id, title: e.summary, time: e.start?.dateTime || e.start?.date, type: "google" }))
+            events: allEvents.map(e => ({ 
+              id: e.id, 
+              title: e.title, 
+              time: e.start.toISOString(), 
+              endTime: e.end.toISOString(),
+              type: "local",
+              isAllDay: e.isAllDay,
+              isRecurring: e.isRecurring,
+              recurrenceId: e.recurrenceId,
+              originalOccurrenceDate: e.originalOccurrenceDate ? e.originalOccurrenceDate.toISOString() : null,
+              isCancelled: e.isCancelled,
+              cancellationReason: e.cancellationReason,
+              originalStart: e.originalStart ? e.originalStart.toISOString() : null,
+              originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null
+            }))
           };
         } catch (e: any) {
           return { status: "error", message: `Fehler: ${e.message}` };
@@ -94,28 +315,162 @@ export const calendarPlugin: Plugin = {
     {
       definition: {
         name: "loesche_termin",
-        description: "Löscht einen Termin aus dem Google Kalender.",
+        description: "Löscht einen Termin. Kann eine einzelne Wiederholung (nurDiesesVorkommen=true) stornieren/löschen oder die gesamte Serie löschen.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
-            eventId: { type: SchemaType.STRING, description: "Die eindeutige ID des Google-Termins" },
-            datum: { type: SchemaType.STRING, description: "Das Datum des Termins (YYYY-MM-DD), um die Liste zu aktualisieren" }
+            eventId: { type: SchemaType.STRING, description: "Die ID des Termins (kann numerisch oder synthetisch sein)" },
+            datum: { type: SchemaType.STRING, description: "Das Datum des Termins (YYYY-MM-DD)" },
+            nurDiesesVorkommen: { type: SchemaType.BOOLEAN, description: "Wenn true, wird nur dieses eine Vorkommen storniert/gelöscht." }
           },
           required: ["eventId", "datum"]
         } as any
       },
       handler: async (args, { prisma }) => {
-        const service = new GoogleCalendarService(prisma);
         try {
-          await service.deleteEvent(args.eventId);
-          // Kurz warten, damit Google Zeit zum Löschen hat
-          await new Promise(resolve => setTimeout(resolve, 500));
-          const updatedEvents = await service.getEvents(new Date(args.datum)) || [];
+          let id: number | null = null;
+          let recurrenceId: number | null = null;
+          let originalOccurrenceDate: Date | null = null;
+
+          if (args.eventId.startsWith('rec-')) {
+            const parts = args.eventId.split('-');
+            recurrenceId = Number(parts[1]);
+            originalOccurrenceDate = new Date(Number(parts[2]));
+          } else {
+            id = Number(args.eventId);
+            const ev = await prisma.event.findUnique({ where: { id } });
+            if (ev && ev.recurrenceId) {
+              recurrenceId = ev.recurrenceId;
+              originalOccurrenceDate = ev.originalOccurrenceDate;
+            }
+          }
+
+          if (args.nurDiesesVorkommen) {
+            if (recurrenceId && originalOccurrenceDate) {
+              const existingOverride = await prisma.event.findFirst({
+                where: { recurrenceId, originalOccurrenceDate }
+              });
+
+              if (existingOverride) {
+                await prisma.event.update({
+                  where: { id: existingOverride.id },
+                  data: { isDeleted: true }
+                });
+              } else {
+                const pattern = await prisma.recurrencePattern.findUnique({ where: { id: recurrenceId } });
+                if (!pattern) throw new Error("Wiederholungsmuster nicht gefunden.");
+                
+                await prisma.event.create({
+                  data: {
+                    title: pattern.title,
+                    description: pattern.description,
+                    start: originalOccurrenceDate,
+                    end: new Date(originalOccurrenceDate.getTime() + (pattern.originalEnd.getTime() - pattern.originalStart.getTime())),
+                    isAllDay: pattern.isAllDay,
+                    recurrenceId,
+                    originalOccurrenceDate,
+                    isDeleted: true
+                  }
+                });
+              }
+            } else if (id) {
+              // Deleting a one-off event is just normal deletion
+              await prisma.event.delete({ where: { id } });
+            }
+          } else {
+            // Delete entire series or the one-off event
+            if (recurrenceId) {
+              await prisma.recurrencePattern.delete({ where: { id: recurrenceId } });
+            } else if (id) {
+              await prisma.event.delete({ where: { id } });
+            }
+          }
+
+          const startOfDay = new Date(args.datum);
+          startOfDay.setHours(0, 0, 0, 0);
+          const endOfDay = new Date(args.datum);
+          endOfDay.setHours(23, 59, 59, 999);
+
+          const dbEvents = await prisma.event.findMany({
+            where: {
+              isDeleted: false,
+              start: { lte: endOfDay },
+              end: { gte: startOfDay }
+            }
+          });
+
+          const dbPatterns = await prisma.recurrencePattern.findMany({
+            where: {
+              originalStart: { lte: endOfDay },
+              OR: [
+                { recurrenceEnd: null },
+                { recurrenceEnd: { gte: startOfDay } }
+              ]
+            }
+          });
+
+          const patternIds = dbPatterns.map(p => p.id);
+          const overrides = patternIds.length > 0 ? await prisma.event.findMany({
+            where: { recurrenceId: { in: patternIds } }
+          }) : [];
+
+          const occurrences: any[] = [];
+          for (const pattern of dbPatterns) {
+            occurrences.push(...getOccurrences(pattern, startOfDay, endOfDay, overrides));
+          }
+
+          const allEvents = [
+            ...dbEvents.map(e => ({
+              id: String(e.id),
+              title: e.title,
+              start: e.start,
+              end: e.end,
+              isAllDay: e.isAllDay,
+              isRecurring: e.recurrenceId !== null,
+              recurrenceId: e.recurrenceId,
+              originalOccurrenceDate: e.originalOccurrenceDate,
+              isCancelled: e.isCancelled,
+              cancellationReason: e.cancellationReason || null,
+              originalStart: e.originalStart,
+              originalEnd: e.originalEnd
+            })),
+            ...occurrences.map(o => ({
+              id: o.id,
+              title: o.title,
+              start: o.start,
+              end: o.end,
+              isAllDay: o.isAllDay,
+              isRecurring: true,
+              recurrenceId: o.recurrenceId,
+              originalOccurrenceDate: o.originalOccurrenceDate,
+              isCancelled: false,
+              cancellationReason: null,
+              originalStart: null,
+              originalEnd: null
+            }))
+          ];
+
+          allEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
+
           return { 
             type: "calendar_widget",
             date: args.datum,
             message: `Termin wurde gelöscht.`,
-            events: updatedEvents.map(e => ({ id: e.id, title: e.summary, time: e.start?.dateTime || e.start?.date, type: "google" }))
+            events: allEvents.map(e => ({ 
+              id: e.id, 
+              title: e.title, 
+              time: e.start.toISOString(), 
+              endTime: e.end.toISOString(),
+              type: "local",
+              isAllDay: e.isAllDay,
+              isRecurring: e.isRecurring,
+              recurrenceId: e.recurrenceId,
+              originalOccurrenceDate: e.originalOccurrenceDate ? e.originalOccurrenceDate.toISOString() : null,
+              isCancelled: e.isCancelled,
+              cancellationReason: e.cancellationReason,
+              originalStart: e.originalStart ? e.originalStart.toISOString() : null,
+              originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null
+            }))
           };
         } catch (e: any) {
           return { status: "error", message: `Fehler beim Löschen: ${e.message}` };
@@ -125,36 +480,249 @@ export const calendarPlugin: Plugin = {
     {
       definition: {
         name: "bearbeite_termin",
-        description: "Bearbeitet einen bestehenden Termin im Google Kalender.",
+        description: "Bearbeitet einen Termin. Kann Verschiebungen (auch für einzelne Vorkommen), Ausfälle (ausgefallen=true mit Grund) oder Löschungen steuern.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
-            eventId: { type: SchemaType.STRING, description: "Die ID des zu bearbeitenden Termins" },
-            datum: { type: SchemaType.STRING, description: "Das aktuelle Datum des Termins (YYYY-MM-DD)" },
+            eventId: { type: SchemaType.STRING, description: "Die ID des Termins" },
+            datum: { type: SchemaType.STRING, description: "Das Datum des Termins (YYYY-MM-DD)" },
+            nurDiesesVorkommen: { type: SchemaType.BOOLEAN, description: "Wenn true, wird nur dieses eine Vorkommen geändert." },
             neuer_titel: { type: SchemaType.STRING, description: "Neuer Titel (optional)" },
-            neues_datum: { type: SchemaType.STRING, description: "Neues Datum/Uhrzeit im ISO-Format (optional)" },
-            neue_beschreibung: { type: SchemaType.STRING, description: "Neue Beschreibung (optional)" }
+            neues_datum: { type: SchemaType.STRING, description: "Neues Startdatum/Uhrzeit im ISO-Format (optional)" },
+            neues_enddatum: { type: SchemaType.STRING, description: "Neues Enddatum/Uhrzeit im ISO-Format (optional)" },
+            neue_beschreibung: { type: SchemaType.STRING, description: "Neue Beschreibung (optional)" },
+            ganztaegig: { type: SchemaType.BOOLEAN, description: "Ob der Termin ganztägig ist (optional)" },
+            ausgefallen: { type: SchemaType.BOOLEAN, description: "Ob das Event ausfällt (optional)" },
+            ausfallGrund: { type: SchemaType.STRING, description: "Grund für den Ausfall (optional)" },
+            geloescht: { type: SchemaType.BOOLEAN, description: "Ob der Termin an diesem Tag gelöscht werden soll (optional)" }
           },
           required: ["eventId", "datum"]
         } as any
       },
       handler: async (args, { prisma }) => {
-        const service = new GoogleCalendarService(prisma);
         try {
-          const updates: any = {};
-          if (args.neuer_titel) updates.title = args.neuer_titel;
-          if (args.neue_beschreibung) updates.description = args.neue_beschreibung;
-          if (args.neues_datum) updates.date = new Date(args.neues_datum);
+          let id: number | null = null;
+          let recurrenceId: number | null = null;
+          let originalOccurrenceDate: Date | null = null;
 
-          await service.updateEvent(args.eventId, updates);
-          // Kurz warten für Google
-          await new Promise(resolve => setTimeout(resolve, 500));
-          const updatedEvents = await service.getEvents(new Date(args.neues_datum || args.datum)) || [];
+          if (args.eventId.startsWith('rec-')) {
+            const parts = args.eventId.split('-');
+            recurrenceId = Number(parts[1]);
+            originalOccurrenceDate = new Date(Number(parts[2]));
+          } else {
+            id = Number(args.eventId);
+            const ev = await prisma.event.findUnique({ where: { id } });
+            if (ev && ev.recurrenceId) {
+              recurrenceId = ev.recurrenceId;
+              originalOccurrenceDate = ev.originalOccurrenceDate;
+            }
+          }
+
+          if (args.nurDiesesVorkommen) {
+            if (recurrenceId && originalOccurrenceDate) {
+              const existingOverride = await prisma.event.findFirst({
+                where: { recurrenceId, originalOccurrenceDate }
+              });
+
+              const data: any = {};
+              if (args.neuer_titel !== undefined) data.title = args.neuer_titel;
+              if (args.neue_beschreibung !== undefined) data.description = args.neue_beschreibung;
+              if (args.ganztaegig !== undefined) data.isAllDay = !!args.ganztaegig;
+              if (args.ausgefallen !== undefined) data.isCancelled = !!args.ausgefallen;
+              if (args.ausfallGrund !== undefined) data.cancellationReason = args.ausfallGrund;
+              if (args.geloescht !== undefined) data.isDeleted = !!args.geloescht;
+
+              if (args.neues_datum) {
+                data.start = new Date(args.neues_datum);
+                const duration = args.neues_enddatum ? (new Date(args.neues_enddatum).getTime() - data.start.getTime()) : (60 * 60 * 1000);
+                data.end = new Date(data.start.getTime() + duration);
+                
+                data.originalStart = originalOccurrenceDate;
+                const pattern = await prisma.recurrencePattern.findUnique({ where: { id: recurrenceId } });
+                if (pattern) {
+                  const patternDuration = pattern.originalEnd.getTime() - pattern.originalStart.getTime();
+                  data.originalEnd = new Date(originalOccurrenceDate.getTime() + patternDuration);
+                }
+              }
+
+              if (existingOverride) {
+                await prisma.event.update({
+                  where: { id: existingOverride.id },
+                  data
+                });
+              } else {
+                const pattern = await prisma.recurrencePattern.findUnique({ where: { id: recurrenceId } });
+                if (!pattern) throw new Error("Wiederholungsmuster nicht gefunden.");
+                
+                await prisma.event.create({
+                  data: {
+                    title: pattern.title,
+                    description: pattern.description,
+                    start: originalOccurrenceDate,
+                    end: new Date(originalOccurrenceDate.getTime() + (pattern.originalEnd.getTime() - pattern.originalStart.getTime())),
+                    isAllDay: pattern.isAllDay,
+                    recurrenceId,
+                    originalOccurrenceDate,
+                    ...data
+                  }
+                });
+              }
+            } else if (id) {
+              // Reschedule a one-off event as a single occurrence change
+              const currentEvent = await prisma.event.findUnique({ where: { id } });
+              const data: any = {};
+              if (args.neuer_titel !== undefined) data.title = args.neuer_titel;
+              if (args.neue_beschreibung !== undefined) data.description = args.neue_beschreibung;
+              if (args.ganztaegig !== undefined) data.isAllDay = !!args.ganztaegig;
+              if (args.ausgefallen !== undefined) data.isCancelled = !!args.ausgefallen;
+              if (args.ausfallGrund !== undefined) data.cancellationReason = args.ausfallGrund;
+              if (args.geloescht !== undefined) data.isDeleted = !!args.geloescht;
+
+              if (args.neues_datum) {
+                if (currentEvent) {
+                  data.originalStart = currentEvent.start;
+                  data.originalEnd = currentEvent.end;
+                }
+                data.start = new Date(args.neues_datum);
+                const duration = args.neues_enddatum ? (new Date(args.neues_enddatum).getTime() - data.start.getTime()) : (60 * 60 * 1000);
+                data.end = new Date(data.start.getTime() + duration);
+              }
+
+              await prisma.event.update({
+                where: { id },
+                data
+              });
+            }
+          } else {
+            // Edit entire series or one-off
+            if (recurrenceId) {
+              const data: any = {};
+              if (args.neuer_titel !== undefined) data.title = args.neuer_titel;
+              if (args.neue_beschreibung !== undefined) data.description = args.neue_beschreibung;
+              if (args.ganztaegig !== undefined) data.isAllDay = !!args.ganztaegig;
+
+              if (args.neues_datum) {
+                data.originalStart = new Date(args.neues_datum);
+                const duration = args.neues_enddatum ? (new Date(args.neues_enddatum).getTime() - data.originalStart.getTime()) : (60 * 60 * 1000);
+                data.originalEnd = new Date(data.originalStart.getTime() + duration);
+              }
+
+              await prisma.recurrencePattern.update({
+                where: { id: recurrenceId },
+                data
+              });
+            } else if (id) {
+              const currentEvent = await prisma.event.findUnique({ where: { id } });
+              const data: any = {};
+              if (args.neuer_titel !== undefined) data.title = args.neuer_titel;
+              if (args.neue_beschreibung !== undefined) data.description = args.neue_beschreibung;
+              if (args.ganztaegig !== undefined) data.isAllDay = !!args.ganztaegig;
+              if (args.ausgefallen !== undefined) data.isCancelled = !!args.ausgefallen;
+              if (args.ausfallGrund !== undefined) data.cancellationReason = args.ausfallGrund;
+
+              if (args.neues_datum) {
+                if (currentEvent) {
+                  data.originalStart = currentEvent.start;
+                  data.originalEnd = currentEvent.end;
+                }
+                data.start = new Date(args.neues_datum);
+                const duration = args.neues_enddatum ? (new Date(args.neues_enddatum).getTime() - data.start.getTime()) : (60 * 60 * 1000);
+                data.end = new Date(data.start.getTime() + duration);
+              }
+
+              await prisma.event.update({
+                where: { id },
+                data
+              });
+            }
+          }
+
+          const targetDate = args.neues_datum || args.datum;
+          const startOfDay = new Date(targetDate);
+          startOfDay.setHours(0, 0, 0, 0);
+          const endOfDay = new Date(targetDate);
+          endOfDay.setHours(23, 59, 59, 999);
+
+          const dbEvents = await prisma.event.findMany({
+            where: {
+              isDeleted: false,
+              start: { lte: endOfDay },
+              end: { gte: startOfDay }
+            }
+          });
+
+          const dbPatterns = await prisma.recurrencePattern.findMany({
+            where: {
+              originalStart: { lte: endOfDay },
+              OR: [
+                { recurrenceEnd: null },
+                { recurrenceEnd: { gte: startOfDay } }
+              ]
+            }
+          });
+
+          const patternIds = dbPatterns.map(p => p.id);
+          const overrides = patternIds.length > 0 ? await prisma.event.findMany({
+            where: { recurrenceId: { in: patternIds } }
+          }) : [];
+
+          const occurrences: any[] = [];
+          for (const pattern of dbPatterns) {
+            occurrences.push(...getOccurrences(pattern, startOfDay, endOfDay, overrides));
+          }
+
+          const allEvents = [
+            ...dbEvents.map(e => ({
+              id: String(e.id),
+              title: e.title,
+              start: e.start,
+              end: e.end,
+              isAllDay: e.isAllDay,
+              isRecurring: e.recurrenceId !== null,
+              recurrenceId: e.recurrenceId,
+              originalOccurrenceDate: e.originalOccurrenceDate,
+              isCancelled: e.isCancelled,
+              cancellationReason: e.cancellationReason || null,
+              originalStart: e.originalStart,
+              originalEnd: e.originalEnd
+            })),
+            ...occurrences.map(o => ({
+              id: o.id,
+              title: o.title,
+              start: o.start,
+              end: o.end,
+              isAllDay: o.isAllDay,
+              isRecurring: true,
+              recurrenceId: o.recurrenceId,
+              originalOccurrenceDate: o.originalOccurrenceDate,
+              isCancelled: false,
+              cancellationReason: null,
+              originalStart: null,
+              originalEnd: null
+            }))
+          ];
+
+          allEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
+
           return { 
             type: "calendar_widget",
-            date: (args.neues_datum || args.datum).split('T')[0],
+            date: targetDate.split('T')[0],
             message: `Termin wurde aktualisiert.`,
-            events: updatedEvents.map(e => ({ id: e.id, title: e.summary, time: e.start?.dateTime || e.start?.date, type: "google" }))
+            events: allEvents.map(e => ({ 
+              id: e.id, 
+              title: e.title, 
+              time: e.start.toISOString(), 
+              endTime: e.end.toISOString(),
+              type: "local",
+              isAllDay: e.isAllDay,
+              isRecurring: e.isRecurring,
+              recurrenceId: e.recurrenceId,
+              originalOccurrenceDate: e.originalOccurrenceDate ? e.originalOccurrenceDate.toISOString() : null,
+              isCancelled: e.isCancelled,
+              cancellationReason: e.cancellationReason,
+              originalStart: e.originalStart ? e.originalStart.toISOString() : null,
+              originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null
+            }))
           };
         } catch (e: any) {
           return { status: "error", message: `Fehler beim Bearbeiten: ${e.message}` };
@@ -162,60 +730,86 @@ export const calendarPlugin: Plugin = {
       }
     }
   ],
-  getAlerts: async ({ prisma }) => {
-    const auth = await prisma.googleAuth.findUnique({ where: { id: 1 } });
-    if (!auth) {
-      const service = new GoogleCalendarService(prisma);
-      return [{
-        id: "google-calendar-auth",
-        type: "auth",
-        message: "Google Kalender ist nicht verbunden.",
-        actionLabel: "Verbinden",
-        actionUrl: service.getAuthUrl()
-      }];
-    }
-    return [];
-  },
   getTopWidgets: async ({ prisma }) => {
-    const auth = await prisma.googleAuth.findUnique({ where: { id: 1 } });
-    if (!auth) return [];
-
-    const service = new GoogleCalendarService(prisma);
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
     const inThreeDays = new Date();
     inThreeDays.setDate(today.getDate() + 3);
+    inThreeDays.setHours(23, 59, 59, 999);
 
-    let events: any[] = [];
-    let tasks: any[] = [];
-
+    let occurrences: any[] = [];
+    let dbEvents: any[] = [];
     try {
-      events = await service.getEvents(today, inThreeDays) || [];
-      tasks = await service.getIncompleteTasks() || [];
+      dbEvents = await prisma.event.findMany({
+        where: {
+          isDeleted: false,
+          start: { lte: inThreeDays },
+          end: { gte: today }
+        }
+      });
+
+      const dbPatterns = await prisma.recurrencePattern.findMany({
+        where: {
+          originalStart: { lte: inThreeDays },
+          OR: [
+            { recurrenceEnd: null },
+            { recurrenceEnd: { gte: today } }
+          ]
+        }
+      });
+
+      const patternIds = dbPatterns.map(p => p.id);
+      const overrides = patternIds.length > 0 ? await prisma.event.findMany({
+        where: { recurrenceId: { in: patternIds } }
+      }) : [];
+
+      for (const pattern of dbPatterns) {
+        occurrences.push(...getOccurrences(pattern, today, inThreeDays, overrides));
+      }
     } catch (e) {
-      console.warn("Fehler beim Abrufen von Kalender-Widget-Daten:", e);
+      console.warn("Fehler beim Abrufen der lokalen Kalender-Daten:", e);
     }
+
+    const allEvents = [
+      ...dbEvents.map(e => ({
+        id: String(e.id),
+        title: e.title,
+        time: e.start.toISOString(),
+        endTime: e.end.toISOString(),
+        isAllDay: e.isAllDay,
+        recurring: e.recurrenceId !== null,
+        occurrenceDate: e.originalOccurrenceDate ? e.originalOccurrenceDate.toISOString().split('T')[0] : null,
+        isCancelled: e.isCancelled,
+        cancellationReason: e.cancellationReason || null,
+        originalStart: e.originalStart ? e.originalStart.toISOString() : null,
+        originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null
+      })),
+      ...occurrences.map(o => ({
+        id: o.id,
+        title: o.title,
+        time: o.start.toISOString(),
+        endTime: o.end.toISOString(),
+        isAllDay: o.isAllDay,
+        recurring: true,
+        occurrenceDate: o.originalOccurrenceDate.toISOString().split('T')[0],
+        isCancelled: false,
+        cancellationReason: null,
+        originalStart: null,
+        originalEnd: null
+      }))
+    ];
+
+    allEvents.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 
     return [
       {
         pluginName: "Calendar",
         type: "calendar_overview",
         data: {
-          events: events.map(e => ({
-            id: e.id,
-            title: e.summary,
-            time: e.start?.dateTime || e.start?.date,
-            recurring: !!e.recurringEventId
-          })),
-          tasks: tasks.map(t => ({
-            id: t.id,
-            tasklistId: t.tasklistId,
-            title: t.title,
-            due: t.due,
-            listTitle: t.listTitle
-          }))
+          events: allEvents
         }
       }
     ];
   }
 };
-

@@ -21,7 +21,7 @@ export interface PluginAlert {
 
 export interface PluginWidget {
   pluginName: string;
-  type: "light_control" | "calendar_overview" | "timer_list" | "custom";
+  type: "calendar_overview" | "timer_list" | "custom";
   data: any;
 }
 

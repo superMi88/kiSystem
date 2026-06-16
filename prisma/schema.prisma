@@ -12,11 +12,6 @@ datasource db {
   extensions = [pgvector(map: "vector")]
 }
 
-model LichtStatus {
-  id        Int      @id @default(1)
-  status    String   @default("off")
-  updatedAt DateTime @updatedAt
-}
 
 model Conversation {
   id        String        @id @default(uuid())
@@ -83,5 +78,66 @@ model Timer {
   createdAt DateTime @default(now())
   completed Boolean  @default(false)
 }
+
+model Note {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Event {
+  id                     Int                @id @default(autoincrement())
+  title                  String
+  description            String?
+  start                  DateTime
+  end                    DateTime
+  isAllDay               Boolean            @default(false)
+  
+  recurrenceId           Int?
+  recurrence             RecurrencePattern? @relation(fields: [recurrenceId], references: [id], onDelete: Cascade)
+  
+  originalOccurrenceDate DateTime?
+  
+  isDeleted              Boolean            @default(false)
+  isCancelled            Boolean            @default(false)
+  cancellationReason     String?
+  
+  originalStart          DateTime?
+  originalEnd            DateTime?
+
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+}
+
+model RecurrencePattern {
+  id              Int       @id @default(autoincrement())
+  title           String
+  description     String?
+  originalStart   DateTime
+  originalEnd     DateTime
+  isAllDay        Boolean   @default(false)
+  recurrenceType  String    // "DAILY" | "WEEKLY" | "MONTHLY"
+  recurrenceEnd   DateTime?
+  events          Event[]   // Overridden instances linked to this pattern
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+
+
+model Task {
+  id          Int      @id @default(autoincrement())
+  title       String
+  notes       String?
+  due         DateTime?
+  completed   Boolean  @default(false)
+  listTitle   String   @default("Standard")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+
 
 

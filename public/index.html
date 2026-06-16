@@ -712,6 +712,72 @@
             transform: translateX(18px);
             background-color: #11111b;
         }
+
+        /* Pulsierender Lade-Zustand */
+        .message.ai.thinking {
+            opacity: 0.85;
+            background: rgba(137, 180, 250, 0.05);
+            border: 1px dashed rgba(137, 180, 250, 0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 200px;
+        }
+        
+        .thinking-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: var(--accent);
+            font-weight: bold;
+        }
+
+        .thinking-dots {
+            display: inline-flex;
+            gap: 4px;
+        }
+        .thinking-dots span {
+            width: 6px;
+            height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+            display: inline-block;
+            animation: dotPulse 1.4s infinite ease-in-out both;
+        }
+        .thinking-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .thinking-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes dotPulse {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        .live-tool-item {
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--text);
+            animation: slideInTool 0.25s ease-out;
+        }
+
+        @keyframes slideInTool {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .live-tool-name {
+            font-family: monospace;
+            background: rgba(137, 180, 250, 0.1);
+            color: var(--accent);
+            padding: 1px 4px;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
@@ -764,6 +830,45 @@
             </div>
         </div>
 
+        <!-- Note Modal -->
+        <div id="note-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 25px; border-radius: 12px; z-index: 300; width: 85%; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px);">
+            <h3 id="note-modal-title" style="color: var(--accent); margin-top: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 20px;">Notiz erstellen</h3>
+            <input type="hidden" id="note-id-input">
+            <div class="settings-group" style="text-align: left; margin-bottom: 15px;">
+                <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Titel</label>
+                <input type="text" id="note-title-input" placeholder="Notiz Titel..." style="width: 100%;">
+            </div>
+            <div class="settings-group" style="text-align: left; margin-bottom: 20px;">
+                <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Inhalt</label>
+                <textarea id="note-content-input" placeholder="Schreibe etwas..." style="width: 100%; height: 120px; background: var(--input); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 12px; color: white; outline: none; font-size: 0.9rem; font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+            </div>
+            <div class="modal-btns" style="display: flex; gap: 10px;">
+                <button class="cancel" onclick="closeNoteModal()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Abbrechen</button>
+                <button class="save" onclick="saveNote()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold;">Speichern</button>
+            </div>
+        </div>
+
+        <!-- Task Modal -->
+        <div id="task-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 25px; border-radius: 12px; z-index: 300; width: 85%; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px);">
+            <h3 style="color: var(--accent); margin-top: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 20px;">Aufgabe erstellen</h3>
+            <div class="settings-group" style="text-align: left; margin-bottom: 15px;">
+                <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Titel</label>
+                <input type="text" id="task-title-input" placeholder="Z.B. Milch einkaufen..." style="width: 100%;">
+            </div>
+            <div class="settings-group" style="text-align: left; margin-bottom: 15px;">
+                <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Beschreibung (optional)</label>
+                <input type="text" id="task-notes-input" placeholder="Zusätzliche Infos..." style="width: 100%;">
+            </div>
+            <div class="settings-group" style="text-align: left; margin-bottom: 20px;">
+                <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Fälligkeitsdatum (optional)</label>
+                <input type="date" id="task-due-input" style="width: 100%; color-scheme: dark;">
+            </div>
+            <div class="modal-btns" style="display: flex; gap: 10px;">
+                <button class="cancel" onclick="closeTaskModal()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Abbrechen</button>
+                <button class="save" onclick="saveTask()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold;">Erstellen</button>
+            </div>
+        </div>
+
         <!-- Linke Spalte: Plugins & Dashboard -->
         <div class="top-panel glass-card">
             <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 0.85rem; text-transform: uppercase; color: var(--accent); letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; text-align: left; font-weight: 700;">Plugins & Dashboard</h3>
@@ -798,7 +903,7 @@
             <!-- Untere Kachel: Chat-System -->
             <div id="chat-section" class="bottom-section glass-card">
                 <div class="chat-area" id="chat-box">
-                    <div class="message ai">Hallo! Ich bin dein Gemini-Lichtassistent. Wie kann ich dir helfen?</div>
+                    <div class="message ai">Hallo! Ich bin dein Gemini-Assistent. Wie kann ich dir helfen?</div>
                 </div>
 
                 <div id="attachments-bar" class="attachments-bar">
@@ -1357,6 +1462,58 @@
 
         async function sendAudioMessage(base64Audio) {
             addMessage("🎤 Sprachnachricht gesendet...", true);
+            
+            const thinkingDiv = document.createElement('div');
+            thinkingDiv.className = 'message ai thinking';
+            thinkingDiv.innerHTML = `
+                <div class="thinking-header">
+                    Gemini denkt nach
+                    <div class="thinking-dots"><span></span><span></span><span></span></div>
+                </div>
+                <div class="thinking-tools-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+            `;
+            chatBox.appendChild(thinkingDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            const thinkingToolsList = thinkingDiv.querySelector('.thinking-tools-list');
+
+            const toolFriendlyNames = {
+                'suche_im_gedaechtnis': 'Semantische Suche im Gedächtnis',
+                'hole_person_info': 'Profil & Fakten abrufen',
+                'aktualisiere_person_biografie': 'Biografie aktualisieren',
+                'fuege_person_fakt_hinzu': 'Fakt hinzufügen',
+                'loesche_person_fakt': 'Fakt löschen',
+                'erstelle_timer': 'Timer erstellen',
+                'loesche_timer': 'Timer abbrechen',
+                'quittiere_timer': 'Timer quittieren',
+                'fuege_termin_hinzu': 'Termin eintragen'
+            };
+
+            let renderedToolsCount = 0;
+            const pollInterval = setInterval(async () => {
+                try {
+                    const pollRes = await fetch('/chat/active-tools');
+                    if (!pollRes.ok) return;
+                    const activeTools = await pollRes.json();
+                    
+                    if (activeTools.length > renderedToolsCount) {
+                        for (let i = renderedToolsCount; i < activeTools.length; i++) {
+                            const t = activeTools[i];
+                            const friendlyName = toolFriendlyNames[t.name] || t.name;
+                            
+                            const toolItem = document.createElement('div');
+                            toolItem.className = 'live-tool-item';
+                            toolItem.innerHTML = `⚙️ ${friendlyName}: <span class="live-tool-name">${t.name}</span>`;
+                            thinkingToolsList.appendChild(toolItem);
+                            chatBox.scrollTop = chatBox.scrollHeight;
+                        }
+                        renderedToolsCount = activeTools.length;
+                    }
+                } catch (pollErr) {
+                    console.error("Fehler beim Polling der aktiven Tools:", pollErr);
+                }
+            }, 300);
+
             try {
                 const res = await fetch('/chat', {
                     method: 'POST',
@@ -1367,6 +1524,10 @@
                     })
                 });
                 const data = await res.json();
+                
+                clearInterval(pollInterval);
+                thinkingDiv.remove();
+
                 currentConversationId = data.conversationId;
                 addMessage(data.text, false, data.widget);
                 updateStatus();
@@ -1374,11 +1535,28 @@
                 ipcRenderer.send('widgets-updated');
                 userInput.placeholder = "Nachricht an Gemini...";
             } catch (e) {
+                clearInterval(pollInterval);
+                thinkingDiv.remove();
                 addMessage("Fehler bei der Audio-Verarbeitung.", false);
             }
         }
 
         micBtn.onclick = () => isRecording ? stopRecording() : startRecording();
+
+        function renderMarkdown(text) {
+            if (!text) return "";
+            let html = escapeHtml(text);
+            // Bold (**text**) -> Render slightly larger and bold for a premium look
+            html = html.replace(/\*\*([\s\S]+?)\*\*/g, '<strong style="font-weight: 800; font-size: 1.05em; color: #ffffff;">$1</strong>');
+            // Italic (*text* or _text_)
+            html = html.replace(/\*([\s\S]+?)\*/g, '<em>$1</em>');
+            html = html.replace(/_([\s\S]+?)_/g, '<em>$1</em>');
+            // Inline Code (`code`)
+            html = html.replace(/`([^`]+)`/g, '<code style="background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.9em; color: var(--accent);">$1</code>');
+            // Newlines to <br>
+            html = html.replace(/\n/g, '<br>');
+            return html;
+        }
 
         function addMessage(text, isUser, widget = null, attachments = []) {
             const msg = document.createElement('div');
@@ -1417,7 +1595,7 @@
             
             if (text) {
                 const textDiv = document.createElement('div');
-                textDiv.textContent = text;
+                textDiv.innerHTML = renderMarkdown(text);
                 msg.appendChild(textDiv);
             }
 
@@ -1443,12 +1621,21 @@
                     html += `<p style="font-size:0.8rem; opacity:0.6;">Keine Termine für diesen Tag.</p>`;
                 } else {
                     data.events.forEach(ev => {
-                        const time = ev.time ? new Date(ev.time).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : 'Ganztägig';
+                        const repeatBadge = ev.isRecurring ? ` <span style="font-size: 0.7rem; color: var(--accent);" title="Wiederkehrender Termin">🔄</span>` : '';
+                        const rescheduleBadge = ev.originalStart ? ` <span style="background: rgba(249, 226, 175, 0.15); color: #f9e2af; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-left: 6px; text-transform: uppercase;" title="Dieser Termin wurde verschoben">verschoben</span>` : '';
+                        const timeHtml = formatEventTime(ev);
+
+                        const cancelStyle = ev.isCancelled ? 'color: var(--off); text-decoration: line-through;' : '';
+                        const titleCancelStyle = ev.isCancelled ? 'color: var(--off);' : '';
+                        const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.75rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.75rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
+
                         html += `
-                            <div class="event-item">
-                                <span class="event-type type-${ev.type}">${ev.type}</span>
-                                <span class="event-title">${ev.title}</span>
-                                <span class="event-time">${time}</span>
+                            <div class="event-item" style="align-items: flex-start; flex-direction: column; gap: 4px; padding: 8px 0; ${cancelStyle}">
+                                <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                                    <span class="event-type type-${ev.type}">${ev.type}</span>
+                                    <span class="event-title" style="${titleCancelStyle}">${escapeHtml(ev.title)}${repeatBadge}${rescheduleBadge}${reasonHtml}</span>
+                                </div>
+                                <div class="event-time" style="margin-left: 46px; ${ev.isCancelled ? 'text-decoration: line-through;' : ''}">${timeHtml}</div>
                             </div>
                         `;
                     });
@@ -1482,6 +1669,57 @@
             attachedFiles = [];
             renderAttachments();
 
+            const thinkingDiv = document.createElement('div');
+            thinkingDiv.className = 'message ai thinking';
+            thinkingDiv.innerHTML = `
+                <div class="thinking-header">
+                    Gemini denkt nach
+                    <div class="thinking-dots"><span></span><span></span><span></span></div>
+                </div>
+                <div class="thinking-tools-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+            `;
+            chatBox.appendChild(thinkingDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            const thinkingToolsList = thinkingDiv.querySelector('.thinking-tools-list');
+
+            const toolFriendlyNames = {
+                'suche_im_gedaechtnis': 'Semantische Suche im Gedächtnis',
+                'hole_person_info': 'Profil & Fakten abrufen',
+                'aktualisiere_person_biografie': 'Biografie aktualisieren',
+                'fuege_person_fakt_hinzu': 'Fakt hinzufügen',
+                'loesche_person_fakt': 'Fakt löschen',
+                'erstelle_timer': 'Timer erstellen',
+                'loesche_timer': 'Timer abbrechen',
+                'quittiere_timer': 'Timer quittieren',
+                'fuege_termin_hinzu': 'Termin eintragen'
+            };
+
+            let renderedToolsCount = 0;
+            const pollInterval = setInterval(async () => {
+                try {
+                    const pollRes = await fetch('/chat/active-tools');
+                    if (!pollRes.ok) return;
+                    const activeTools = await pollRes.json();
+                    
+                    if (activeTools.length > renderedToolsCount) {
+                        for (let i = renderedToolsCount; i < activeTools.length; i++) {
+                            const t = activeTools[i];
+                            const friendlyName = toolFriendlyNames[t.name] || t.name;
+                            
+                            const toolItem = document.createElement('div');
+                            toolItem.className = 'live-tool-item';
+                            toolItem.innerHTML = `⚙️ ${friendlyName}: <span class="live-tool-name">${t.name}</span>`;
+                            thinkingToolsList.appendChild(toolItem);
+                            chatBox.scrollTop = chatBox.scrollHeight;
+                        }
+                        renderedToolsCount = activeTools.length;
+                    }
+                } catch (pollErr) {
+                    console.error("Fehler beim Polling der aktiven Tools:", pollErr);
+                }
+            }, 300);
+
             try {
                 const res = await fetch('/chat', {
                     method: 'POST',
@@ -1493,11 +1731,17 @@
                     })
                 });
                 const data = await res.json();
+                
+                clearInterval(pollInterval);
+                thinkingDiv.remove();
+
                 currentConversationId = data.conversationId;
                 addMessage(data.text, false, data.widget);
                 loadTopWidgets();
                 ipcRenderer.send('widgets-updated');
             } catch (e) {
+                clearInterval(pollInterval);
+                thinkingDiv.remove();
                 addMessage("Fehler beim Senden der Nachricht.", false);
             }
         }
@@ -1513,53 +1757,70 @@
                     const widgetDiv = document.createElement('div');
                     widgetDiv.style.marginBottom = '15px';
                     
-                    if (widget.type === 'light_control') {
-                        widgetDiv.innerHTML = `
-                            <h1>LICHT STEUERUNG</h1>
-                            <div class="controls">
-                                <button class="tool ${widget.data.status === 'on' ? 'active-on' : ''}" onclick="callTool('schalte_licht', {status: 'on'})">EIN</button>
-                                <button class="tool ${widget.data.status === 'off' ? 'active-off' : ''}" onclick="callTool('schalte_licht', {status: 'off'})">AUS</button>
-                            </div>
-                            <div style="font-size: 0.75rem; opacity: 0.6;">Status: ${widget.data.status === 'on' ? 'An' : 'Aus'}</div>
-                        `;
-                    } else if (widget.type === 'calendar_overview') {
-                        let html = `<h1>GOOGLE KALENDER</h1><div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">`;
+                    if (widget.type === 'calendar_overview') {
+                        let html = `<h1>TERMIN KALENDER</h1><div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;">`;
                         
-                        html += `<h4 style="margin: 0 0 10px 0; color: var(--accent); font-size: 0.8rem;">Termine (nächste 3 Tage)</h4>`;
+                        html += `<h4 style="margin: 0 0 10px 0; color: var(--accent); font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">Termine (nächste 3 Tage)</h4>`;
                         if (widget.data.events.length === 0) {
-                            html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 0 0 10px 0;">Keine Termine.</p>`;
+                            html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 10px 0; text-align: center;">Keine Termine.</p>`;
                         } else {
                             widget.data.events.forEach(ev => {
-                                const timeStr = ev.time ? new Date(ev.time).toLocaleString('de-DE', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : 'Ganztägig';
-                                const repeatBadge = ev.recurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
-                                html += `<div style="font-size: 0.8rem; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;"><span>${ev.title}${repeatBadge}</span><span style="opacity: 0.6; font-size: 0.75rem;">${timeStr}</span></div>`;
+                                const isRec = ev.recurring || ev.isRecurring;
+                                const repeatBadge = isRec ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
+                                const rescheduleBadge = ev.originalStart ? ` <span style="background: rgba(249, 226, 175, 0.15); color: #f9e2af; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase;" title="Dieser Termin wurde verschoben">verschoben</span>` : '';
+                                const targetDate = ev.occurrenceDate || ev.time.split('T')[0];
+                                
+                                const timeHtml = formatEventTime(ev);
+
+                                const cancelStyle = ev.isCancelled ? 'color: var(--off); text-decoration: line-through;' : '';
+                                const titleCancelStyle = ev.isCancelled ? 'color: var(--off); font-weight: 500;' : 'font-weight: 500;';
+                                const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
+
+                                const rescheduleBorder = ev.originalStart ? 'border-left: 3px solid #f9e2af;' : '';
+
+                                html += `
+                                    <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; background: rgba(255,255,255,0.03); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04); ${rescheduleBorder} ${cancelStyle}">
+                                        <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
+                                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                                <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
+                                                ${repeatBadge}
+                                                ${rescheduleBadge}
+                                                ${reasonHtml}
+                                            </div>
+                                            <div style="${ev.isCancelled ? 'text-decoration: line-through; opacity: 0.5;' : ''}">${timeHtml}</div>
+                                        </div>
+                                        <button onclick="deleteCalendarEvent('${ev.id}', '${targetDate}', ${isRec})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.85rem; padding: 2px 6px; align-self: center;" title="Termin löschen">✖</button>
+                                    </div>
+                                `;
                             });
                         }
 
-                        html += `<h4 style="margin: 15px 0 10px 0; color: var(--accent); font-size: 0.8rem;">Offene Aufgaben</h4>`;
-                        if (widget.data.tasks.length === 0) {
-                            html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 0;">Keine offenen Aufgaben.</p>`;
-                        } else {
-                            const groupedTasks = {};
-                            widget.data.tasks.forEach(t => {
-                                const listName = t.listTitle || "Meine Aufgaben";
-                                if (!groupedTasks[listName]) groupedTasks[listName] = [];
-                                groupedTasks[listName].push(t);
-                            });
-
-                            Object.keys(groupedTasks).forEach(listName => {
-                                html += `<div style="font-weight: 600; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin: 12px 0 6px 0; text-transform: uppercase; letter-spacing: 0.5px;">${listName}</div>`;
-                                html += `<div style="display: flex; flex-direction: column; gap: 4px;">`;
-                                groupedTasks[listName].forEach(t => {
-                                    const repeatBadge = t.recurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrende Aufgabe">🔄</span>` : '';
-                                    html += `
-                                        <label style="font-size: 0.8rem; display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.05); transition: background 0.2s; cursor: pointer;">
-                                            <input type="checkbox" data-task-id="${t.id}" data-tasklist-id="${t.tasklistId}" onchange="completeTask(this)" style="margin-top: 3px; accent-color: var(--accent); cursor: pointer;">
-                                            <span style="flex: 1; line-height: 1.4;">${t.title}${repeatBadge}</span>
-                                        </label>`;
+                        if (widget.data.tasks && Array.isArray(widget.data.tasks)) {
+                            html += `<h4 style="margin: 15px 0 10px 0; color: var(--accent); font-size: 0.8rem;">Offene Aufgaben</h4>`;
+                            if (widget.data.tasks.length === 0) {
+                                html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 0;">Keine offenen Aufgaben.</p>`;
+                            } else {
+                                const groupedTasks = {};
+                                widget.data.tasks.forEach(t => {
+                                    const listName = t.listTitle || "Meine Aufgaben";
+                                    if (!groupedTasks[listName]) groupedTasks[listName] = [];
+                                    groupedTasks[listName].push(t);
                                 });
-                                html += `</div>`;
-                            });
+
+                                Object.keys(groupedTasks).forEach(listName => {
+                                    html += `<div style="font-weight: 600; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin: 12px 0 6px 0; text-transform: uppercase; letter-spacing: 0.5px;">${listName}</div>`;
+                                    html += `<div style="display: flex; flex-direction: column; gap: 4px;">`;
+                                    groupedTasks[listName].forEach(t => {
+                                        const repeatBadge = t.recurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrende Aufgabe">🔄</span>` : '';
+                                        html += `
+                                            <label style="font-size: 0.8rem; display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.05); transition: background 0.2s; cursor: pointer;">
+                                                <input type="checkbox" data-task-id="${t.id}" data-tasklist-id="${t.tasklistId}" onchange="completeTask(this)" style="margin-top: 3px; accent-color: var(--accent); cursor: pointer;">
+                                                <span style="flex: 1; line-height: 1.4;">${t.title}${repeatBadge}</span>
+                                            </label>`;
+                                    });
+                                    html += `</div>`;
+                                });
+                            }
                         }
                         
                         html += `</div>`;
@@ -1587,6 +1848,71 @@
                         }
                         html += `</div>`;
                         widgetDiv.innerHTML = html;
+                    } else if (widget.type === 'custom') {
+                        if (widget.data.widgetType === 'notes_list') {
+                            let html = `<h1>📝 NOTIZEN</h1>
+                            <div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">`;
+                            
+                            html += `<button onclick="openNoteModal()" class="nav-btn" style="width: 100%; font-size: 0.8rem; margin-bottom: 5px;">➕ Neue Notiz</button>`;
+                            
+                            if (!widget.data.notes || widget.data.notes.length === 0) {
+                                html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine Notizen.</p>`;
+                            } else {
+                                widget.data.notes.forEach(note => {
+                                    const rawTitle = note.title;
+                                    const rawContent = note.content;
+                                    const cleanTitle = escapeHtml(rawTitle);
+                                    const cleanContent = escapeHtml(rawContent);
+                                    const escTitle = cleanTitle.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+                                    const escContent = cleanContent.replace(/'/g, "\\'").replace(/"/g, "&quot;").replace(/\n/g, "\\n");
+                                    html += `
+                                        <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); padding: 8px 10px; border-radius: 8px; position: relative;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                                <strong style="font-size: 0.8rem; color: var(--accent);">${cleanTitle}</strong>
+                                                <div style="display: flex; gap: 8px;">
+                                                    <button onclick="openNoteModal(${note.id}, '${escTitle}', '${escContent}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 0 4px;" title="Bearbeiten">✏️</button>
+                                                    <button onclick="deleteNote(${note.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 0 4px;" title="Löschen">✖</button>
+                                                </div>
+                                            </div>
+                                            <div style="font-size: 0.75rem; opacity: 0.8; white-space: pre-wrap; word-break: break-word; line-height: 1.3;">${cleanContent}</div>
+                                        </div>
+                                    `;
+                                });
+                            }
+                            html += `</div>`;
+                            widgetDiv.innerHTML = html;
+                        } else if (widget.data.widgetType === 'tasks_overview') {
+                            let html = `<h1>✅ AUFGABEN</h1>
+                            <div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">`;
+                            
+                            html += `<button onclick="openTaskModal()" class="nav-btn" style="width: 100%; font-size: 0.8rem; margin-bottom: 5px;">➕ Neue Aufgabe</button>`;
+                            
+                            if (!widget.data.tasks || widget.data.tasks.length === 0) {
+                                html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine offenen Aufgaben.</p>`;
+                            } else {
+                                const groupedTasks = {};
+                                widget.data.tasks.forEach(t => {
+                                    const listName = t.listTitle || "Meine Aufgaben";
+                                    if (!groupedTasks[listName]) groupedTasks[listName] = [];
+                                    groupedTasks[listName].push(t);
+                                });
+
+                                Object.keys(groupedTasks).forEach(listName => {
+                                    html += `<div style="font-weight: 600; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin: 8px 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px;">${listName}</div>`;
+                                    html += `<div style="display: flex; flex-direction: column; gap: 4px;">`;
+                                    groupedTasks[listName].forEach(t => {
+                                        html += `
+                                            <label style="font-size: 0.8rem; display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.05); transition: background 0.2s; cursor: pointer;">
+                                                <input type="checkbox" data-task-id="${t.id}" data-tasklist-id="${t.tasklistId}" onchange="completeTask(this)" style="margin-top: 3px; accent-color: var(--accent); cursor: pointer;">
+                                                <span style="flex: 1; line-height: 1.4;">${escapeHtml(t.title)}</span>
+                                            </label>`;
+                                    });
+                                    html += `</div>`;
+                                });
+                            }
+                            html += `</div>`;
+                            widgetDiv.innerHTML = html;
+                        }
                     }
                     
                     topWidgetsContainer.appendChild(widgetDiv);
@@ -1614,6 +1940,101 @@
         }
 
         window.callTool = callTool;
+
+        // Notes and Tasks JS Modals Logic
+        const noteModal = document.getElementById('note-modal');
+        const noteIdInput = document.getElementById('note-id-input');
+        const noteTitleInput = document.getElementById('note-title-input');
+        const noteContentInput = document.getElementById('note-content-input');
+        const noteModalTitle = document.getElementById('note-modal-title');
+
+        window.openNoteModal = function(id = null, title = '', content = '') {
+            noteIdInput.value = id || '';
+            noteTitleInput.value = title;
+            noteContentInput.value = content;
+            noteModalTitle.textContent = id ? 'Notiz bearbeiten' : 'Notiz erstellen';
+            noteModal.style.display = 'block';
+        };
+
+        window.closeNoteModal = function() {
+            noteModal.style.display = 'none';
+        };
+
+        window.saveNote = async function() {
+            const id = noteIdInput.value;
+            const title = noteTitleInput.value.trim();
+            const content = noteContentInput.value.trim();
+            if (!title || !content) {
+                alert("Titel und Inhalt sind erforderlich.");
+                return;
+            }
+            if (id) {
+                await callTool('bearbeite_notiz', { id: parseInt(id), titel: title, inhalt: content });
+            } else {
+                await callTool('erstelle_notiz', { titel: title, inhalt: content });
+            }
+            closeNoteModal();
+        };
+
+        window.deleteNote = async function(id) {
+            if (confirm("Möchtest du diese Notiz wirklich löschen?")) {
+                await callTool('loesche_notiz', { id: parseInt(id) });
+            }
+        };
+
+        window.deleteCalendarEvent = async function(eventId, datum, isRecurring) {
+            if (isRecurring) {
+                const cancelOccurrence = confirm(
+                    "Möchtest du NUR DIESES EINE VORKOMMEN löschen?\n\n" +
+                    "(Klicke 'OK' für nur dieses Vorkommen, oder 'Abbrechen' für die GESAMTE SERIE)"
+                );
+                
+                if (cancelOccurrence) {
+                    await callTool('loesche_termin', { eventId, datum, nurDiesesVorkommen: true });
+                } else {
+                    const deleteSeries = confirm("Möchtest du wirklich die GESAMTE SERIE löschen?");
+                    if (deleteSeries) {
+                        await callTool('loesche_termin', { eventId, datum, nurDiesesVorkommen: false });
+                    }
+                }
+            } else {
+                if (confirm("Möchtest du diesen Termin wirklich löschen?")) {
+                    await callTool('loesche_termin', { eventId, datum, nurDiesesVorkommen: false });
+                }
+            }
+        };
+
+        const taskModal = document.getElementById('task-modal');
+        const taskTitleInput = document.getElementById('task-title-input');
+        const taskNotesInput = document.getElementById('task-notes-input');
+        const taskDueInput = document.getElementById('task-due-input');
+
+        window.openTaskModal = function() {
+            taskTitleInput.value = '';
+            taskNotesInput.value = '';
+            taskDueInput.value = '';
+            taskModal.style.display = 'block';
+        };
+
+        window.closeTaskModal = function() {
+            taskModal.style.display = 'none';
+        };
+
+        window.saveTask = async function() {
+            const title = taskTitleInput.value.trim();
+            const notes = taskNotesInput.value.trim();
+            const due = taskDueInput.value;
+            if (!title) {
+                alert("Titel ist erforderlich.");
+                return;
+            }
+            const args = { titel: title };
+            if (notes) args.notizen = notes;
+            if (due) args.datum = due;
+
+            await callTool('erstelle_aufgabe', args);
+            closeTaskModal();
+        };
 
         async function completeTask(checkbox) {
             const taskId = checkbox.getAttribute('data-task-id');
@@ -1756,6 +2177,67 @@
         }
 
         setInterval(updateAllCountdowns, 500);
+
+        function formatEventTime(ev) {
+            const start = new Date(ev.time);
+            const end = ev.endTime ? new Date(ev.endTime) : start;
+            
+            const formatTime = (d) => d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+            const formatDate = (d) => d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+            
+            const isSameDay = start.toDateString() === end.toDateString();
+            
+            let timeStr = "";
+            if (ev.isAllDay) {
+                if (isSameDay) {
+                    timeStr = `${formatDate(start)} (Ganztägig)`;
+                } else {
+                    const days = Math.round((end.getTime() - start.getTime()) / (24 * 3600 * 1000));
+                    const daysStr = days > 1 ? `${days} Tage` : '2 Tage';
+                    timeStr = `${formatDate(start)} - ${formatDate(end)} (${daysStr}, Ganztägig)`;
+                }
+            } else {
+                if (isSameDay) {
+                    timeStr = `${formatDate(start)}, ${formatTime(start)} - ${formatTime(end)}`;
+                } else {
+                    const days = Math.round((end.getTime() - start.getTime()) / (24 * 3600 * 1000));
+                    const daysStr = days > 1 ? `${days} Tage` : '2 Tage';
+                    timeStr = `${formatDate(start)} ${formatTime(start)} - ${formatDate(end)} ${formatTime(end)} (${daysStr})`;
+                }
+            }
+            
+            if (ev.originalStart) {
+                const origStart = new Date(ev.originalStart);
+                const origEnd = ev.originalEnd ? new Date(ev.originalEnd) : new Date(origStart.getTime() + (end.getTime() - start.getTime()));
+                const origIsSameDay = origStart.toDateString() === origEnd.toDateString();
+                
+                let origTimeStr = "";
+                if (ev.isAllDay) {
+                    if (origIsSameDay) {
+                        origTimeStr = `${formatDate(origStart)}`;
+                    } else {
+                        origTimeStr = `${formatDate(origStart)} - ${formatDate(origEnd)}`;
+                    }
+                } else {
+                    if (origIsSameDay) {
+                        origTimeStr = `${formatDate(origStart)}, ${formatTime(origStart)} - ${formatTime(origEnd)}`;
+                    } else {
+                        origTimeStr = `${formatDate(origStart)} ${formatTime(origStart)} - ${formatDate(origEnd)} ${formatTime(origEnd)}`;
+                    }
+                }
+                
+                return `
+                    <div class="rescheduled-container" style="display: flex; flex-direction: column; gap: 2px;">
+                        <span style="text-decoration: line-through; opacity: 0.5; font-size: 0.7rem;">War: ${origTimeStr}</span>
+                        <span style="color: #f9e2af; font-weight: 500; font-size: 0.75rem; display: flex; align-items: center; gap: 4px;">
+                            ➔ Neu: ${timeStr}
+                        </span>
+                    </div>
+                `;
+            }
+            
+            return `<span style="font-size: 0.75rem; opacity: 0.75;">${timeStr}</span>`;
+        }
 
     </script>
 </body>
