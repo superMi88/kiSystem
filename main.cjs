@@ -172,14 +172,18 @@ function createWindow() {
 
   // Lade die URL des Express-Servers mit Retry-Logik und verschiedenen Hashes
   const loadURL = () => {
+    const settings = getSettings();
+    const serverUrl = settings.serverUrl || 'http://localhost:3001';
+    
+    console.log(`Lade URLs von Server: ${serverUrl}`);
     Promise.all([
-      mainWindow.loadURL('http://localhost:3001/#chat'),
-      pluginsWindow.loadURL('http://localhost:3001/#plugins')
+      mainWindow.loadURL(`${serverUrl}/#chat`),
+      pluginsWindow.loadURL(`${serverUrl}/#plugins`)
     ]).then(() => {
       console.log('Beide Fenster erfolgreich geladen!');
     }).catch(err => {
-      console.log('Server noch nicht bereit, versuche es erneut...');
-      setTimeout(loadURL, 1000);
+      console.log(`Verbindung zu ${serverUrl} fehlgeschlagen, versuche es erneut...`);
+      setTimeout(loadURL, 2000);
     });
   };
 
