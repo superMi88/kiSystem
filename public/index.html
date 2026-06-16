@@ -284,6 +284,26 @@
 
         input:focus { border-color: var(--accent); }
 
+        #user-input {
+            flex: 1;
+            background: var(--input);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px 18px;
+            color: white;
+            outline: none;
+            font-size: 0.9rem;
+            resize: none;
+            font-family: inherit;
+            line-height: 1.4;
+            max-height: 150px;
+            height: 45px;
+            overflow-y: hidden;
+            box-sizing: border-box;
+        }
+
+        #user-input:focus { border-color: var(--accent); }
+
         #send-btn {
             background: var(--accent);
             border: none;
@@ -911,7 +931,7 @@
                 </div>
 
                 <div class="input-area">
-                    <input type="text" id="user-input" placeholder="Nachricht an Gemini..." autofocus>
+                    <textarea id="user-input" placeholder="Nachricht an Gemini..." autofocus rows="1"></textarea>
                     <button id="mic-btn" title="Spracheingabe">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
                     </button>
@@ -1664,6 +1684,7 @@
             const attachmentsToSend = [...attachedFiles];
             addMessage(text, true, null, attachmentsToSend);
             userInput.value = '';
+            autoResizeInput();
 
             console.log("Sende Nachricht mit Anhängen:", attachmentsToSend.length);
             attachedFiles = [];
@@ -2079,8 +2100,37 @@
 
         window.completeTask = completeTask;
 
+        function autoResizeInput() {
+            userInput.style.height = 'auto';
+            if (!userInput.value) {
+                userInput.style.height = '45px';
+                userInput.style.overflowY = 'hidden';
+                return;
+            }
+            const scrollHeight = userInput.scrollHeight;
+            if (scrollHeight > 150) {
+                userInput.style.height = '150px';
+                userInput.style.overflowY = 'auto';
+            } else {
+                userInput.style.height = Math.max(45, scrollHeight) + 'px';
+                userInput.style.overflowY = 'hidden';
+            }
+        }
+
         sendBtn.onclick = sendMessage;
-        userInput.onkeypress = (e) => { if (e.key === 'Enter') sendMessage(); };
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                if (e.shiftKey) {
+                    // Shift + Enter: let browser insert newline, and resize input
+                    setTimeout(autoResizeInput, 0);
+                } else {
+                    // Enter alone: send message and prevent newline
+                    e.preventDefault();
+                    sendMessage();
+                }
+            }
+        });
+        userInput.addEventListener('input', autoResizeInput);
 
         ipcRenderer.on('settings-updated', () => {
             console.log('Empfange settings-updated Event. Lade Widgets neu...');
