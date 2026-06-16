@@ -320,6 +320,17 @@ app.whenReady().then(() => {
   });
 });
 
+app.on('login', (event, webContents, details, authInfo, callback) => {
+  event.preventDefault();
+  const settings = getSettings();
+  if (settings.serverUser && settings.serverPassword) {
+    callback(settings.serverUser, settings.serverPassword);
+  } else {
+    console.error('Basic Auth Zugangsdaten fehlen in settings.json.');
+    callback('', '');
+  }
+});
+
 app.on('will-quit', () => {
   // Alle globalen Hotkeys entregistrieren
   globalShortcut.unregisterAll();
