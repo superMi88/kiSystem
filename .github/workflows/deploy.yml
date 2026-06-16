@@ -1,0 +1,54 @@
+name: Deploy kiSystem to Server
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Prisma Client generieren
+        run: npx prisma generate
+
+      - name: TypeScript kompilieren
+        run: npm run build
+
+      - name: Kopiere Dateien auf den Server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "build/,public/,package.json,package-lock.json,prisma/,ecosystem.config.cjs"
+          target: "/home/kisystem"
+
+      - name: Führe Befehle auf Server aus (Deploy & Start)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd /home/kisystem
+            echo "${{ secrets.ENV_FILE_CONTENT }}" > .env
+            npm install --omit=dev
+            npx prisma migrate deploy
+            pm2 startOrReload ecosystem.config.cjs --update-env
+            pm2 save
