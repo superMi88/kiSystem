@@ -10,6 +10,7 @@ import {
 import { PrismaClient } from "@prisma/client";
 import dotenv from "dotenv";
 import { exec } from "child_process";
+import os from "os";
 
 import { PluginManager } from "./plugins/index.js";
 import { getSettings, saveSettings } from "./settings.js";
@@ -398,6 +399,18 @@ WICHTIGE VERHALTENSREGELN:
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`KI-System Server läuft auf Port ${PORT}`);
+  
+  // Output local network IP addresses to let the user know what to enter in the mobile app settings
+  const nets = os.networkInterfaces();
+  console.log("\n>>> LOKALE IP-ADRESSEN FÜR DIE MOBILE APP <<<");
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]!) {
+      if (net.family === 'IPv4' && !net.internal) {
+        console.log(`  http://${net.address}:${PORT}`);
+      }
+    }
+  }
+  console.log(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
 });
 
 

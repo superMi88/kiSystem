@@ -928,6 +928,25 @@
                         </div>
                     </div>
 
+                    <!-- Server-Adresse -->
+                    <div class="settings-group">
+                        <label>Server-Adresse (für Mobile/Web)</label>
+                        <div class="hotkey-container">
+                            <input type="text" id="api-base-url-input" placeholder="Z.B. http://192.168.178.50:3001" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.9rem;">
+                            <span class="hotkey-tip">Wird für den Zugriff von Mobilgeräten oder Webbrowsern benötigt. Standardmäßig leer (Verbindung zum lokalen Server).</span>
+                        </div>
+                    </div>
+
+                    <!-- Server-Zugangsdaten (Basic Auth) -->
+                    <div class="settings-group">
+                        <label>Server-Login (Username / Passwort)</label>
+                        <div class="hotkey-container" style="display: flex; gap: 10px;">
+                            <input type="text" id="api-username-input" placeholder="Username" style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.9rem;">
+                            <input type="password" id="api-password-input" placeholder="Passwort" style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.9rem;">
+                        </div>
+                        <span class="hotkey-tip" style="margin-top: 4px; display: block;">Nur notwendig, wenn dein Server mit Basic Authentication geschützt ist (z. B. dein Online-Server).</span>
+                    </div>
+
                     <!-- Autostart toggle setting -->
                     <div class="settings-group">
                         <label>System-Einstellungen</label>
@@ -961,6 +980,29 @@
 
     <script>
         const escapeHtml = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+        // Helper to resolve API URLs (either absolute or relative depending on configuration)
+        function getApiUrl(path) {
+            const savedUrl = localStorage.getItem('api_base_url');
+            if (savedUrl) {
+                const cleanedUrl = savedUrl.replace(/\/$/, '');
+                return cleanedUrl + (path.startsWith('/') ? path : '/' + path);
+            }
+            return path;
+        }
+
+        // Custom wrapper around fetch to automatically attach Basic Authentication headers if configured
+        async function authFetch(url, options = {}) {
+            options.headers = options.headers || {};
+            const username = localStorage.getItem('api_username');
+            const password = localStorage.getItem('api_password');
+            if (username && password) {
+                options.headers['Authorization'] = 'Basic ' + btoa(username + ':' + password);
+            }
+            return window.fetch(url, options);
+        }
+
+        const fetch = authFetch;
 
         // PWA Service Worker Registrierung
         if ('serviceWorker' in navigator) {
@@ -1015,7 +1057,7 @@
         let wasAlertActive = false;
         async function loadAlerts() {
             try {
-                const res = await fetch('/alerts');
+                const res = await fetch(getApiUrl('/alerts'));
                 const alerts = await res.json();
                 
                 if (alerts.length > 0) {
@@ -1077,8 +1119,16 @@
         // Settings laden
         async function loadSettings() {
             try {
-                const res = await fetch('/settings');
-                const settings = await res.json();
+                let settings = { hotkey: 'Ctrl+Shift+Space', autostart: false };
+                try {
+                    const res = await fetch(getApiUrl('/settings'));
+                    if (res.ok) {
+                        settings = await res.json();
+                    }
+                } catch (err) {
+                    console.warn("Konnte Einstellungen nicht vom Server laden:", err);
+                }
+                
                 currentHotkey = settings.hotkey || 'Ctrl+Shift+Space';
                 tempHotkey = currentHotkey;
                 hotkeyBtn.textContent = currentHotkey;
@@ -1088,9 +1138,31 @@
                     autostartCheckbox.checked = settings.autostart === true;
                 }
                 
-                const pRes = await fetch('/settings/plugins');
-                const plugins = await pRes.json();
-                renderPluginsSettings(plugins);
+                // Initialize the Server Address input field from localStorage
+                const apiBaseUrlInput = document.getElementById('api-base-url-input');
+                if (apiBaseUrlInput) {
+                    apiBaseUrlInput.value = localStorage.getItem('api_base_url') || '';
+                }
+
+                // Initialize the Server Credentials input fields from localStorage
+                const apiUsernameInput = document.getElementById('api-username-input');
+                const apiPasswordInput = document.getElementById('api-password-input');
+                if (apiUsernameInput) {
+                    apiUsernameInput.value = localStorage.getItem('api_username') || '';
+                }
+                if (apiPasswordInput) {
+                    apiPasswordInput.value = localStorage.getItem('api_password') || '';
+                }
+                
+                try {
+                    const pRes = await fetch(getApiUrl('/settings/plugins'));
+                    if (pRes.ok) {
+                        const plugins = await pRes.json();
+                        renderPluginsSettings(plugins);
+                    }
+                } catch (err) {
+                    console.warn("Konnte Plugins-Liste nicht vom Server laden:", err);
+                }
             } catch (e) {
                 console.error("Fehler beim Laden der Einstellungen:", e);
             }
@@ -1130,6 +1202,41 @@
             recordingHotkey = false;
             hotkeyBtn.classList.remove('recording');
             
+            // Save the server URL first
+            const apiBaseUrlInput = document.getElementById('api-base-url-input');
+            if (apiBaseUrlInput) {
+                const enteredUrl = apiBaseUrlInput.value.trim();
+                if (enteredUrl) {
+                    let formattedUrl = enteredUrl;
+                    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+                        formattedUrl = 'http://' + formattedUrl;
+                    }
+                    localStorage.setItem('api_base_url', formattedUrl);
+                } else {
+                    localStorage.removeItem('api_base_url');
+                }
+            }
+
+            // Save the server credentials
+            const apiUsernameInput = document.getElementById('api-username-input');
+            const apiPasswordInput = document.getElementById('api-password-input');
+            if (apiUsernameInput) {
+                const username = apiUsernameInput.value.trim();
+                if (username) {
+                    localStorage.setItem('api_username', username);
+                } else {
+                    localStorage.removeItem('api_username');
+                }
+            }
+            if (apiPasswordInput) {
+                const password = apiPasswordInput.value.trim();
+                if (password) {
+                    localStorage.setItem('api_password', password);
+                } else {
+                    localStorage.removeItem('api_password');
+                }
+            }
+
             const disabledPlugins = [];
             document.querySelectorAll('.plugin-checkbox').forEach(cb => {
                 if (!cb.checked) {
@@ -1141,7 +1248,7 @@
             const autostart = autostartCheckbox ? autostartCheckbox.checked : false;
             
             try {
-                const res = await fetch('/settings', {
+                const res = await fetch(getApiUrl('/settings'), {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
@@ -1152,16 +1259,21 @@
                 });
                 
                 if (res.ok) {
-                    ipcRenderer.send('reload-hotkey');
+                    if (isElectron && ipcRenderer) {
+                        ipcRenderer.send('reload-hotkey');
+                    }
                     showSection('chat');
                     loadTopWidgets(); // Top-Widgets sofort neu laden
                     
                     addMessage("✅ Einstellungen erfolgreich gespeichert.", false);
                 } else {
-                    alert("Fehler beim Speichern der Einstellungen.");
+                    alert("Fehler beim Speichern der Einstellungen auf dem Server.");
                 }
             } catch (err) {
-                alert("Speichern-Fehler: " + err.message);
+                console.error("Speichern-Fehler:", err);
+                alert("Einstellungen lokal gespeichert, aber der Server ist nicht erreichbar. Bitte überprüfe die Server-Adresse.");
+                showSection('chat');
+                loadTopWidgets();
             }
         };
 
@@ -1201,11 +1313,16 @@
                     hotkeyBtn.classList.remove('recording');
                     
                     // Testen über IPC
-                    const testResult = await ipcRenderer.invoke('register-hotkey-test', hotkeyStr);
-                    if (!testResult.success) {
-                        alert("Hotkey Fehler: " + testResult.error);
-                        tempHotkey = currentHotkey;
-                        hotkeyBtn.textContent = currentHotkey;
+                    if (isElectron && ipcRenderer) {
+                        const testResult = await ipcRenderer.invoke('register-hotkey-test', hotkeyStr);
+                        if (!testResult.success) {
+                            alert("Hotkey Fehler: " + testResult.error);
+                            tempHotkey = currentHotkey;
+                            hotkeyBtn.textContent = currentHotkey;
+                        }
+                    } else {
+                        tempHotkey = hotkeyStr;
+                        hotkeyBtn.textContent = hotkeyStr;
                     }
                 }
             }
@@ -1232,13 +1349,21 @@
 
         // Schließen Button
         closePanel.onclick = () => {
-            ipcRenderer.send('hide-window');
+            if (isElectron && ipcRenderer) {
+                ipcRenderer.send('hide-window');
+            } else {
+                document.body.classList.remove('active');
+            }
         };
 
         // Schließen wenn auf den transparenten Hintergrund (außerhalb der Kacheln) geklickt wird
         document.addEventListener('click', (e) => {
             if (e.target === document.body || e.target.classList.contains('side-panel-container')) {
-                ipcRenderer.send('hide-window');
+                if (isElectron && ipcRenderer) {
+                    ipcRenderer.send('hide-window');
+                } else {
+                    document.body.classList.remove('active');
+                }
             }
         });
 
@@ -1297,7 +1422,7 @@
         async function registerApp(name, path) {
             console.log("Registriere App:", name, path);
             try {
-                const res = await fetch('/apps', {
+                const res = await fetch(getApiUrl('/apps'), {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ name, path })
@@ -1317,12 +1442,14 @@
         let attachedFiles = [];
         const attachmentsBar = document.getElementById('attachments-bar');
 
-        ipcRenderer.on('process-dropped-files', async (event, filePaths) => {
-            console.log("Verarbeite gedroppte Dateien:", filePaths);
-            for (const path of filePaths) {
-                await addAttachment(path);
-            }
-        });
+        if (isElectron && ipcRenderer) {
+            ipcRenderer.on('process-dropped-files', async (event, filePaths) => {
+                console.log("Verarbeite gedroppte Dateien:", filePaths);
+                for (const path of filePaths) {
+                    await addAttachment(path);
+                }
+            });
+        }
 
         async function addAttachment(filePath) {
             const fs = require('fs');
@@ -1452,7 +1579,7 @@
 
         // Verlauf laden
         async function loadHistory() {
-            const res = await fetch('/conversations');
+            const res = await fetch(getApiUrl('/conversations'));
             const conversations = await res.json();
             renderHistory(conversations);
         }
@@ -1475,7 +1602,7 @@
         }
 
         async function loadConversation(id) {
-            const res = await fetch(`/conversations/${id}`);
+            const res = await fetch(getApiUrl(`/conversations/${id}`));
             const messages = await res.json();
             
             currentConversationId = id;
@@ -1488,7 +1615,7 @@
         // Suche
         historyQuery.oninput = async () => {
             const query = historyQuery.value.toLowerCase();
-            const res = await fetch('/conversations');
+            const res = await fetch(getApiUrl('/conversations'));
             const conversations = await res.json();
             const filtered = conversations.filter(c => c.title.toLowerCase().includes(query));
             renderHistory(filtered);
@@ -1561,7 +1688,6 @@
                 'hole_person_info': 'Profil & Fakten abrufen',
                 'aktualisiere_person_biografie': 'Biografie aktualisieren',
                 'fuege_person_fakt_hinzu': 'Fakt hinzufügen',
-                'loesche_person_fakt': 'Fakt löschen',
                 'erstelle_timer': 'Timer erstellen',
                 'loesche_timer': 'Timer abbrechen',
                 'quittiere_timer': 'Timer quittieren',
@@ -1571,7 +1697,7 @@
             let renderedToolsCount = 0;
             const pollInterval = setInterval(async () => {
                 try {
-                    const pollRes = await fetch('/chat/active-tools');
+                    const pollRes = await fetch(getApiUrl('/chat/active-tools'));
                     if (!pollRes.ok) return;
                     const activeTools = await pollRes.json();
                     
@@ -1594,7 +1720,7 @@
             }, 300);
 
             try {
-                const res = await fetch('/chat', {
+                const res = await fetch(getApiUrl('/chat'), {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ 
@@ -1606,12 +1732,13 @@
                 
                 clearInterval(pollInterval);
                 thinkingDiv.remove();
-
+ 
                 currentConversationId = data.conversationId;
                 addMessage(data.text, false, data.widget);
-                updateStatus();
                 loadTopWidgets();
-                ipcRenderer.send('widgets-updated');
+                if (isElectron && ipcRenderer) {
+                    ipcRenderer.send('widgets-updated');
+                }
                 userInput.placeholder = "Nachricht an Gemini...";
             } catch (e) {
                 clearInterval(pollInterval);
@@ -1778,7 +1905,7 @@
             let renderedToolsCount = 0;
             const pollInterval = setInterval(async () => {
                 try {
-                    const pollRes = await fetch('/chat/active-tools');
+                    const pollRes = await fetch(getApiUrl('/chat/active-tools'));
                     if (!pollRes.ok) return;
                     const activeTools = await pollRes.json();
                     
@@ -1801,7 +1928,7 @@
             }, 300);
 
             try {
-                const res = await fetch('/chat', {
+                const res = await fetch(getApiUrl('/chat'), {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ 
@@ -1831,7 +1958,7 @@
 
         async function loadTopWidgets() {
             try {
-                const res = await fetch('/widgets');
+                const res = await fetch(getApiUrl('/widgets'));
                 const widgets = await res.json();
                 topWidgetsContainer.innerHTML = '';
                 
@@ -1853,13 +1980,13 @@
                                 const targetDate = ev.occurrenceDate || ev.time.split('T')[0];
                                 
                                 const timeHtml = formatEventTime(ev);
-
+ 
                                 const cancelStyle = ev.isCancelled ? 'color: var(--off); text-decoration: line-through;' : '';
                                 const titleCancelStyle = ev.isCancelled ? 'color: var(--off); font-weight: 500;' : 'font-weight: 500;';
                                 const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
-
+ 
                                 const rescheduleBorder = ev.originalStart ? 'border-left: 3px solid #f9e2af;' : '';
-
+ 
                                 html += `
                                     <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; background: rgba(255,255,255,0.03); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04); ${rescheduleBorder} ${cancelStyle}">
                                         <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
@@ -1876,7 +2003,7 @@
                                 `;
                             });
                         }
-
+ 
                         if (widget.data.tasks && Array.isArray(widget.data.tasks)) {
                             html += `<h4 style="margin: 15px 0 10px 0; color: var(--accent); font-size: 0.8rem;">Offene Aufgaben</h4>`;
                             if (widget.data.tasks.length === 0) {
@@ -1888,7 +2015,7 @@
                                     if (!groupedTasks[listName]) groupedTasks[listName] = [];
                                     groupedTasks[listName].push(t);
                                 });
-
+ 
                                 Object.keys(groupedTasks).forEach(listName => {
                                     html += `<div style="font-weight: 600; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin: 12px 0 6px 0; text-transform: uppercase; letter-spacing: 0.5px;">${listName}</div>`;
                                     html += `<div style="display: flex; flex-direction: column; gap: 4px;">`;
@@ -1978,7 +2105,7 @@
                                     if (!groupedTasks[listName]) groupedTasks[listName] = [];
                                     groupedTasks[listName].push(t);
                                 });
-
+ 
                                 Object.keys(groupedTasks).forEach(listName => {
                                     html += `<div style="font-weight: 600; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin: 8px 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px;">${listName}</div>`;
                                     html += `<div style="display: flex; flex-direction: column; gap: 4px;">`;
@@ -2009,13 +2136,15 @@
 
         async function callTool(name, args) {
             try {
-                await fetch('/api/tools/call', {
+                await fetch(getApiUrl('/api/tools/call'), {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ name, arguments: args })
                 });
                 loadTopWidgets();
-                ipcRenderer.send('widgets-updated');
+                if (isElectron && ipcRenderer) {
+                    ipcRenderer.send('widgets-updated');
+                }
             } catch(e) {
                 console.error("Tool Call Error:", e);
             }
@@ -2131,7 +2260,7 @@
             }
 
             try {
-                const res = await fetch('/tasks/complete', {
+                const res = await fetch(getApiUrl('/tasks/complete'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ tasklistId, taskId })
@@ -2207,7 +2336,15 @@
             });
         }
 
-        loadTopWidgets();
+        loadTopWidgets().catch(err => {
+            console.error("Konnte keine Verbindung zum Server herstellen:", err);
+            if (!isElectron) {
+                setTimeout(() => {
+                    showSection('settings');
+                    alert("Konnte keine Verbindung zum Server herstellen. Bitte trage die IP-Adresse des Servers in den Einstellungen ein.");
+                }, 1000);
+            }
+        });
         setInterval(loadAlerts, 3000); // Alle 3 Sekunden prüfen
 
         function playAlarmBeep() {

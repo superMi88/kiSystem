@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">kiSystem</string>
+    <string name="title_activity_main">kiSystem</string>
+    <string name="package_name">com.kisystem.app</string>
+    <string name="custom_url_scheme">com.kisystem.app</string>
+</resources>
