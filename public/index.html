@@ -774,6 +774,20 @@
             padding: 1px 4px;
             border-radius: 4px;
         }
+
+        /* Mobile Switch Buttons only visible when in mobile-mode */
+        .mobile-only {
+            display: none !important;
+        }
+        body.mobile-mode .mobile-only {
+            display: inline-flex !important;
+        }
+        #view-toggle-container.mobile-only {
+            display: none !important;
+        }
+        body.mobile-mode #view-toggle-container.mobile-only {
+            display: flex !important;
+        }
     </style>
 </head>
 <body>
@@ -844,7 +858,12 @@
 
         <!-- Linke Spalte: Plugins & Dashboard -->
         <div class="top-panel glass-card">
-            <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 0.85rem; text-transform: uppercase; color: var(--accent); letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; text-align: left; font-weight: 700;">Plugins & Dashboard</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; width: 100%;">
+                <h3 style="margin: 0; font-size: 0.85rem; text-transform: uppercase; color: var(--accent); letter-spacing: 1px; text-align: left; font-weight: 700;">Plugins & Dashboard</h3>
+                <button onclick="toggleMobileView()" class="nav-btn mobile-only" style="margin: 0; max-width: 140px; padding: 6px 12px; font-size: 0.75rem; border-radius: 20px; border-color: var(--accent); color: var(--accent); font-weight: bold; background: rgba(137, 180, 250, 0.1);">
+                    ➔ Chat anzeigen
+                </button>
+            </div>
             <div id="top-widgets-container"></div>
         </div>
 
@@ -882,6 +901,12 @@
 
                 <div id="attachments-bar" class="attachments-bar">
                     <!-- Dateianhänge kommen hierher -->
+                </div>
+
+                <div id="view-toggle-container" class="mobile-only" style="display: none; justify-content: center; padding: 8px; background: rgba(0, 0, 0, 0.15); border-top: 1px solid rgba(255, 255, 255, 0.05); gap: 10px; width: 100%;">
+                     <button onclick="toggleMobileView()" class="nav-btn" style="max-width: 280px; padding: 8px 16px; font-size: 0.8rem; border-radius: 20px; border-color: var(--accent); color: var(--accent); font-weight: bold; background: rgba(137, 180, 250, 0.1);">
+                         ➔ Dashboard & Plugins anzeigen
+                     </button>
                 </div>
 
                 <div class="input-area">
@@ -979,6 +1004,17 @@
     </div>
 
     <script>
+        function toggleMobileView() {
+            if (document.body.classList.contains('view-chat')) {
+                document.body.classList.remove('view-chat');
+                document.body.classList.add('view-plugins');
+            } else {
+                document.body.classList.remove('view-plugins');
+                document.body.classList.add('view-chat');
+            }
+        }
+        window.toggleMobileView = toggleMobileView;
+
         const escapeHtml = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
         // Helper to resolve API URLs (either absolute or relative depending on configuration)
@@ -1039,6 +1075,7 @@
         // Wenn wir nicht in Electron laufen, machen wir die Seite direkt aktiv/sichtbar
         if (!isElectron) {
             document.body.classList.add('active');
+            document.body.classList.add('mobile-mode');
             // Auf Handys/Webbrowsern wollen wir auch keinen transparenten Hintergrund
             document.documentElement.style.setProperty('background', '#11111b', 'important');
             document.body.style.setProperty('background', '#11111b', 'important');
