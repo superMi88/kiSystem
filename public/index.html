@@ -273,6 +273,14 @@
             border-bottom-right-radius: 12px;
         }
 
+        .input-row {
+            display: flex;
+            flex: 1;
+            gap: 12px;
+            align-items: center;
+            width: 100%;
+        }
+
         input {
             flex: 1;
             background: var(--input);
@@ -787,47 +795,78 @@
         }
         body.mobile-mode #view-toggle-container.mobile-only {
             display: flex !important;
-            position: fixed;
-            left: 15px;
-            right: 15px;
-            z-index: 1000;
-            border-radius: 30px;
-            background: rgba(30, 30, 46, 0.9);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 8px 15px;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.45);
-            transition: bottom 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-            justify-content: space-around;
-            align-items: center;
-            gap: 12px;
-        }
-        body.mobile-mode.view-chat #view-toggle-container.mobile-only {
-            bottom: 74px; /* Floats exactly above the chat input box */
-        }
-        body.mobile-mode:not(.view-chat) #view-toggle-container.mobile-only {
-            bottom: 15px; /* Floats at the very bottom */
+            position: static !important;
+            left: auto !important;
+            right: auto !important;
+            z-index: auto !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            backdrop-filter: none !important;
+            border: none !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+            transition: none !important;
+            justify-content: space-around !important;
+            align-items: center !important;
+            gap: 12px !important;
+            width: 100% !important;
+            bottom: auto !important;
         }
 
         /* Adjust bottom padding to prevent items from being cut off by the floating bar */
         body.mobile-mode.view-chat #chat-box {
-            padding-bottom: 75px !important;
+            padding-bottom: 140px !important;
         }
         body.mobile-mode:not(.view-chat) .top-panel {
-            padding-bottom: 80px !important;
+            padding-bottom: 140px !important;
         }
 
-        /* Hide general top panel and right column rules according to view states on mobile */
-        body.mobile-mode:not(.view-chat) .right-column {
+        /* Control panels display and scrolling on mobile */
+        body.mobile-mode .top-panel {
+            grid-column: 1 !important;
+            grid-row: 1 !important;
+            padding-top: 70px !important;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        body.mobile-mode.view-chat .top-panel,
+        body.mobile-mode.view-history .top-panel,
+        body.mobile-mode.view-settings .top-panel {
             display: none !important;
         }
-        body.mobile-mode.view-chat .top-panel {
+
+        body.mobile-mode .right-column {
+            grid-column: 1 !important;
+            grid-row: 1 !important;
+            padding-top: 60px !important;
+            height: 100vh;
+            display: flex !important;
+            transition: background 0.3s;
+        }
+
+        /* Pass-through clicks to the dashboard plugin view when they are displayed */
+        body.mobile-mode.view-plugins .right-column {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            pointer-events: none !important;
+        }
+        body.mobile-mode.view-plugins .right-column .input-area,
+        body.mobile-mode.view-plugins .right-column .input-area *,
+        body.mobile-mode.view-plugins .right-column #attachments-bar,
+        body.mobile-mode.view-plugins .right-column #attachments-bar * {
+            pointer-events: auto !important;
+        }
+        body.mobile-mode.view-plugins .right-column #chat-box,
+        body.mobile-mode.view-plugins .right-column #history-section,
+        body.mobile-mode.view-plugins .right-column #right-header {
             display: none !important;
         }
 
         /* Set single column grid layout on mobile when in any view */
         body.mobile-mode .side-panel-container {
             grid-template-columns: 1fr !important;
+            grid-template-rows: 1fr !important;
             transform: translateX(0) !important;
         }
 
@@ -914,9 +953,196 @@
             border-color: var(--accent);
             color: var(--accent);
         }
+
+        /* Fixed Mobile Top Bar */
+        #mobile-top-bar {
+            display: none;
+        }
+        body.mobile-mode #mobile-top-bar {
+            display: flex;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: var(--card);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 15px;
+            z-index: 1001;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        #mobile-top-bar #mobile-view-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #mobile-top-bar .settings-btn {
+            position: static;
+            transform: none;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        #mobile-top-bar .settings-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        #mobile-chat-nav {
+            display: none;
+            gap: 8px;
+        }
+        body.mobile-mode.view-chat #mobile-chat-nav,
+        body.mobile-mode.view-history #mobile-chat-nav {
+            display: flex;
+        }
+        #mobile-chat-nav .nav-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            padding: 0;
+            transition: all 0.2s;
+        }
+        #mobile-chat-nav .nav-btn.active {
+            background: var(--accent);
+            color: #11111b;
+            border-color: var(--accent);
+        }
+        /* Hide double top bar in settings on mobile */
+        body.mobile-mode.view-settings #mobile-top-bar {
+            display: none !important;
+        }
+
+        /* Hide chat input area and attachments preview on mobile when typing in another input field or when a modal is open */
+        body.mobile-mode:not(.view-chat) .side-panel-container > :not(.right-column):focus-within ~ .right-column .input-area,
+        body.mobile-mode:not(.view-chat) .side-panel-container > :not(.right-column):focus-within ~ .right-column #attachments-bar,
+        body.mobile-mode.modal-active .input-area,
+        body.mobile-mode.modal-active #attachments-bar {
+            display: none !important;
+        }
+
+        /* Fixed Message Input & Attachments for Mobile */
+        body.mobile-mode .input-area {
+            position: fixed;
+            bottom: 15px;
+            left: 15px;
+            right: 15px;
+            z-index: 999;
+            border-radius: 20px;
+            background: rgba(30, 30, 46, 0.95);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.45);
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            height: auto;
+            max-height: 220px;
+            transform: translateY(0) !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }
+
+        body.mobile-mode #attachments-bar {
+            position: fixed;
+            bottom: 155px; /* Sits directly above the merged bottom bar */
+            left: 15px;
+            right: 15px;
+            z-index: 999;
+            border-radius: 8px;
+            background: rgba(30, 30, 46, 0.95);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.45);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
+            transform: translateY(150%);
+            opacity: 0;
+            pointer-events: none !important;
+        }
+
+        body.mobile-mode #attachments-bar.active {
+            transform: translateY(0) !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }
+
+        body.mobile-mode #mic-btn {
+            display: none !important;
+        }
+
+        #plus-btn {
+            background: var(--input);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        #plus-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* Hide close panel button on mobile */
+        body.mobile-mode #close-panel {
+            display: none !important;
+        }
+        /* Hide settings button in desktop right-header on mobile (replaced by mobile top bar) */
+        body.mobile-mode #right-header #open-settings {
+            display: none !important;
+        }
+        /* Hide plugin view title on mobile */
+        body.mobile-mode .top-panel > div:first-child {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
+    <!-- Mobile Top Bar -->
+    <div id="mobile-top-bar" class="mobile-only">
+        <button id="mobile-settings-btn" class="settings-btn" onclick="openMobileSettings()" title="Einstellungen">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+        </button>
+        <div id="mobile-view-title">Chat</div>
+        <div id="mobile-chat-nav" class="nav-bar">
+            <button id="mobile-nav-new" class="nav-btn" title="Neuer Chat">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            </button>
+            <button id="mobile-nav-history" class="nav-btn" title="Verlauf">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+            </button>
+        </div>
+    </div>
     <div class="side-panel-container">
         <!-- Notification Bar -->
         <div id="notification-bar" class="notification-bar glass-card">
@@ -1032,13 +1258,65 @@
 
 
                 <div class="input-area">
-                    <textarea id="user-input" placeholder="Nachricht an Gemini..." autofocus rows="1"></textarea>
-                    <button id="mic-btn" title="Spracheingabe">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
-                    </button>
-                    <button id="send-btn">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                    </button>
+                    <!-- Floating Mobile Plugins Bar (merged inside input-area for mobile) -->
+                    <div id="view-toggle-container" class="mobile-only">
+                        <button class="plugin-nav-btn" id="btn-nav-calendar" onclick="focusWidget('calendar')" title="Kalender">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                            <span class="badge" id="badge-calendar" style="display: none;">0</span>
+                        </button>
+                        
+                        <button class="plugin-nav-btn" id="btn-nav-timer" onclick="focusWidget('timer')" title="Timer">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                            <span class="badge" id="badge-timer" style="display: none;">0</span>
+                        </button>
+
+                        <button class="plugin-nav-btn" id="btn-nav-tasks" onclick="focusWidget('tasks')" title="Aufgaben">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 11l3 3L22 4"></path>
+                                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                            </svg>
+                            <span class="badge" id="badge-tasks" style="display: none;">0</span>
+                        </button>
+
+                        <button class="plugin-nav-btn" id="btn-nav-notes" onclick="focusWidget('notes')" title="Notizen">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
+                            <span class="badge" id="badge-notes" style="display: none;">0</span>
+                        </button>
+
+                        <button class="plugin-nav-btn chat-toggle-btn" id="btn-nav-chat" onclick="switchMobileView('chat')" title="Zurück zum Chat">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="input-row">
+                        <button id="plus-btn" title="Bild hochladen">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        </button>
+                        <input type="file" id="file-input" style="display: none;" accept="image/*" multiple>
+                        <textarea id="user-input" placeholder="Nachricht an Gemini..." rows="1"></textarea>
+                        <button id="mic-btn" title="Spracheingabe">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                        </button>
+                        <button id="send-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -1125,60 +1403,22 @@
         </div>
     </div>
 
-    <!-- Floating Mobile Plugins Bar (always visible on mobile, outside grid columns) -->
-    <div id="view-toggle-container" class="mobile-only">
-        <button class="plugin-nav-btn" id="btn-nav-calendar" onclick="focusWidget('calendar')" title="Kalender">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                <line x1="16" y1="2" x2="16" y2="6"></line>
-                <line x1="8" y1="2" x2="8" y2="6"></line>
-                <line x1="3" y1="10" x2="21" y2="10"></line>
-            </svg>
-            <span class="badge" id="badge-calendar" style="display: none;">0</span>
-        </button>
-        
-        <button class="plugin-nav-btn" id="btn-nav-timer" onclick="focusWidget('timer')" title="Timer">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <polyline points="12 6 12 12 16 14"></polyline>
-            </svg>
-            <span class="badge" id="badge-timer" style="display: none;">0</span>
-        </button>
-
-        <button class="plugin-nav-btn" id="btn-nav-tasks" onclick="focusWidget('tasks')" title="Aufgaben">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 11l3 3L22 4"></path>
-                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-            </svg>
-            <span class="badge" id="badge-tasks" style="display: none;">0</span>
-        </button>
-
-        <button class="plugin-nav-btn" id="btn-nav-notes" onclick="focusWidget('notes')" title="Notizen">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="16" y1="13" x2="8" y2="13"></line>
-                <line x1="16" y1="17" x2="8" y2="17"></line>
-                <polyline points="10 9 9 9 8 9"></polyline>
-            </svg>
-            <span class="badge" id="badge-notes" style="display: none;">0</span>
-        </button>
-        
-        <button class="plugin-nav-btn chat-toggle-btn" id="btn-nav-chat" onclick="switchMobileView('chat')" title="Zurück zum Chat">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-            </svg>
-        </button>
-    </div>
+    <!-- Old Floating Mobile Plugins Bar has been merged inside input-area -->
 
     <script>
+        let lastActiveView = 'chat';
+
         function switchMobileView(viewName) {
+            if (viewName !== 'settings') {
+                lastActiveView = viewName;
+            }
+
             // Remove all view classes from body
-            document.body.classList.remove('view-chat', 'view-calendar', 'view-timer', 'view-tasks', 'view-notes', 'view-plugins');
+            document.body.classList.remove('view-chat', 'view-calendar', 'view-timer', 'view-tasks', 'view-notes', 'view-plugins', 'view-settings', 'view-history');
             
             // Add the new active view class
             document.body.classList.add('view-' + viewName);
-            if (viewName !== 'chat') {
+            if (viewName !== 'chat' && viewName !== 'settings' && viewName !== 'history') {
                 document.body.classList.add('view-plugins'); // keeps general plugin panel visible on mobile
             }
             
@@ -1196,18 +1436,107 @@
                 };
                 titleEl.textContent = titles[viewName] || 'Plugins & Dashboard';
             }
+
+            // Update mobile header title dynamically
+            const mobTitleEl = document.getElementById('mobile-view-title');
+            if (mobTitleEl) {
+                const titles = {
+                    'calendar': 'Kalender',
+                    'timer': 'Timer',
+                    'tasks': 'Aufgaben',
+                    'notes': 'Notizen',
+                    'chat': 'Chat',
+                    'history': 'Verlauf',
+                    'settings': 'Einstellungen'
+                };
+                mobTitleEl.textContent = titles[viewName] || 'kiSystem';
+            }
             
-            // If it's a plugin view, we scroll it to top
-            if (viewName !== 'chat') {
-                setTimeout(() => {
-                    const el = document.getElementById('widget-' + viewName);
-                    if (el) {
-                        el.scrollIntoView({ behavior: 'auto', block: 'start' });
+            // If it's a plugin view, we scroll it to top on desktop, or reset scroll on mobile
+            if (viewName !== 'chat' && viewName !== 'settings' && viewName !== 'history') {
+                if (document.body.classList.contains('mobile-mode')) {
+                    const topPanel = document.querySelector('.top-panel');
+                    if (topPanel) {
+                        topPanel.scrollTop = 0;
                     }
-                }, 50);
+                } else {
+                    setTimeout(() => {
+                        const el = document.getElementById('widget-' + viewName);
+                        if (el) {
+                            el.scrollIntoView({ behavior: 'auto', block: 'start' });
+                        }
+                    }, 50);
+                }
+            }
+
+            // Force keyboard to close on mobile view switch by temporarily hiding the input area
+            // and blurring the text field, ONLY if the input field was actually focused.
+            // This resolves buggy WebView virtual keyboard states and prevents flickering on normal clicks.
+            const inputArea = document.querySelector('.input-area');
+            const inputField = document.getElementById('user-input');
+            if (document.body.classList.contains('mobile-mode')) {
+                if (inputField) {
+                    const isFocused = (document.activeElement === inputField);
+                    inputField.blur();
+                    if (isFocused && inputArea) {
+                        const origDisplay = inputArea.style.display;
+                        inputArea.style.display = 'none';
+                        setTimeout(() => {
+                            inputArea.style.display = origDisplay || '';
+                        }, 50);
+                    }
+                }
+            }
+
+            // Force page scroll reset to prevent viewport shifting/cut-off on mobile
+            window.scrollTo(0, 0);
+
+            // Sync sections visibility
+            if (viewName === 'chat') {
+                if (typeof chatSection !== 'undefined' && chatSection && chatSection.style.display === 'none') {
+                    showSection('chat');
+                }
+            } else if (viewName === 'history') {
+                if (typeof historySection !== 'undefined' && historySection && historySection.style.display === 'none') {
+                    showSection('history');
+                }
             }
         }
         window.switchMobileView = switchMobileView;
+
+        function openMobileSettings() {
+            loadSettings();
+            switchMobileView('settings');
+            showSection('settings');
+        }
+        window.openMobileSettings = openMobileSettings;
+
+        function toggleKeyboard() {
+            document.body.classList.toggle('keyboard-active');
+            const isActive = document.body.classList.contains('keyboard-active');
+            
+            const keyBtn = document.getElementById('btn-toggle-keyboard');
+            if (keyBtn) {
+                if (isActive) {
+                    keyBtn.style.borderColor = 'var(--accent)';
+                    keyBtn.style.color = 'var(--accent)';
+                    keyBtn.style.background = 'rgba(137, 180, 250, 0.15)';
+                } else {
+                    keyBtn.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                    keyBtn.style.color = 'var(--text)';
+                    keyBtn.style.background = 'rgba(255, 255, 255, 0.04)';
+                }
+            }
+            
+            if (isActive) {
+                setTimeout(() => {
+                    userInput.focus();
+                }, 100);
+            } else {
+                userInput.blur();
+            }
+        }
+        window.toggleKeyboard = toggleKeyboard;
 
         function setActiveNav(viewName) {
             // Remove active classes from all plugin nav buttons
@@ -1288,20 +1617,6 @@
 
         // Routing basierend auf URL-Hash
         const isPluginsView = window.location.hash === '#plugins';
-        if (isPluginsView) {
-            switchMobileView('calendar');
-        } else {
-            switchMobileView('chat');
-        }
-
-        // Wenn wir nicht in Electron laufen, machen wir die Seite direkt aktiv/sichtbar
-        if (!isElectron) {
-            document.body.classList.add('active');
-            document.body.classList.add('mobile-mode');
-            // Auf Handys/Webbrowsern wollen wir auch keinen transparenten Hintergrund
-            document.documentElement.style.setProperty('background', '#11111b', 'important');
-            document.body.style.setProperty('background', '#11111b', 'important');
-        }
 
         const chatBox = document.getElementById('chat-box');
         const userInput = document.getElementById('user-input');
@@ -1454,7 +1769,13 @@
         settingsBackBtn.onclick = () => {
             recordingHotkey = false;
             hotkeyBtn.classList.remove('recording');
-            showSection('chat');
+            if (document.body.classList.contains('mobile-mode')) {
+                const targetView = (lastActiveView === 'chat' || lastActiveView === 'history') ? lastActiveView : 'chat';
+                showSection(targetView);
+                switchMobileView(lastActiveView);
+            } else {
+                showSection('chat');
+            }
         };
 
         settingsSave.onclick = async () => {
@@ -1784,14 +2105,17 @@
             }
         }
 
-        // Fokus beim Start
-        userInput.focus();
+        // Fokus beim Start (nur auf Desktop/Electron)
+        if (isElectron && !document.body.classList.contains('mobile-mode')) {
+            userInput.focus();
+        }
 
-        // Fokus-Trigger bei Electron-Aktivierung
+        // Fokus-Trigger bei Electron-Aktivierung (nur auf Desktop/Electron)
         const observer = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
                 if (mutation.attributeName === 'class' && document.body.classList.contains('active')) {
                     setTimeout(() => {
+                        if (!isElectron || document.body.classList.contains('mobile-mode')) return;
                         if (!isPluginsView && chatSection.style.display !== 'none') userInput.focus();
                     }, 100);
                 }
@@ -1819,6 +2143,15 @@
                 rightHeader.style.display = 'flex';
                 navNew.classList.add('active');
                 navHistory.classList.remove('active');
+                
+                const mobNew = document.getElementById('mobile-nav-new');
+                const mobHist = document.getElementById('mobile-nav-history');
+                if (mobNew) mobNew.classList.add('active');
+                if (mobHist) mobHist.classList.remove('active');
+                
+                if (document.body.classList.contains('mobile-mode')) {
+                    switchMobileView('chat');
+                }
             } else if (name === 'history') {
                 chatSection.style.display = 'none';
                 historySection.style.display = 'flex';
@@ -1826,6 +2159,15 @@
                 rightHeader.style.display = 'flex';
                 navNew.classList.remove('active');
                 navHistory.classList.add('active');
+                
+                const mobNew = document.getElementById('mobile-nav-new');
+                const mobHist = document.getElementById('mobile-nav-history');
+                if (mobNew) mobNew.classList.remove('active');
+                if (mobHist) mobHist.classList.add('active');
+                
+                if (document.body.classList.contains('mobile-mode')) {
+                    switchMobileView('history');
+                }
             } else if (name === 'settings') {
                 chatSection.style.display = 'none';
                 historySection.style.display = 'none';
@@ -1833,6 +2175,10 @@
                 rightHeader.style.display = 'none';
                 navNew.classList.remove('active');
                 navHistory.classList.remove('active');
+                
+                if (document.body.classList.contains('mobile-mode')) {
+                    switchMobileView('settings');
+                }
             }
         }
 
@@ -1926,6 +2272,9 @@
         }
 
         async function sendAudioMessage(base64Audio) {
+            if (document.body.classList.contains('mobile-mode')) {
+                switchMobileView('chat');
+            }
             addMessage("🎤 Sprachnachricht gesendet...", true);
             
             const thinkingDiv = document.createElement('div');
@@ -2126,6 +2475,10 @@
             const text = userInput.value.trim();
             if (!text && attachedFiles.length === 0) return;
 
+            if (document.body.classList.contains('mobile-mode')) {
+                switchMobileView('chat');
+            }
+
             const attachmentsToSend = [...attachedFiles];
             addMessage(text, true, null, attachmentsToSend);
             userInput.value = '';
@@ -2236,7 +2589,7 @@
                     if (widget.type === 'calendar_overview') {
                         let html = `<h1>TERMIN KALENDER</h1><div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;">`;
                         
-                        html += `<h4 style="margin: 0 0 10px 0; color: var(--accent); font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">Termine (nächste 3 Tage)</h4>`;
+                        html += `<h4 style="margin: 0 0 10px 0; color: var(--accent); font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">Termine (nächste 7 Tage)</h4>`;
                         if (widget.data.events.length === 0) {
                             html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 10px 0; text-align: center;">Keine Termine.</p>`;
                         } else {
@@ -2530,10 +2883,12 @@
             noteContentInput.value = content;
             noteModalTitle.textContent = id ? 'Notiz bearbeiten' : 'Notiz erstellen';
             noteModal.style.display = 'block';
+            document.body.classList.add('modal-active');
         };
 
         window.closeNoteModal = function() {
             noteModal.style.display = 'none';
+            document.body.classList.remove('modal-active');
         };
 
         window.saveNote = async function() {
@@ -2590,10 +2945,12 @@
             taskNotesInput.value = '';
             taskDueInput.value = '';
             taskModal.style.display = 'block';
+            document.body.classList.add('modal-active');
         };
 
         window.closeTaskModal = function() {
             taskModal.style.display = 'none';
+            document.body.classList.remove('modal-active');
         };
 
         window.saveTask = async function() {
@@ -2689,6 +3046,67 @@
         });
         userInput.addEventListener('input', autoResizeInput);
 
+        // Plus button and file input listeners
+        const plusBtn = document.getElementById('plus-btn');
+        const fileInput = document.getElementById('file-input');
+
+        if (plusBtn && fileInput) {
+            plusBtn.onclick = (e) => {
+                e.preventDefault();
+                fileInput.click();
+            };
+
+            fileInput.onchange = async () => {
+                const files = fileInput.files;
+                if (files && files.length > 0) {
+                    for (const file of files) {
+                        await addAttachmentFromFile(file);
+                    }
+                }
+                fileInput.value = ''; // Reset
+            };
+        }
+
+        async function addAttachmentFromFile(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const base64 = reader.result.split(',')[1];
+                    const mimeType = file.type || 'application/octet-stream';
+                    const attachment = {
+                        name: file.name,
+                        base64: base64,
+                        mimeType: mimeType,
+                        isImage: mimeType.startsWith('image/')
+                    };
+                    attachedFiles.push(attachment);
+                    renderAttachments();
+                    resolve();
+                };
+                reader.onerror = (err) => {
+                    console.error("FileReader error:", err);
+                    resolve();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Mobile chat navigation proxies
+        const mobNavNew = document.getElementById('mobile-nav-new');
+        const mobNavHistory = document.getElementById('mobile-nav-history');
+        if (mobNavNew) {
+            mobNavNew.onclick = () => {
+                const navNew = document.getElementById('nav-new');
+                if (navNew) navNew.click();
+            };
+        }
+        if (mobNavHistory) {
+            mobNavHistory.onclick = () => {
+                const navHistory = document.getElementById('nav-history');
+                if (navHistory) navHistory.click();
+            };
+        }
+
         if (isElectron && ipcRenderer) {
             ipcRenderer.on('settings-updated', () => {
                 console.log('Empfange settings-updated Event. Lade Widgets neu...');
@@ -2699,6 +3117,22 @@
                 console.log('Empfange reload-widgets Event. Lade Widgets neu...');
                 loadTopWidgets();
             });
+        }
+
+        // Routing basierend auf URL-Hash und Initialisierung von mobile-mode
+        if (isPluginsView) {
+            switchMobileView('calendar');
+        } else {
+            switchMobileView('chat');
+        }
+
+        // Wenn wir nicht in Electron laufen, machen wir die Seite direkt aktiv/sichtbar
+        if (!isElectron) {
+            document.body.classList.add('active');
+            document.body.classList.add('mobile-mode');
+            // Auf Handys/Webbrowsern wollen wir auch keinen transparenten Hintergrund
+            document.documentElement.style.setProperty('background', '#11111b', 'important');
+            document.body.style.setProperty('background', '#11111b', 'important');
         }
 
         loadTopWidgets().catch(err => {

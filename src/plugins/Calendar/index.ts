@@ -734,9 +734,9 @@ export const calendarPlugin: Plugin = {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    const inThreeDays = new Date();
-    inThreeDays.setDate(today.getDate() + 3);
-    inThreeDays.setHours(23, 59, 59, 999);
+    const inSevenDays = new Date();
+    inSevenDays.setDate(today.getDate() + 7);
+    inSevenDays.setHours(23, 59, 59, 999);
 
     let occurrences: any[] = [];
     let dbEvents: any[] = [];
@@ -744,14 +744,14 @@ export const calendarPlugin: Plugin = {
       dbEvents = await prisma.event.findMany({
         where: {
           isDeleted: false,
-          start: { lte: inThreeDays },
+          start: { lte: inSevenDays },
           end: { gte: today }
         }
       });
 
       const dbPatterns = await prisma.recurrencePattern.findMany({
         where: {
-          originalStart: { lte: inThreeDays },
+          originalStart: { lte: inSevenDays },
           OR: [
             { recurrenceEnd: null },
             { recurrenceEnd: { gte: today } }
@@ -765,7 +765,7 @@ export const calendarPlugin: Plugin = {
       }) : [];
 
       for (const pattern of dbPatterns) {
-        occurrences.push(...getOccurrences(pattern, today, inThreeDays, overrides));
+        occurrences.push(...getOccurrences(pattern, today, inSevenDays, overrides));
       }
     } catch (e) {
       console.warn("Fehler beim Abrufen der lokalen Kalender-Daten:", e);
