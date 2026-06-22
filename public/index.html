@@ -2892,7 +2892,7 @@
                     }
                     
                     if (widget.type === 'calendar_overview') {
-                        let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;">`;
+                        let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; display: flex; flex-direction: column; gap: 6px;">`;
                         
                         html += `<h4 style="margin: 0 0 10px 0; color: var(--accent); font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">Termine (nächste 7 Tage)</h4>`;
                         if (widget.data.events.length === 0) {
@@ -2984,7 +2984,7 @@
                         widgetDiv.innerHTML = html;
                     } else if (widget.type === 'custom') {
                         if (widget.data.widgetType === 'notes_list') {
-                            let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">`;
+                            let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; display: flex; flex-direction: column; gap: 8px;">`;
                             
                             html += `<button onclick="openNoteModal()" class="nav-btn" style="width: 100%; font-size: 0.8rem; margin-bottom: 5px;">➕ Neue Notiz</button>`;
                             
@@ -3015,7 +3015,7 @@
                             html += `</div>`;
                             widgetDiv.innerHTML = html;
                         } else if (widget.data.widgetType === 'memory_people_list') {
-                            let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">`;
+                            let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; display: flex; flex-direction: column; gap: 8px;">`;
                             if (!widget.data.people || widget.data.people.length === 0) {
                                 html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine Personen im Gedächtnis.</p>`;
                             } else {
