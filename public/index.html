@@ -968,68 +968,283 @@
             background: var(--card);
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
             align-items: center;
-            justify-content: space-between;
+            justify-content: flex-start;
+            gap: 15px;
             padding: 0 15px;
             z-index: 1001;
             box-shadow: 0 2px 10px rgba(0,0,0,0.3);
         }
-        #mobile-top-bar #mobile-view-title {
-            font-size: 0.9rem;
-            font-weight: 700;
-            color: var(--accent);
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-        #mobile-top-bar .settings-btn {
-            position: static;
-            transform: none;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+        
+        /* Burger menu button */
+        .burger-btn {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             color: var(--text);
-            width: 36px;
-            height: 36px;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            outline: none;
+            padding: 0;
         }
-        #mobile-top-bar .settings-btn:hover {
-            background: rgba(255, 255, 255, 0.15);
+        .burger-btn:hover {
+            background: rgba(137, 180, 250, 0.15);
             border-color: var(--accent);
             color: var(--accent);
         }
-        #mobile-chat-nav {
+        .burger-btn:active {
+            transform: scale(0.95);
+        }
+        
+        /* Model Selection Badge */
+        .mobile-model-badge {
+            background: rgba(137, 180, 250, 0.08);
+            border: 1px solid rgba(137, 180, 250, 0.2);
+            color: var(--accent);
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        .mobile-model-badge:hover {
+            background: rgba(137, 180, 250, 0.18);
+            border-color: var(--accent);
+        }
+        .mobile-model-badge .chevron {
+            transition: transform 0.2s;
+        }
+        .mobile-model-badge.active .chevron {
+            transform: rotate(180deg);
+        }
+        
+        /* Model Dropdown Box */
+        .model-dropdown {
             display: none;
+            position: absolute;
+            top: 55px;
+            left: 68px;
+            width: 220px;
+            background: rgba(30, 30, 46, 0.98);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            z-index: 1002;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+            padding: 6px;
+        }
+        .model-dropdown.active {
+            display: block;
+        }
+        .model-option {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: background 0.2s;
+            color: var(--text);
+        }
+        .model-option:hover:not(.disabled) {
+            background: rgba(255, 255, 255, 0.05);
+            color: #ffffff;
+        }
+        .model-option.active {
+            background: rgba(137, 180, 250, 0.15);
+            color: var(--accent);
+            font-weight: bold;
+        }
+        .model-option .checkmark {
+            color: var(--accent);
+        }
+        
+        /* Side Drawer Styles */
+        .drawer-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(6px);
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.3s ease-out;
+        }
+        .drawer-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+        
+        .drawer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 280px;
+            height: 100%;
+            background: #1e1e2e;
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            z-index: 2001;
+            transform: translateX(-100%);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+            box-shadow: 4px 0 24px rgba(0, 0, 0, 0.6);
+        }
+        .drawer.active {
+            transform: translateX(0);
+        }
+        
+        .drawer-header {
+            padding: 18px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .drawer-header h3 {
+            margin: 0;
+            font-size: 0.9rem;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 700;
+        }
+        .close-drawer-btn {
+            background: transparent;
+            border: none;
+            color: var(--text);
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        .close-drawer-btn:hover {
+            opacity: 1;
+            color: var(--off);
+        }
+        
+        .drawer-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .drawer-item {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--text);
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-align: left;
+        }
+        .drawer-item:hover {
+            background: rgba(137, 180, 250, 0.1);
+            border-color: var(--accent);
+            color: var(--accent);
+            transform: translateX(3px);
+        }
+        
+        .drawer-divider {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.05);
+            margin: 15px 0 10px 0;
+        }
+        
+        .drawer-section-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(255, 255, 255, 0.45);
+            font-weight: 700;
+            margin-bottom: 8px;
+            margin-top: 5px;
+        }
+        
+        .drawer-search {
+            margin-bottom: 12px;
+        }
+        .drawer-search input {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--input);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: white;
+            outline: none;
+            font-size: 0.85rem;
+            transition: border-color 0.2s;
+        }
+        .drawer-search input:focus {
+            border-color: var(--accent);
+        }
+        
+        .drawer-history-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
             gap: 8px;
         }
-        body.mobile-mode.view-chat #mobile-chat-nav,
-        body.mobile-mode.view-history #mobile-chat-nav {
-            display: flex;
+        
+        .drawer-history-list::-webkit-scrollbar {
+            width: 3px;
         }
-        #mobile-chat-nav .nav-btn {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: var(--text);
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        .drawer-history-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+        }
+        
+        .drawer-history-item {
+            padding: 12px 14px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.04);
             cursor: pointer;
-            padding: 0;
             transition: all 0.2s;
         }
-        #mobile-chat-nav .nav-btn.active {
-            background: var(--accent);
-            color: #11111b;
-            border-color: var(--accent);
+        .drawer-history-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.1);
         }
+        .drawer-history-item .title {
+            font-size: 0.85rem;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .drawer-history-item .date {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.4);
+            margin-bottom: 4px;
+        }
+        
         /* Hide double top bar in settings on mobile */
         body.mobile-mode.view-settings #mobile-top-bar {
             display: none !important;
@@ -1110,8 +1325,8 @@
         body.mobile-mode #close-panel {
             display: none !important;
         }
-        /* Hide settings button in desktop right-header on mobile (replaced by mobile top bar) */
-        body.mobile-mode #right-header #open-settings {
+        /* Hide right-header entirely on mobile (navigation is now inside the burger drawer menu) */
+        body.mobile-mode #right-header {
             display: none !important;
         }
         /* Hide plugin view title on mobile */
@@ -1121,22 +1336,72 @@
     </style>
 </head>
 <body>
+    <!-- Mobile Side Drawer & Overlay -->
+    <div id="mobile-drawer-overlay" class="drawer-overlay" onclick="closeMobileDrawer()"></div>
+    <div id="mobile-drawer" class="drawer">
+        <div class="drawer-header">
+            <h3>kiSystem</h3>
+            <button class="close-drawer-btn" onclick="closeMobileDrawer()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+        <div class="drawer-body">
+            <button class="drawer-item" onclick="handleDrawerNewChat()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Neuer Chat
+            </button>
+            <button class="drawer-item" onclick="handleDrawerSettings()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+                Einstellungen
+            </button>
+            
+            <div class="drawer-divider"></div>
+            
+            <div class="drawer-section-title">Verlauf</div>
+            <div class="drawer-search">
+                <input type="text" id="drawer-history-query" placeholder="Verlauf durchsuchen..." oninput="handleDrawerHistorySearch()">
+            </div>
+            <div id="drawer-history-list" class="drawer-history-list">
+                <!-- Dynamischer Verlauf -->
+            </div>
+        </div>
+    </div>
+
     <!-- Mobile Top Bar -->
     <div id="mobile-top-bar" class="mobile-only">
-        <button id="mobile-settings-btn" class="settings-btn" onclick="openMobileSettings()" title="Einstellungen">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="3"></circle>
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        <button id="mobile-burger-btn" class="burger-btn" onclick="toggleMobileDrawer()" title="Menü">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
             </svg>
         </button>
-        <div id="mobile-view-title">Chat</div>
-        <div id="mobile-chat-nav" class="nav-bar">
-            <button id="mobile-nav-new" class="nav-btn" title="Neuer Chat">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            </button>
-            <button id="mobile-nav-history" class="nav-btn" title="Verlauf">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
-            </button>
+        
+        <!-- Model Selector Badge -->
+        <div id="mobile-model-select" class="mobile-model-badge" onclick="toggleModelDropdown(event)" title="Modell auswählen">
+            <span id="current-model-display">Gemini 1.5 Flash</span>
+            <svg class="chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+        </div>
+        
+        <!-- Model Dropdown Box -->
+        <div id="model-dropdown-box" class="model-dropdown">
+            <div class="model-option active" onclick="selectModel('Gemini 1.5 Flash')">
+                <span>Gemini 1.5 Flash</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="checkmark">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+            </div>
+            <div class="model-option disabled" style="opacity: 0.4; cursor: not-allowed; display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; font-size: 0.85rem;">
+                <span>Gemini 2.5 Pro (Demnächst)</span>
+            </div>
         </div>
     </div>
     <div class="side-panel-container">
@@ -2200,6 +2465,28 @@
                 item.onclick = () => loadConversation(conv.id);
                 historyList.appendChild(item);
             });
+
+            // Also render drawer history
+            const drawerHistoryList = document.getElementById('drawer-history-list');
+            if (drawerHistoryList) {
+                drawerHistoryList.innerHTML = '';
+                conversations.forEach(conv => {
+                    const item = document.createElement('div');
+                    item.className = 'drawer-history-item';
+                    const date = new Date(conv.createdAt).toLocaleString('de-DE', { 
+                        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
+                    });
+                    item.innerHTML = `
+                        <div class="date">${date}</div>
+                        <div class="title">${conv.title}</div>
+                    `;
+                    item.onclick = () => {
+                        loadConversation(conv.id);
+                        closeMobileDrawer();
+                    };
+                    drawerHistoryList.appendChild(item);
+                });
+            }
         }
 
         async function loadConversation(id) {
@@ -2583,7 +2870,7 @@
                     }
                     
                     if (widget.type === 'calendar_overview') {
-                        let html = `<h1>TERMIN KALENDER</h1><div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;">`;
+                        let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;">`;
                         
                         html += `<h4 style="margin: 0 0 10px 0; color: var(--accent); font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">Termine (nächste 7 Tage)</h4>`;
                         if (widget.data.events.length === 0) {
@@ -2651,7 +2938,7 @@
                         html += `</div>`;
                         widgetDiv.innerHTML = html;
                     } else if (widget.type === 'timer_list') {
-                        let html = `<h1>TIMER & WECKER</h1><div class="timer-list-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%;">`;
+                        let html = `<div class="timer-list-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%;">`;
                         if (widget.data.timers.length === 0) {
                             html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 0; padding: 10px; text-align: center; background: rgba(0,0,0,0.15); border-radius: 8px;">Keine aktiven Timer.</p>`;
                         } else {
@@ -2675,8 +2962,7 @@
                         widgetDiv.innerHTML = html;
                     } else if (widget.type === 'custom') {
                         if (widget.data.widgetType === 'notes_list') {
-                            let html = `<h1>📝 NOTIZEN</h1>
-                            <div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">`;
+                            let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">`;
                             
                             html += `<button onclick="openNoteModal()" class="nav-btn" style="width: 100%; font-size: 0.8rem; margin-bottom: 5px;">➕ Neue Notiz</button>`;
                             
@@ -2707,8 +2993,7 @@
                             html += `</div>`;
                             widgetDiv.innerHTML = html;
                         } else if (widget.data.widgetType === 'tasks_overview') {
-                            let html = `<h1>✅ AUFGABEN</h1>
-                            <div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">`;
+                            let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">`;
                             
                             html += `<button onclick="openTaskModal()" class="nav-btn" style="width: 100%; font-size: 0.8rem; margin-bottom: 5px;">➕ Neue Aufgabe</button>`;
                             
@@ -3286,6 +3571,91 @@
             
             return `<span style="font-size: 0.75rem; opacity: 0.75;">${timeStr}</span>`;
         }
+
+        // Mobile Drawer and Model Selector Handlers
+        window.toggleMobileDrawer = function() {
+            const drawer = document.getElementById('mobile-drawer');
+            const overlay = document.getElementById('mobile-drawer-overlay');
+            if (drawer && overlay) {
+                const isOpen = drawer.classList.contains('active');
+                if (isOpen) {
+                    drawer.classList.remove('active');
+                    overlay.classList.remove('active');
+                } else {
+                    // Refresh history list when opening
+                    loadHistory().catch(err => console.error("Konnte Verlauf im Drawer nicht laden:", err));
+                    drawer.classList.add('active');
+                    overlay.classList.add('active');
+                }
+            }
+        };
+        
+        window.closeMobileDrawer = function() {
+            const drawer = document.getElementById('mobile-drawer');
+            const overlay = document.getElementById('mobile-drawer-overlay');
+            if (drawer && overlay) {
+                drawer.classList.remove('active');
+                overlay.classList.remove('active');
+            }
+        };
+        
+        window.handleDrawerNewChat = function() {
+            closeMobileDrawer();
+            currentConversationId = null;
+            chatBox.innerHTML = '<div class="message ai">Ein neuer Chat wurde gestartet. Wie kann ich dir helfen?</div>';
+            showSection('chat');
+        };
+        
+        window.handleDrawerSettings = function() {
+            closeMobileDrawer();
+            openMobileSettings();
+        };
+        
+        window.handleDrawerHistorySearch = async function() {
+            const queryInput = document.getElementById('drawer-history-query');
+            if (!queryInput) return;
+            const query = queryInput.value.toLowerCase();
+            const res = await fetch(getApiUrl('/conversations'));
+            const conversations = await res.json();
+            const filtered = conversations.filter(c => c.title.toLowerCase().includes(query));
+            renderHistory(filtered);
+        };
+        
+        window.toggleModelDropdown = function(event) {
+            if (event) event.stopPropagation();
+            const dropdown = document.getElementById('model-dropdown-box');
+            const badge = document.getElementById('mobile-model-select');
+            if (dropdown && badge) {
+                dropdown.classList.toggle('active');
+                badge.classList.toggle('active');
+            }
+        };
+        
+        window.selectModel = function(modelName) {
+            const displayEl = document.getElementById('current-model-display');
+            if (displayEl) {
+                displayEl.textContent = modelName;
+            }
+            // Close dropdown
+            const dropdown = document.getElementById('model-dropdown-box');
+            const badge = document.getElementById('mobile-model-select');
+            if (dropdown && badge) {
+                dropdown.classList.remove('active');
+                badge.classList.remove('active');
+            }
+        };
+        
+        // Close model dropdown when clicking anywhere outside of it
+        window.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('model-dropdown-box');
+            const badge = document.getElementById('mobile-model-select');
+            if (dropdown && dropdown.classList.contains('active')) {
+                if (!dropdown.contains(event.target) && !badge.contains(event.target)) {
+                    dropdown.classList.remove('active');
+                    badge.classList.remove('active');
+                }
+            }
+        });
 
     </script>
 </body>
