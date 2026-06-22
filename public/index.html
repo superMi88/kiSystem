@@ -276,9 +276,44 @@
         .input-row {
             display: flex;
             flex: 1;
-            gap: 12px;
             align-items: center;
+            background: var(--input);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 22px;
+            padding: 4px 8px;
+            gap: 6px;
+            box-sizing: border-box;
+            transition: border-color 0.25s, box-shadow 0.25s;
             width: 100%;
+        }
+
+        .input-row:focus-within {
+            border-color: var(--accent);
+            box-shadow: 0 0 10px rgba(137, 180, 250, 0.15);
+        }
+
+        .input-row.recording {
+            border-color: var(--off) !important;
+            box-shadow: 0 0 15px rgba(243, 139, 168, 0.4) !important;
+            animation: pulse-recording 1.5s infinite alternate ease-in-out;
+            background: rgba(243, 139, 168, 0.08) !important;
+        }
+
+        @keyframes pulse-recording {
+            from { box-shadow: 0 0 8px rgba(243, 139, 168, 0.3); }
+            to { box-shadow: 0 0 18px rgba(243, 139, 168, 0.6); }
+        }
+
+        .input-row.recording #mic-btn svg {
+            stroke: var(--off) !important;
+        }
+
+        .input-row.recording #user-input {
+            color: var(--off);
+        }
+
+        .input-row.recording #user-input::placeholder {
+            color: rgba(243, 139, 168, 0.7);
         }
 
         input {
@@ -296,10 +331,9 @@
 
         #user-input {
             flex: 1;
-            background: var(--input);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            padding: 12px 18px;
+            background: transparent;
+            border: none;
+            padding: 10px 6px;
             color: white;
             outline: none;
             font-size: 0.9rem;
@@ -307,41 +341,40 @@
             font-family: inherit;
             line-height: 1.4;
             max-height: 150px;
-            height: 45px;
+            height: 40px;
             overflow-y: hidden;
             box-sizing: border-box;
         }
 
-        #user-input:focus { border-color: var(--accent); }
-
-        #send-btn {
-            background: var(--accent);
+        #user-input:focus {
             border: none;
-            width: 42px;
-            height: 42px;
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            transition: transform 0.2s;
+            outline: none;
         }
 
-        #mic-btn {
-            background: var(--input);
-            border: 1px solid rgba(255,255,255,0.1);
-            width: 42px;
-            height: 42px;
+        #plus-btn, #mic-btn, #send-btn {
+            background: transparent !important;
+            border: none !important;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             display: flex;
             justify-content: center;
             align-items: center;
             cursor: pointer;
             transition: all 0.2s;
+            flex-shrink: 0;
+            outline: none;
+            padding: 0;
+            box-shadow: none !important;
         }
 
-        #mic-btn:hover { background: rgba(255,255,255,0.15); }
-        #send-btn:active { transform: scale(0.95); }
+        #plus-btn:hover, #mic-btn:hover, #send-btn:hover {
+            background: rgba(255, 255, 255, 0.08) !important;
+        }
+
+        #plus-btn:active, #mic-btn:active, #send-btn:active {
+            transform: scale(0.92);
+        }
 
         /* Attachment Preview Area */
         .attachments-bar {
@@ -1305,22 +1338,7 @@
             pointer-events: auto !important;
         }
 
-        #plus-btn {
-            background: var(--input);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            width: 42px;
-            height: 42px;
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            transition: all 0.2s;
-            flex-shrink: 0;
-        }
-        #plus-btn:hover {
-            background: rgba(255, 255, 255, 0.15);
-        }
+
 
         /* Hide close panel button on mobile */
         body.mobile-mode #close-panel {
@@ -1587,15 +1605,15 @@
 
                     <div class="input-row">
                         <button id="plus-btn" title="Bild hochladen">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255, 255, 255, 0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                         </button>
                         <input type="file" id="file-input" style="display: none;" accept="image/*" multiple>
                         <textarea id="user-input" placeholder="Nachricht an Gemini..." rows="1"></textarea>
                         <button id="mic-btn" title="Spracheingabe">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255, 255, 255, 0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
                         </button>
-                        <button id="send-btn">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                        <button id="send-btn" style="display: none;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                         </button>
                     </div>
                 </div>
@@ -2386,6 +2404,9 @@
             } else {
                 attachmentsBar.classList.remove('active');
             }
+            if (typeof updateInputRowButtons === 'function') {
+                updateInputRowButtons();
+            }
         }
 
         // Fokus beim Start (nur auf Desktop/Electron)
@@ -2559,8 +2580,10 @@
 
                 mediaRecorder.start();
                 isRecording = true;
-                micBtn.style.background = 'var(--off)';
-                micBtn.style.boxShadow = '0 0 20px var(--off)';
+                const inputRow = document.querySelector('.input-row');
+                if (inputRow) {
+                    inputRow.classList.add('recording');
+                }
                 userInput.placeholder = "Ich höre zu...";
             } catch (err) {
                 userInput.placeholder = "Fehler: Mikrofon-Zugriff verweigert.";
@@ -2571,8 +2594,11 @@
             if (mediaRecorder && isRecording) {
                 mediaRecorder.stop();
                 isRecording = false;
-                micBtn.style.background = 'var(--input)';
-                micBtn.style.boxShadow = 'none';
+                const inputRow = document.querySelector('.input-row');
+                if (inputRow) {
+                    inputRow.classList.remove('recording');
+                }
+                userInput.placeholder = "Nachricht an Gemini...";
             }
         }
 
@@ -3333,11 +3359,24 @@
 
         window.completeTask = completeTask;
 
+        function updateInputRowButtons() {
+            const text = userInput.value.trim();
+            const hasContent = text.length > 0 || (typeof attachedFiles !== 'undefined' && attachedFiles.length > 0);
+            if (hasContent) {
+                micBtn.style.display = 'none';
+                sendBtn.style.display = 'flex';
+            } else {
+                micBtn.style.display = 'flex';
+                sendBtn.style.display = 'none';
+            }
+        }
+
         function autoResizeInput() {
             userInput.style.height = 'auto';
             if (!userInput.value) {
-                userInput.style.height = '45px';
+                userInput.style.height = '40px';
                 userInput.style.overflowY = 'hidden';
+                updateInputRowButtons();
                 return;
             }
             const scrollHeight = userInput.scrollHeight;
@@ -3345,25 +3384,21 @@
                 userInput.style.height = '150px';
                 userInput.style.overflowY = 'auto';
             } else {
-                userInput.style.height = Math.max(45, scrollHeight) + 'px';
+                userInput.style.height = Math.max(40, scrollHeight) + 'px';
                 userInput.style.overflowY = 'hidden';
             }
+            updateInputRowButtons();
         }
 
         sendBtn.onclick = sendMessage;
         userInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
-                if (e.shiftKey) {
-                    // Shift + Enter: let browser insert newline, and resize input
-                    setTimeout(autoResizeInput, 0);
-                } else {
-                    // Enter alone: send message and prevent newline
-                    e.preventDefault();
-                    sendMessage();
-                }
+                // Let browser insert newline naturally and resize input
+                setTimeout(autoResizeInput, 0);
             }
         });
         userInput.addEventListener('input', autoResizeInput);
+        updateInputRowButtons();
 
         // Plus button and file input listeners
         const plusBtn = document.getElementById('plus-btn');
