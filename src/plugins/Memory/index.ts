@@ -203,5 +203,34 @@ export const memoryPlugin: Plugin = {
         return { status: "success", message: `Fakt mit ID ${faktId} wurde gelöscht.` };
       }
     }
-  ]
+  ],
+  getTopWidgets: async ({ prisma }) => {
+    try {
+      const people = await prisma.person.findMany({
+        select: {
+          id: true,
+          name: true,
+          notes: true
+        },
+        orderBy: { name: "asc" }
+      });
+      return [
+        {
+          pluginName: "Memory",
+          type: "custom",
+          data: {
+            widgetType: "memory_people_list",
+            people: people.map(p => ({
+              id: p.id,
+              name: p.name,
+              notes: p.notes || "Keine Biografie vorhanden."
+            }))
+          }
+        }
+      ];
+    } catch (e) {
+      console.error("Fehler beim Laden des Memory-Widgets:", e);
+      return [];
+    }
+  }
 };

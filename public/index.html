@@ -879,7 +879,8 @@
         body.mobile-mode.view-calendar #top-widgets-container > #widget-calendar,
         body.mobile-mode.view-timer #top-widgets-container > #widget-timer,
         body.mobile-mode.view-tasks #top-widgets-container > #widget-tasks,
-        body.mobile-mode.view-notes #top-widgets-container > #widget-notes {
+        body.mobile-mode.view-notes #top-widgets-container > #widget-notes,
+        body.mobile-mode.view-memory #top-widgets-container > #widget-memory {
             display: block !important;
         }
 
@@ -1360,6 +1361,15 @@
                 </svg>
                 Einstellungen
             </button>
+            <button class="drawer-item" onclick="handleDrawerMemory()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                Gedächtnis
+            </button>
             
             <div class="drawer-divider"></div>
             
@@ -1558,6 +1568,16 @@
                             <span class="badge" id="badge-notes" style="display: none;">0</span>
                         </button>
 
+                        <button class="plugin-nav-btn" id="btn-nav-memory" onclick="focusWidget('memory')" title="Gedächtnis">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                            <span class="badge" id="badge-memory" style="display: none;">0</span>
+                        </button>
+
                         <button class="plugin-nav-btn chat-toggle-btn" id="btn-nav-chat" onclick="switchMobileView('chat')" title="Zurück zum Chat">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
@@ -1675,7 +1695,7 @@
             }
 
             // Remove all view classes from body
-            document.body.classList.remove('view-chat', 'view-calendar', 'view-timer', 'view-tasks', 'view-notes', 'view-plugins', 'view-settings', 'view-history');
+            document.body.classList.remove('view-chat', 'view-calendar', 'view-timer', 'view-tasks', 'view-notes', 'view-plugins', 'view-settings', 'view-history', 'view-memory');
             
             // Add the new active view class
             document.body.classList.add('view-' + viewName);
@@ -1693,7 +1713,8 @@
                     'calendar': 'Kalender & Termine',
                     'timer': 'Timer & Wecker',
                     'tasks': 'Aufgaben',
-                    'notes': 'Notizen'
+                    'notes': 'Notizen',
+                    'memory': 'Personen & Gedächtnis'
                 };
                 titleEl.textContent = titles[viewName] || 'Plugins & Dashboard';
             }
@@ -1706,6 +1727,7 @@
                     'timer': 'Timer',
                     'tasks': 'Aufgaben',
                     'notes': 'Notizen',
+                    'memory': 'Gedächtnis',
                     'chat': 'Chat',
                     'history': 'Verlauf',
                     'settings': 'Einstellungen'
@@ -2992,6 +3014,22 @@
                             }
                             html += `</div>`;
                             widgetDiv.innerHTML = html;
+                        } else if (widget.data.widgetType === 'memory_people_list') {
+                            let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">`;
+                            if (!widget.data.people || widget.data.people.length === 0) {
+                                html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine Personen im Gedächtnis.</p>`;
+                            } else {
+                                widget.data.people.forEach(p => {
+                                    html += `
+                                        <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); padding: 8px 10px; border-radius: 8px;">
+                                            <strong style="font-size: 0.85rem; color: var(--accent);">${escapeHtml(p.name)}</strong>
+                                            <div style="font-size: 0.75rem; opacity: 0.8; white-space: pre-wrap; word-break: break-word; line-height: 1.3; margin-top: 4px;">${escapeHtml(p.notes)}</div>
+                                        </div>
+                                    `;
+                                });
+                            }
+                            html += `</div>`;
+                            widgetDiv.innerHTML = html;
                         } else if (widget.data.widgetType === 'tasks_overview') {
                             let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">`;
                             
@@ -3656,6 +3694,11 @@
                 }
             }
         });
+
+        window.handleDrawerMemory = function() {
+            closeMobileDrawer();
+            focusWidget('memory');
+        };
 
     </script>
 </body>
