@@ -129,5 +129,16 @@ export const tasksPlugin: Plugin = {
         }
       } as any
     ];
+  },
+  entityConfig: {
+    type: "task",
+    prefix: "app://task/",
+    color: "rgba(166, 227, 161, 0.15)",
+    borderColor: "#a6e3a1",
+    icon: "✅",
+    displayName: "Aufgabe"
+  },
+  resolveEntity: async (id, { prisma }) => {
+    return prisma.task.findUnique({ where: { id } });
   }
 };

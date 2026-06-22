@@ -811,5 +811,16 @@ export const calendarPlugin: Plugin = {
         }
       }
     ];
+  },
+  entityConfig: {
+    type: "event",
+    prefix: "app://event/",
+    color: "rgba(137, 180, 250, 0.15)",
+    borderColor: "#89b4fa",
+    icon: "📅",
+    displayName: "Termin"
+  },
+  resolveEntity: async (id, { prisma }) => {
+    return prisma.event.findUnique({ where: { id } });
   }
 };

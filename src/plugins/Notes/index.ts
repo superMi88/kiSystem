@@ -142,5 +142,16 @@ export const notesPlugin: Plugin = {
         }
       } as any
     ];
+  },
+  entityConfig: {
+    type: "note",
+    prefix: "app://note/",
+    color: "rgba(249, 226, 175, 0.15)",
+    borderColor: "#f9e2af",
+    icon: "📝",
+    displayName: "Notiz"
+  },
+  resolveEntity: async (id, { prisma }) => {
+    return prisma.note.findUnique({ where: { id } });
   }
 };

@@ -14,6 +14,7 @@ import os from "os";
 
 import { PluginManager } from "./plugins/index.js";
 import { getSettings, saveSettings } from "./settings.js";
+import { runAutomaticMigration } from "./migrate.js";
 
 dotenv.config();
 
@@ -132,6 +133,97 @@ app.post("/tasks/complete", async (req, res) => {
   } catch (e: any) {
     console.error("Fehler beim Erledigen der Aufgabe:", e);
     res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * Dynamic Entity Links API
+ */
+app.get("/api/plugins/entities", (req, res) => {
+  try {
+    const configs = pluginManager.getEntityConfigs();
+    res.json(configs);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/entities/:type/:id", async (req, res) => {
+  const { type, id } = req.params;
+  try {
+    const entity = await pluginManager.resolveEntity(type, Number(id));
+    if (!entity) {
+      return res.status(404).json({ error: `Entity vom Typ '${type}' mit ID ${id} nicht gefunden.` });
+    }
+    res.json(entity);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/persons/merge", async (req, res) => {
+  const { sourceId, targetId } = req.body;
+  if (!sourceId || !targetId) {
+    return res.status(400).json({ error: "sourceId und targetId sind erforderlich." });
+  }
+  if (Number(sourceId) === Number(targetId)) {
+    return res.status(400).json({ error: "Ein Profil kann nicht mit sich selbst verschmolzen werden." });
+  }
+  try {
+    await prisma.$transaction(async (tx) => {
+      const sourcePerson = await tx.person.findUnique({
+        where: { id: Number(sourceId) },
+        include: { aliases: true }
+      });
+      const targetPerson = await tx.person.findUnique({
+        where: { id: Number(targetId) },
+        include: { aliases: true }
+      });
+      if (!sourcePerson || !targetPerson) {
+        throw new Error("Eine oder beide Personen existieren nicht.");
+      }
+
+      const targetAliasNames = new Set(targetPerson.aliases.map(a => a.name.toLowerCase()));
+      for (const sourceAlias of sourcePerson.aliases) {
+        if (targetAliasNames.has(sourceAlias.name.toLowerCase())) {
+          await tx.personAlias.delete({ where: { id: sourceAlias.id } });
+        } else {
+          await tx.personAlias.update({
+            where: { id: sourceAlias.id },
+            data: { personId: targetPerson.id, isPrimary: false }
+          });
+        }
+      }
+
+      await tx.fact.updateMany({
+        where: { personId: sourcePerson.id },
+        data: { personId: targetPerson.id }
+      });
+
+      await tx.semanticMemory.updateMany({
+        where: { personId: sourcePerson.id },
+        data: { personId: targetPerson.id }
+      });
+
+      if (sourcePerson.biography) {
+        const newBiography = targetPerson.biography 
+          ? `${targetPerson.biography}\n\n[Zusammengeführt]: ${sourcePerson.biography}`
+          : sourcePerson.biography;
+        await tx.person.update({
+          where: { id: targetPerson.id },
+          data: { biography: newBiography }
+        });
+      }
+
+      await tx.person.delete({
+        where: { id: sourcePerson.id }
+      });
+    });
+
+    res.json({ success: true, message: "Profile erfolgreich zusammengeführt." });
+  } catch (error: any) {
+    console.error("Fehler beim Mergen der Profile:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -397,8 +489,21 @@ WICHTIGE VERHALTENSREGELN:
 
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`KI-System Server läuft auf Port ${PORT}`);
+  
+  // Automatische Schema-Migration ausführen
+  try {
+    console.log("[Migration] Führe 'prisma db push' aus, um das Schema in der Datenbank zu aktualisieren...");
+    const { execSync } = await import("child_process");
+    execSync("npx prisma db push --accept-data-loss", { stdio: "inherit" });
+    console.log("[Migration] Schema-Migration erfolgreich abgeschlossen.");
+  } catch (error: any) {
+    console.error("[Migration] Fehler bei der Schema-Migration (prisma db push):", error);
+  }
+  
+  // Automatische Datenmigration ausführen
+  await runAutomaticMigration(prisma);
   
   // Output local network IP addresses to let the user know what to enter in the mobile app settings
   const nets = os.networkInterfaces();

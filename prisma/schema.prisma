@@ -37,11 +37,21 @@ model AppLauncher {
 
 model Person {
   id        Int              @id @default(autoincrement())
-  name      String           @unique
-  notes     String?          // General information/biography
+  name      String?          // Deprecated, für automatische Migration
+  notes     String?          // Deprecated, für automatische Migration
+  biography String?          // Zuvor 'notes'
+  createdAt DateTime         @default(now())
+  aliases   PersonAlias[]
   facts     Fact[]
   memories  SemanticMemory[]
-  createdAt DateTime         @default(now())
+}
+
+model PersonAlias {
+  id        Int      @id @default(autoincrement())
+  personId  Int
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  name      String   @unique
+  isPrimary Boolean  @default(false)
 }
 
 model Fact {
@@ -49,7 +59,7 @@ model Fact {
   content   String
   category  String?  // e.g., "game", "hobby", "personal"
   personId  Int
-  person    Person   @relation(fields: [personId], references: [id])
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 }
 
@@ -59,7 +69,7 @@ model SemanticMemory {
   embedding Unsupported("vector(3072)")
   metadata  Json?                   // { source: "chat", conversationId: "..." }
   personId  Int?
-  person    Person?                 @relation(fields: [personId], references: [id])
+  person    Person?                 @relation(fields: [personId], references: [id], onDelete: Cascade)
   createdAt DateTime                @default(now())
 }
 

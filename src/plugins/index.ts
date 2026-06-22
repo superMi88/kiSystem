@@ -129,6 +129,23 @@ export class PluginManager {
     }
     return widgets;
   }
+
+  getEntityConfigs() {
+    const activeConfigs: any[] = [];
+    for (const plugin of this.plugins) {
+      if (plugin.entityConfig) {
+        activeConfigs.push(plugin.entityConfig);
+      }
+    }
+    return activeConfigs;
+  }
+
+  async resolveEntity(type: string, id: number) {
+    const plugin = this.plugins.find(p => p.entityConfig?.type === type);
+    if (!plugin) throw new Error(`Plugin für Entity-Typ '${type}' nicht gefunden.`);
+    if (!plugin.resolveEntity) throw new Error(`Plugin '${plugin.name}' unterstützt keine Entity-Auflösung.`);
+    return await plugin.resolveEntity(id, { prisma: this.prisma });
+  }
 }
 
 

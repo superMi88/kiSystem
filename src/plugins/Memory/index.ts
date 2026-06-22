@@ -19,25 +19,39 @@ export const memoryPlugin: Plugin = {
           type: SchemaType.OBJECT,
           properties: {
             text: { type: SchemaType.STRING, description: "Die Information, die gemerkt werden soll." },
-            personName: { type: SchemaType.STRING, description: "Optionaler Name der Person, auf die sich das bezieht." },
+            personId: { type: SchemaType.INTEGER, description: "Optional: ID der Person, auf die sich das bezieht." },
+            personName: { type: SchemaType.STRING, description: "Optional: Name/Spitzname der Person, falls die ID nicht bekannt ist." },
             kontext: { type: SchemaType.STRING, description: "Zusätzlicher Kontext (z.B. 'Gespräch über Urlaub')." }
           },
           required: ["text"]
         } as any
       },
       handler: async (args, { prisma }) => {
-        const { text, personName, kontext } = args;
+        const { text, personId: inputPersonId, personName, kontext } = args;
         const result = await embeddingModel.embedContent(text);
         const embedding = result.embedding.values;
 
-        let personId: number | undefined;
-        if (personName) {
-          const person = await prisma.person.upsert({
-            where: { name: personName },
-            update: {},
-            create: { name: personName }
+        let personId: number | undefined = inputPersonId ? Number(inputPersonId) : undefined;
+        if (!personId && personName) {
+          const alias = await prisma.personAlias.findUnique({
+            where: { name: personName }
           });
-          personId = person.id;
+          if (alias) {
+            personId = alias.personId;
+          } else {
+            const person = await prisma.person.create({
+              data: {
+                biography: "",
+                aliases: {
+                  create: {
+                    name: personName,
+                    isPrimary: true
+                  }
+                }
+              }
+            });
+            personId = person.id;
+          }
         }
 
         await prisma.$executeRawUnsafe(
@@ -49,7 +63,7 @@ export const memoryPlugin: Plugin = {
           personId || null
         );
 
-        return { status: "success", message: "Ich werde mich daran erinnern." };
+        return { status: "success", personId, message: "Ich werde mich daran erinnern." };
       }
     },
     {
@@ -60,20 +74,38 @@ export const memoryPlugin: Plugin = {
           type: SchemaType.OBJECT,
           properties: {
             frage: { type: SchemaType.STRING, description: "Die Frage oder der Suchbegriff." },
-            personName: { type: SchemaType.STRING, description: "Optional: Nur nach Informationen zu dieser Person suchen." }
+            personId: { type: SchemaType.INTEGER, description: "Optional: Nur nach Erinnerungen zu dieser Person (ID) suchen." },
+            personName: { type: SchemaType.STRING, description: "Optional: Nur nach Erinnerungen zu dieser Person (Name) suchen." }
           },
           required: ["frage"]
         } as any
       },
       handler: async (args, { prisma }) => {
-        const { frage } = args;
+        const { frage, personId: inputPersonId, personName } = args;
         const result = await embeddingModel.embedContent(frage);
         const embedding = result.embedding.values;
 
-        const memories: any[] = await prisma.$queryRawUnsafe(
-          `SELECT content, metadata, "createdAt" FROM "SemanticMemory" ORDER BY embedding <=> $1::vector LIMIT 5`,
-          `[${embedding.join(",")}]`
-        );
+        let personId: number | undefined = inputPersonId ? Number(inputPersonId) : undefined;
+        if (!personId && personName) {
+          const alias = await prisma.personAlias.findUnique({
+            where: { name: personName }
+          });
+          if (alias) personId = alias.personId;
+        }
+
+        let memories: any[];
+        if (personId) {
+          memories = await prisma.$queryRawUnsafe(
+            `SELECT content, metadata, "createdAt" FROM "SemanticMemory" WHERE "personId" = $1 ORDER BY embedding <=> $2::vector LIMIT 5`,
+            personId,
+            `[${embedding.join(",")}]`
+          );
+        } else {
+          memories = await prisma.$queryRawUnsafe(
+            `SELECT content, metadata, "createdAt" FROM "SemanticMemory" ORDER BY embedding <=> $1::vector LIMIT 5`,
+            `[${embedding.join(",")}]`
+          );
+        }
 
         if (memories.length === 0) return { message: "Keine relevanten Erinnerungen gefunden." };
 
@@ -89,24 +121,37 @@ export const memoryPlugin: Plugin = {
     {
       definition: {
         name: "hole_person_info",
-        description: "Ruft alle strukturierten (Biografie, Fakten) und unstrukturierten Informationen über eine Person ab.",
+        description: "Ruft alle strukturierten (Biografie, Fakten, Aliase) und unstrukturierten Informationen über eine Person ab.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
-            name: { type: SchemaType.STRING, description: "Name der Person" }
+            personId: { type: SchemaType.INTEGER, description: "Die ID der Person (bevorzugt verwenden)" },
+            name: { type: SchemaType.STRING, description: "Alternativ: Name oder Spitzname der Person" }
           },
-          required: ["name"]
+          required: []
         } as any
       },
       handler: async (args, { prisma }) => {
-        const { name } = args;
-        const person = await prisma.person.findUnique({
-          where: { name },
-          include: { facts: true }
-        }) as any;
+        const { personId, name } = args;
+        
+        let person: any = null;
+        if (personId) {
+          person = await prisma.person.findUnique({
+            where: { id: Number(personId) },
+            include: { aliases: true, facts: true }
+          });
+        } else if (name) {
+          const alias = await prisma.personAlias.findUnique({
+            where: { name },
+            include: { person: { include: { aliases: true, facts: true } } }
+          });
+          if (alias) {
+            person = alias.person;
+          }
+        }
         
         if (!person) {
-          return { status: "not_found", message: `Person ${name} existiert noch nicht im System.` };
+          return { status: "not_found", message: `Person wurde im System nicht gefunden.` };
         }
         
         const memories = await prisma.semanticMemory.findMany({
@@ -115,9 +160,15 @@ export const memoryPlugin: Plugin = {
           take: 10
         });
 
+        const primaryAlias = person.aliases.find((a: any) => a.isPrimary) || person.aliases[0];
+        const primaryName = primaryAlias ? primaryAlias.name : "Unbekannt";
+        const allAliases = person.aliases.map((a: any) => a.name);
+
         return {
-          name: person.name,
-          biografie: person.notes || "",
+          id: person.id,
+          name: primaryName,
+          aliases: allAliases,
+          biografie: person.biography || "",
           facts: person.facts.map((f: any) => ({ id: f.id, content: f.content, category: f.category })),
           langzeit_erinnerungen: memories.map(m => ({ text: m.content, datum: m.createdAt }))
         };
@@ -126,55 +177,99 @@ export const memoryPlugin: Plugin = {
     {
       definition: {
         name: "aktualisiere_person_biografie",
-        description: "Aktualisiert die Biografie / allgemeine Notizen (notes) einer Person. Dies dient als zentrale, kompakte Zusammenfassung der Person.",
+        description: "Aktualisiert die Biografie / allgemeine Notizen einer Person.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
-            name: { type: SchemaType.STRING, description: "Name der Person" },
+            personId: { type: SchemaType.INTEGER, description: "Die ID der Person" },
+            name: { type: SchemaType.STRING, description: "Alternativ: Name der Person, falls ID unbekannt" },
             biografie: { type: SchemaType.STRING, description: "Die neue vollständige Biografie / allgemeine Informationen der Person." }
           },
-          required: ["name", "biografie"]
+          required: ["biografie"]
         } as any
       },
       handler: async (args, { prisma }) => {
-        const { name, biografie } = args;
-        await prisma.person.upsert({
-          where: { name },
-          update: { notes: biografie },
-          create: { name, notes: biografie }
-        });
-        return { status: "success", message: `Biografie von ${name} wurde aktualisiert.` };
+        const { personId: inputPersonId, name, biografie } = args;
+        
+        let personId = inputPersonId ? Number(inputPersonId) : undefined;
+        if (!personId && name) {
+          const alias = await prisma.personAlias.findUnique({
+            where: { name }
+          });
+          if (alias) personId = alias.personId;
+        }
+
+        if (personId) {
+          await prisma.person.update({
+            where: { id: personId },
+            data: { biography: biografie }
+          });
+          return { status: "success", personId, message: `Biografie wurde aktualisiert.` };
+        } else if (name) {
+          const person = await prisma.person.create({
+            data: {
+              biography: biografie,
+              aliases: {
+                create: { name, isPrimary: true }
+              }
+            }
+          });
+          return { status: "success", personId: person.id, message: `Neue Person '${name}' erstellt und Biografie aktualisiert.` };
+        } else {
+          throw new Error("Entweder 'personId' oder 'name' muss angegeben werden.");
+        }
       }
     },
     {
       definition: {
         name: "fuege_person_fakt_hinzu",
-        description: "Fügt einen strukturierten Fakt (Fact) für eine Person hinzu (z.B. Lieblingsfarbe, Hobbys, Geburtstag).",
+        description: "Fügt einen strukturierten Fakt (Fact) für eine Person hinzu.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
-            name: { type: SchemaType.STRING, description: "Name der Person" },
-            inhalt: { type: SchemaType.STRING, description: "Der Fakt (z.B. 'Spielt gerne Volleyball' oder 'Hat eine Katze namens Luna')" },
-            kategorie: { type: SchemaType.STRING, description: "Optional: Kategorie des Fakts (z.B. 'hobby', 'vorliebe', 'kontakt', 'geburtstag')" }
+            personId: { type: SchemaType.INTEGER, description: "Die ID der Person" },
+            name: { type: SchemaType.STRING, description: "Alternativ: Name der Person" },
+            inhalt: { type: SchemaType.STRING, description: "Der Fakt (z.B. 'Spielt gerne Volleyball')" },
+            kategorie: { type: SchemaType.STRING, description: "Optional: Kategorie (z.B. 'hobby', 'geburtstag')" }
           },
-          required: ["name", "inhalt"]
+          required: ["inhalt"]
         } as any
       },
       handler: async (args, { prisma }) => {
-        const { name, inhalt, kategorie } = args;
-        const person = await prisma.person.upsert({
-          where: { name },
-          update: {},
-          create: { name }
-        });
+        const { personId: inputPersonId, name, inhalt, kategorie } = args;
+        
+        let personId = inputPersonId ? Number(inputPersonId) : undefined;
+        if (!personId && name) {
+          const alias = await prisma.personAlias.findUnique({
+            where: { name }
+          });
+          if (alias) personId = alias.personId;
+        }
+
+        if (!personId) {
+          if (name) {
+            const person = await prisma.person.create({
+              data: {
+                biography: "",
+                aliases: {
+                  create: { name, isPrimary: true }
+                }
+              }
+            });
+            personId = person.id;
+          } else {
+            throw new Error("Entweder 'personId' oder 'name' muss angegeben werden.");
+          }
+        }
+
         const fact = await prisma.fact.create({
           data: {
             content: inhalt,
             category: kategorie || null,
-            personId: person.id
+            personId: personId
           }
         });
-        return { status: "success", message: `Fakt wurde hinzugefügt (ID: ${fact.id}).` };
+        return { status: "success", personId, faktId: fact.id, message: `Fakt wurde hinzugefügt.` };
       }
     },
     {
@@ -184,7 +279,7 @@ export const memoryPlugin: Plugin = {
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
-            faktId: { type: SchemaType.INTEGER, description: "Die ID des Fakts, der gelöscht werden soll (erhält man über hole_person_info)." }
+            faktId: { type: SchemaType.INTEGER, description: "Die ID des Fakts" }
           },
           required: ["faktId"]
         } as any
@@ -192,39 +287,93 @@ export const memoryPlugin: Plugin = {
       handler: async (args, { prisma }) => {
         const { faktId } = args;
         const fact = await prisma.fact.findUnique({
-          where: { id: faktId }
+          where: { id: Number(faktId) }
         });
         if (!fact) {
           return { status: "error", message: `Fakt mit ID ${faktId} wurde nicht gefunden.` };
         }
         await prisma.fact.delete({
-          where: { id: faktId }
+          where: { id: Number(faktId) }
         });
         return { status: "success", message: `Fakt mit ID ${faktId} wurde gelöscht.` };
+      }
+    },
+    {
+      definition: {
+        name: "verwalte_person_alias",
+        description: "Fügt einen neuen Spitznamen hinzu oder löscht einen vorhandenen Alias einer Person.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            personId: { type: SchemaType.INTEGER, description: "ID der Person" },
+            aktion: { type: SchemaType.STRING, description: "Aktion: 'add' oder 'delete'" },
+            aliasName: { type: SchemaType.STRING, description: "Name des Spitznamens/Alias" }
+          },
+          required: ["personId", "aktion", "aliasName"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const personId = Number(args.personId);
+        const { aktion, aliasName } = args;
+
+        if (aktion === "add") {
+          const existing = await prisma.personAlias.findUnique({
+            where: { name: aliasName }
+          });
+          if (existing) {
+            return { status: "error", message: `Der Spitzname '${aliasName}' wird bereits von einer anderen Person verwendet.` };
+          }
+          await prisma.personAlias.create({
+            data: {
+              personId,
+              name: aliasName,
+              isPrimary: false
+            }
+          });
+          return { status: "success", message: `Spitzname '${aliasName}' hinzugefügt.` };
+        } else if (aktion === "delete") {
+          const alias = await prisma.personAlias.findFirst({
+            where: { personId, name: aliasName }
+          });
+          if (!alias) {
+            return { status: "error", message: `Spitzname '${aliasName}' existiert nicht für diese Person.` };
+          }
+          if (alias.isPrimary) {
+            return { status: "error", message: `Der primäre Name '${aliasName}' kann nicht gelöscht werden. Setze zuerst einen anderen Namen als primär.` };
+          }
+          await prisma.personAlias.delete({
+            where: { id: alias.id }
+          });
+          return { status: "success", message: `Spitzname '${aliasName}' gelöscht.` };
+        } else {
+          return { status: "error", message: "Ungültige Aktion. Nur 'add' und 'delete' sind erlaubt." };
+        }
       }
     }
   ],
   getTopWidgets: async ({ prisma }) => {
     try {
       const people = await prisma.person.findMany({
-        select: {
-          id: true,
-          name: true,
-          notes: true
-        },
-        orderBy: { name: "asc" }
+        include: {
+          aliases: true
+        }
       });
+      const formattedPeople = people.map(p => {
+        const primaryAlias = p.aliases.find(a => a.isPrimary) || p.aliases[0];
+        return {
+          id: p.id,
+          name: primaryAlias ? primaryAlias.name : "Unbekannt",
+          notes: p.biography || "Keine Biografie vorhanden."
+        };
+      });
+      formattedPeople.sort((a, b) => a.name.localeCompare(b.name));
       return [
         {
           pluginName: "Memory",
           type: "custom",
           data: {
             widgetType: "memory_people_list",
-            people: people.map(p => ({
-              id: p.id,
-              name: p.name,
-              notes: p.notes || "Keine Biografie vorhanden."
-            }))
+            people: formattedPeople
           }
         }
       ];
@@ -232,5 +381,19 @@ export const memoryPlugin: Plugin = {
       console.error("Fehler beim Laden des Memory-Widgets:", e);
       return [];
     }
+  },
+  entityConfig: {
+    type: "person",
+    prefix: "app://person/",
+    color: "rgba(203, 166, 247, 0.15)",
+    borderColor: "#cba6f7",
+    icon: "👤",
+    displayName: "Person"
+  },
+  resolveEntity: async (id, { prisma }) => {
+    return prisma.person.findUnique({
+      where: { id },
+      include: { aliases: true, facts: true }
+    });
   }
 };

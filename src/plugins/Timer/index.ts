@@ -112,5 +112,16 @@ export const timerPlugin: Plugin = {
         }
       }
     ];
+  },
+  entityConfig: {
+    type: "timer",
+    prefix: "app://timer/",
+    color: "rgba(243, 139, 168, 0.15)",
+    borderColor: "#f38ba8",
+    icon: "⏱️",
+    displayName: "Timer"
+  },
+  resolveEntity: async (id, { prisma }) => {
+    return prisma.timer.findUnique({ where: { id } });
   }
 };
