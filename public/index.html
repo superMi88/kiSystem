@@ -1596,7 +1596,10 @@
         <div id="person-profile-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 25px; border-radius: 12px; z-index: 300; width: 85%; max-width: 500px; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px);">
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 15px;">
                 <h3 id="person-profile-title" style="color: var(--accent); margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px;">👤 Personenprofil</h3>
-                <button onclick="closePersonProfileModal()" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 1.1rem;" title="Schließen">✖</button>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <button id="person-profile-link-btn" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--accent); cursor: pointer; border-radius: 4px; padding: 4px 8px; font-size: 0.75rem; font-weight: bold; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">🔗 Link</button>
+                    <button onclick="closePersonProfileModal()" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 1.1rem;" title="Schließen">✖</button>
+                </div>
             </div>
             
             <div class="profile-body" style="display: flex; flex-direction: column; gap: 15px; text-align: left; max-height: 60vh; overflow-y: auto; padding-right: 5px;">
@@ -2099,6 +2102,27 @@
         }
         window.handleEntityClick = handleEntityClick;
 
+        function insertEntityLinkIntoChat(label, type, id) {
+            const userInput = document.getElementById('user-input');
+            if (userInput) {
+                const linkStr = `[${label}](app://${type}/${id})`;
+                const currentValue = userInput.value;
+                if (currentValue.length > 0 && !currentValue.endsWith(' ')) {
+                    userInput.value = currentValue + ' ' + linkStr + ' ';
+                } else {
+                    userInput.value = currentValue + linkStr + ' ';
+                }
+                userInput.focus();
+                if (typeof autoResizeInput === 'function') {
+                    autoResizeInput();
+                }
+                if (document.body.classList.contains('mobile-mode')) {
+                    switchMobileView('chat');
+                }
+            }
+        }
+        window.insertEntityLinkIntoChat = insertEntityLinkIntoChat;
+
         // Modal für Personenprofile
         let personProfileModal, personProfileId, personProfileTitle, personProfileNames;
         let personNewAliasInput, personProfileBio, personProfileFacts, personNewFactInput;
@@ -2133,6 +2157,16 @@
                 const primaryName = primaryAlias ? primaryAlias.name : "Unbekannt";
                 personProfileTitle.textContent = `👤 Profil: ${primaryName}`;
                 
+                // Link-Button im Header konfigurieren
+                const linkBtn = document.getElementById('person-profile-link-btn');
+                if (linkBtn) {
+                    const escName = primaryName.replace(/'/g, "\\'");
+                    linkBtn.onclick = () => {
+                        insertEntityLinkIntoChat(escName, 'person', person.id);
+                        closePersonProfileModal();
+                    };
+                }
+                
                 // Biografie
                 personProfileBio.value = person.biography || '';
                 
@@ -2158,12 +2192,16 @@
                         const item = document.createElement('div');
                         item.className = 'fact-item';
                         const catHtml = f.category ? `<span class="category-badge">${escapeHtml(f.category)}</span>` : '';
+                        const escContent = escapeHtml(f.content).replace(/'/g, "\\'");
                         item.innerHTML = `
                             <div style="display: flex; align-items: center;">
                                 ${catHtml}
                                 <span>${escapeHtml(f.content)}</span>
                             </div>
-                            <button onclick="deletePersonFact(${f.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.8rem;">✖</button>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <button onclick="insertEntityLinkIntoChat('${escContent}', 'person', ${person.id}); closePersonProfileModal();" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.8rem;" title="In Chat verlinken">🔗</button>
+                                <button onclick="deletePersonFact(${f.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.8rem;">✖</button>
+                            </div>
                         `;
                         personProfileFacts.appendChild(item);
                     });
@@ -3362,6 +3400,7 @@
                                 const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
  
                                 const rescheduleBorder = ev.originalStart ? 'border-left: 3px solid #f9e2af;' : '';
+                                const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
  
                                 html += `
                                     <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; background: rgba(255,255,255,0.03); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04); ${rescheduleBorder} ${cancelStyle}">
@@ -3374,7 +3413,10 @@
                                             </div>
                                             <div style="${ev.isCancelled ? 'text-decoration: line-through; opacity: 0.5;' : ''}">${timeHtml}</div>
                                         </div>
-                                        <button onclick="deleteCalendarEvent('${ev.id}', '${targetDate}', ${isRec})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.85rem; padding: 2px 6px; align-self: center;" title="Termin löschen">✖</button>
+                                        <div style="display: flex; align-items: center; gap: 4px; align-self: center;">
+                                            <button onclick="insertEntityLinkIntoChat('${escTitle}', 'event', ${ev.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
+                                            <button onclick="deleteCalendarEvent('${ev.id}', '${targetDate}', ${isRec})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Termin löschen">✖</button>
+                                        </div>
                                     </div>
                                 `;
                             });
@@ -3416,11 +3458,15 @@
                             html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 0; padding: 10px; text-align: center; background: rgba(0,0,0,0.15); border-radius: 8px;">Keine aktiven Timer.</p>`;
                         } else {
                             widget.data.timers.forEach(t => {
+                                const escTitle = escapeHtml(t.title).replace(/'/g, "\\'");
                                 html += `
                                     <div class="timer-card" id="timer-card-${t.id}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" style="padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); transition: all 0.3s; position: relative;">
                                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
                                             <span style="font-size: 0.85rem; font-weight: bold; color: var(--text);">${escapeHtml(t.title)}</span>
-                                            <button onclick="callTool('loesche_timer', {id: ${t.id}})" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Timer löschen">✖</button>
+                                            <div style="display: flex; align-items: center; gap: 4px;">
+                                                <button onclick="insertEntityLinkIntoChat('${escTitle}', 'timer', ${t.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
+                                                <button onclick="callTool('loesche_timer', {id: ${t.id}})" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Timer löschen">✖</button>
+                                            </div>
                                         </div>
                                         <div class="timer-countdown" style="font-family: monospace; font-size: 1.1rem; font-weight: bold; color: var(--accent); margin-bottom: 6px;">--:--:--</div>
                                         <div class="timer-progress-bg" style="width: 100%; height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; margin-bottom: 4px;">
@@ -3453,7 +3499,8 @@
                                         <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); padding: 8px 10px; border-radius: 8px; position: relative;">
                                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                                                 <strong style="font-size: 0.8rem; color: var(--accent);">${cleanTitle}</strong>
-                                                <div style="display: flex; gap: 8px;">
+                                                <div style="display: flex; gap: 8px; align-items: center;">
+                                                    <button onclick="insertEntityLinkIntoChat('${escTitle}', 'note', ${note.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 0 4px;" title="In Chat verlinken">🔗</button>
                                                     <button onclick="openNoteModal(${note.id}, '${escTitle}', '${escContent}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 0 4px;" title="Bearbeiten">✏️</button>
                                                     <button onclick="deleteNote(${note.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 0 4px;" title="Löschen">✖</button>
                                                 </div>
@@ -3461,19 +3508,19 @@
                                             <div style="font-size: 0.75rem; opacity: 0.8; white-space: pre-wrap; word-break: break-word; line-height: 1.3;">${cleanContent}</div>
                                         </div>
                                     `;
-                                });
-                            }
-                            html += `</div>`;
-                            widgetDiv.innerHTML = html;
-                        } else if (widget.data.widgetType === 'memory_people_list') {
+                                          } else if (widget.data.widgetType === 'memory_people_list') {
                             let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; display: flex; flex-direction: column; gap: 8px;">`;
                             if (!widget.data.people || widget.data.people.length === 0) {
                                 html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine Personen im Gedächtnis.</p>`;
                             } else {
                                 widget.data.people.forEach(p => {
+                                    const escName = escapeHtml(p.name).replace(/'/g, "\\'");
                                     html += `
                                         <div onclick="openPersonProfileModal(${p.id})" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
-                                            <strong style="font-size: 0.85rem; color: var(--accent);">${escapeHtml(p.name)}</strong>
+                                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                <strong style="font-size: 0.85rem; color: var(--accent);">${escapeHtml(p.name)}</strong>
+                                                <button onclick="event.stopPropagation(); insertEntityLinkIntoChat('${escName}', 'person', ${p.id})" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--accent); cursor: pointer; border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'" title="In Chat verlinken">🔗 Link</button>
+                                            </div>
                                             <div style="font-size: 0.75rem; opacity: 0.8; white-space: pre-wrap; word-break: break-word; line-height: 1.3; margin-top: 4px;">${escapeHtml(p.notes)}</div>
                                         </div>
                                     `;
@@ -3495,16 +3542,21 @@
                                     if (!groupedTasks[listName]) groupedTasks[listName] = [];
                                     groupedTasks[listName].push(t);
                                 });
- 
+  
                                 Object.keys(groupedTasks).forEach(listName => {
                                     html += `<div style="font-weight: 600; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin: 8px 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px;">${listName}</div>`;
                                     html += `<div style="display: flex; flex-direction: column; gap: 4px;">`;
                                     groupedTasks[listName].forEach(t => {
+                                        const repeatBadge = t.recurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrende Aufgabe">🔄</span>` : '';
+                                        const escTitle = escapeHtml(t.title).replace(/'/g, "\\'");
                                         html += `
-                                            <label style="font-size: 0.8rem; display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.05); transition: background 0.2s; cursor: pointer;">
-                                                <input type="checkbox" data-task-id="${t.id}" data-tasklist-id="${t.tasklistId}" onchange="completeTask(this)" style="margin-top: 3px; accent-color: var(--accent); cursor: pointer;">
-                                                <span style="flex: 1; line-height: 1.4;">${escapeHtml(t.title)}</span>
-                                            </label>`;
+                                            <div style="font-size: 0.8rem; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.05); transition: background 0.2s; margin-bottom: 4px;">
+                                                <label style="display: flex; align-items: flex-start; gap: 8px; flex: 1; cursor: pointer; margin: 0;">
+                                                    <input type="checkbox" data-task-id="${t.id}" data-tasklist-id="${t.tasklistId}" onchange="completeTask(this)" style="margin-top: 3px; accent-color: var(--accent); cursor: pointer;">
+                                                    <span style="line-height: 1.4;">${escapeHtml(t.title)}${repeatBadge}</span>
+                                                </label>
+                                                <button onclick="insertEntityLinkIntoChat('${escTitle}', 'task', ${t.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
+                                            </div>`;
                                     });
                                     html += `</div>`;
                                 });
