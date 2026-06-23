@@ -3508,7 +3508,11 @@
                                             <div style="font-size: 0.75rem; opacity: 0.8; white-space: pre-wrap; word-break: break-word; line-height: 1.3;">${cleanContent}</div>
                                         </div>
                                     `;
-                                          } else if (widget.data.widgetType === 'memory_people_list') {
+                                });
+                            }
+                            html += `</div>`;
+                            widgetDiv.innerHTML = html;
+                        } else if (widget.data.widgetType === 'memory_people_list') {
                             let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; display: flex; flex-direction: column; gap: 8px;">`;
                             if (!widget.data.people || widget.data.people.length === 0) {
                                 html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine Personen im Gedächtnis.</p>`;
