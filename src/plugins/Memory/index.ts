@@ -354,8 +354,15 @@ export const memoryPlugin: Plugin = {
   getTopWidgets: async ({ prisma }) => {
     try {
       const people = await prisma.person.findMany({
-        include: {
-          aliases: true
+        select: {
+          id: true,
+          biography: true,
+          aliases: {
+            select: {
+              name: true,
+              isPrimary: true
+            }
+          }
         }
       });
       const formattedPeople = people.map(p => {
