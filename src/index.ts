@@ -206,7 +206,7 @@ app.post("/api/persons/merge", async (req, res) => {
       });
 
       if (sourcePerson.biography) {
-        const newBiography = targetPerson.biography 
+        const newBiography = targetPerson.biography
           ? `${targetPerson.biography}\n\n[Zusammengeführt]: ${sourcePerson.biography}`
           : sourcePerson.biography;
         await tx.person.update({
@@ -259,25 +259,6 @@ app.post("/messages", async (req, res) => {
   }
 });
 
-/**
- * Google Auth Callback
- */
-app.get("/auth/google/callback", async (req, res) => {
-  const { code } = req.query;
-  if (code) {
-    try {
-      // Wir nutzen eine temporäre Instanz des Service zum Speichern
-      const { GoogleCalendarService } = await import("./plugins/Calendar/googleService.js");
-      const googleService = new GoogleCalendarService(prisma);
-      await googleService.saveTokens(code as string);
-      res.send("<h1>Erfolg!</h1><p>Dein Google Kalender ist jetzt verbunden. Du kannst dieses Fenster schließen.</p>");
-    } catch (e: any) {
-      res.status(500).send("Fehler beim Speichern der Tokens: " + e.message);
-    }
-  } else {
-    res.status(400).send("Kein Code erhalten.");
-  }
-});
 
 let activeTools: { name: string; args: any }[] = [];
 
@@ -307,10 +288,10 @@ app.post("/chat", async (req, res) => {
     // Speichere Benutzer-Nachricht in DB
     if (message || audio || (attachments && attachments.length > 0)) {
       await prisma.chatMessage.create({
-        data: { 
-          role: "user", 
-          text: message || (attachments && attachments.length > 0 ? "🖼️ Bild-Anhang" : "🎤 Sprachnachricht"), 
-          conversationId 
+        data: {
+          role: "user",
+          text: message || (attachments && attachments.length > 0 ? "🖼️ Bild-Anhang" : "🎤 Sprachnachricht"),
+          conversationId
         }
       });
     }
@@ -319,13 +300,14 @@ app.post("/chat", async (req, res) => {
     const dateString = now.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     const timeString = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 
-    const modelName = process.env.GEMINI_MODEL || "gemini-flash-latest";
+    const modelName = "gemini-flash-latest";
     const model = genAI.getGenerativeModel({
       model: modelName,
       tools: [{ functionDeclarations: pluginManager.getGeminiTools() } as any],
       systemInstruction: {
         role: "system",
-        parts: [{ text: `Du bist ein hilfreicher PC-Assistent. 
+        parts: [{
+          text: `Du bist ein hilfreicher PC-Assistent. 
 Heute ist ${dateString}, es ist ${timeString} Uhr (deutsche Lokalzeit, Mitteleuropäische Sommerzeit, UTC+2). 
 Nutze dieses Datum als Basis für relative Zeitangaben.
 Wenn du relative Timer erstellst (z.B. "in 15 Minuten" oder "für 10 Sekunden"), benutze im Tool 'erstelle_timer' bevorzugt den Parameter 'sekunden'.
@@ -348,7 +330,7 @@ WICHTIGE VERHALTENSREGELN:
     const chat = model.startChat({
       history: chatHistory
     });
-    
+
     // Baue die Nachricht für Gemini zusammen
     const promptParts: any[] = [];
     if (message) {
@@ -404,26 +386,26 @@ WICHTIGE VERHALTENSREGELN:
       }
 
       console.log(`KI ruft ${calls.length} Tools auf (Schritt ${step + 1}):`);
-      
+
       const functionResponses = [];
       for (const call of calls) {
         let toolResult: any;
         executedTools.push({ name: call.name, args: call.args });
         activeTools.push({ name: call.name, args: call.args });
-        
+
         // Wenn wir das Limit erreichen, verweigern wir weitere Aufrufe und zwingen das Modell zu einer Antwort
         if (step === MAX_STEPS - 1) {
           console.log(`  - Tool-Limit erreicht. Verweigere Ausführung für: ${call.name}`);
-          toolResult = { 
-            status: "limit_reached", 
-            message: "Such-Limit für diese Runde erreicht. Bitte fasse alle bisher gesammelten Informationen kurz zusammen und antworte dem Benutzer direkt." 
+          toolResult = {
+            status: "limit_reached",
+            message: "Such-Limit für diese Runde erreicht. Bitte fasse alle bisher gesammelten Informationen kurz zusammen und antworte dem Benutzer direkt."
           };
         } else {
           console.log(`  - Rufe Tool auf: ${call.name}`, call.args);
           try {
             toolResult = await pluginManager.executeTool(call.name, call.args);
             console.log("    Tool Ergebnis empfangen:", { name: call.name, hasWidget: !!toolResult?.type });
-            
+
             if (toolResult && toolResult.type) {
               widgetData = toolResult;
             }
@@ -491,7 +473,7 @@ WICHTIGE VERHALTENSREGELN:
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`KI-System Server läuft auf Port ${PORT}`);
-  
+
   // Automatische Schema-Migration ausführen
   try {
     console.log("[Migration] Führe 'prisma db push' aus, um das Schema in der Datenbank zu aktualisieren...");
@@ -501,10 +483,10 @@ app.listen(PORT, async () => {
   } catch (error: any) {
     console.error("[Migration] Fehler bei der Schema-Migration (prisma db push):", error);
   }
-  
+
   // Automatische Datenmigration ausführen
   await runAutomaticMigration(prisma);
-  
+
   // Output local network IP addresses to let the user know what to enter in the mobile app settings
   const nets = os.networkInterfaces();
   console.log("\n>>> LOKALE IP-ADRESSEN FÜR DIE MOBILE APP <<<");

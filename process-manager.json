@@ -1,0 +1,26 @@
+{
+  "name": "kiSystem",
+  "requirements": [
+    {
+      "key": "DATABASE_URL",
+      "type": "database",
+      "dbType": "postgres",
+      "description": "Prisma PostgreSQL Connection URL"
+    },
+    {
+      "key": "GOOGLE_API_KEY",
+      "type": "credential",
+      "description": "Google AI / Maps API Key"
+    },
+    {
+      "key": "PORT",
+      "type": "credential",
+      "description": "Port the node server listens on"
+    },
+    {
+      "key": "GEMINI_MODEL",
+      "type": "credential",
+      "description": "Gemini Model (e.g. gemini-flash-latest)"
+    }
+  ]
+}

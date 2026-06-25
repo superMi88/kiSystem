@@ -73,14 +73,6 @@ model SemanticMemory {
   createdAt DateTime                @default(now())
 }
 
-model GoogleAuth {
-  id           Int      @id @default(1)
-  accessToken  String
-  refreshToken String
-  expiryDate   BigInt
-  createdAt    DateTime @default(now())
-}
-
 model Timer {
   id        Int      @id @default(autoincrement())
   title     String   @default("Timer")
