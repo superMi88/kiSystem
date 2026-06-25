@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rich-Text Editor Playground</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f0f17;
+            --card: #181825;
+            --border: #313244;
+            --text: #cdd6f4;
+            --text-muted: #7f849c;
+            --accent: #89b4fa;
+            --accent-hover: #b4befe;
+            --pill-bg: rgba(137, 180, 250, 0.15);
+            --pill-border: rgba(137, 180, 250, 0.3);
+            --pill-text: #89b4fa;
+            --success: #a6e3a1;
+            --error: #f38ba8;
+            --warning: #f9e2af;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --font-main: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --font-mono: 'Fira Code', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: var(--font-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        header {
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto 20px auto;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent) 0%, #cba6f7 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            flex: 1;
+        }
+
+        @media (max-width: 900px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-shadow: 0 8px 32px var(--shadow);
+            backdrop-filter: blur(10px);
+        }
+
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+        }
+
+        .panel-title span.badge {
+            font-size: 0.75rem;
+            background: rgba(137, 180, 250, 0.1);
+            color: var(--accent);
+            padding: 2px 8px;
+            border-radius: 99px;
+            border: 1px solid rgba(137, 180, 250, 0.2);
+        }
+
+        /* Editor Area */
+        .editor-container {
+            position: relative;
+            flex: 1;
+            min-height: 250px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .editor-box {
+            width: 100%;
+            flex: 1;
+            min-height: 250px;
+            background-color: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 15px;
+            color: var(--text);
+            font-size: 1.05rem;
+            line-height: 1.6;
+            outline: none;
+            overflow-y: auto;
+            transition: all 0.3s ease;
+        }
+
+        .editor-box:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(137, 180, 250, 0.15);
+        }
+
+        .editor-box[placeholder]:empty:before {
+            content: attr(placeholder);
+            color: var(--text-muted);
+            cursor: text;
+        }
+
+        /* Pill Link Box styling */
+        .link-pill {
+            display: inline-flex;
+            align-items: center;
+            background-color: var(--pill-bg);
+            color: var(--pill-text);
+            border: 1px solid var(--pill-border);
+            border-radius: 6px;
+            padding: 2px 8px;
+            margin: 0 3px;
+            font-weight: 500;
+            user-select: all; /* Allows atomic selection */
+            cursor: pointer;
+            box-decoration-break: clone;
+            -webkit-box-decoration-break: clone;
+            transition: all 0.2s ease;
+        }
+
+        .link-pill:hover {
+            background-color: rgba(137, 180, 250, 0.25);
+            border-color: rgba(137, 180, 250, 0.5);
+            box-shadow: 0 0 8px rgba(137, 180, 250, 0.2);
+        }
+
+        /* Tools & Actions */
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 10px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: var(--font-main);
+            font-weight: 500;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            background: rgba(137, 180, 250, 0.1);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .btn-accent {
+            background: var(--accent);
+            color: var(--bg);
+            border-color: var(--accent);
+        }
+
+        .btn-accent:hover {
+            background: var(--accent-hover);
+            border-color: var(--accent-hover);
+            color: var(--bg);
+        }
+
+        .btn-error {
+            background: rgba(243, 139, 168, 0.1);
+            color: var(--error);
+            border-color: rgba(243, 139, 168, 0.2);
+        }
+
+        .btn-error:hover {
+            background: var(--error);
+            color: var(--bg);
+            border-color: var(--error);
+        }
+
+        /* Form Controls */
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr auto;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .input-text {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: var(--text);
+            font-family: var(--font-main);
+            font-size: 0.85rem;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        .input-text:focus {
+            border-color: var(--accent);
+        }
+
+        /* Previews and output */
+        .preview-box {
+            background-color: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 15px;
+            height: 120px;
+            overflow-y: auto;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .html-highlight {
+            color: #f9e2af; /* light yellow for HTML structure */
+        }
+
+        .notepad-textarea {
+            width: 100%;
+            height: 140px;
+            background: #11111b;
+            color: #a6e3a1; /* terminal green */
+            font-family: var(--font-mono);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+            outline: none;
+            resize: none;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--accent);
+            color: var(--bg);
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            font-weight: 600;
+            font-size: 0.9rem;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .alert-bar {
+            background: rgba(249, 226, 175, 0.08);
+            border: 1px solid var(--warning);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 0.85rem;
+            color: var(--warning);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Rich-Text Link-Pill Editor</h1>
+        <p>Ein contenteditable-Editor, der spezifische Markdown-Verknüpfungen visuell als abgerundete Pills rendert.</p>
+    </header>
+
+    <div class="container">
+        
+        <!-- Left Panel: Editor & Insertion Tools -->
+        <div class="panel">
+            <div class="panel-title">
+                Der Editor
+                <span class="badge">contenteditable</span>
+            </div>
+
+            <div class="editor-container">
+                <div id="editor" class="editor-box" contenteditable="true" placeholder="Schreibe etwas oder füge Text ein... Kopiere Pills oder Markdown-Links [Beispiel](app://link)...">Hier ist normaler Text. Das hier ist eine <span class="link-pill" contenteditable="false" data-url="app://event/12">Was mit Mond machen</span> Pill. Und noch etwas Text danach.</div>
+            </div>
+
+            <div class="alert-bar">
+                <span>💡</span>
+                <span>Pills verhalten sich wie einzelne Zeichen beim Löschen (Backspace/Entf).</span>
+            </div>
+
+            <div class="panel-title">Link erstellen</div>
+            
+            <div class="form-row">
+                <input type="text" id="link-text" class="input-text" placeholder="Anzeigetext (z.B. Mondmission)">
+                <input type="text" id="link-url" class="input-text" placeholder="URL (z.B. app://event/12)" value="app://event/">
+                <button id="btn-insert-link" class="btn btn-accent">Pill Einfügen</button>
+            </div>
+
+            <div class="panel-title">Schnell-Vorschau / Aktionen</div>
+            <div class="actions-grid">
+                <button id="btn-insert-preset1" class="btn">🚀 Preset 1</button>
+                <button id="btn-insert-preset2" class="btn">📅 Preset 2</button>
+                <button id="btn-clear" class="btn btn-error">Inhalt löschen</button>
+            </div>
+        </div>
+
+        <!-- Right Panel: Previews & External Testing -->
+        <div class="panel">
+            <div class="panel-title">
+                Externer Editor (z.B. Notepad-Simulation)
+                <span class="badge">Kopiertest</span>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: -10px;">
+                Kopiere Text aus dem Editor links und füge ihn hier ein. Du siehst das Markdown-Format.
+            </p>
+            <textarea class="notepad-textarea" placeholder="Hier einfügen zum Testen des externen Copy-Paste..."></textarea>
+
+            <div class="panel-title">Echtzeit-Datenstruktur (HTML im Hintergrund)</div>
+            <div id="html-preview" class="preview-box"></div>
+
+            <div class="panel-title">
+                XSS-Sicherheitstest
+                <span class="badge" style="background: rgba(243,139,168,0.1); color: var(--error); border-color: rgba(243,139,168,0.2);">XSS</span>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: -10px;">
+                Klicke den Button unten, um einen bösartigen HTML-String in deine Zwischenablage zu kopieren. Füge ihn dann links in den Editor ein.
+            </p>
+            <div class="actions-grid">
+                <button id="btn-copy-xss" class="btn btn-error">Malicious HTML kopieren</button>
+                <button id="btn-copy-markdown" class="btn">Markdown-Link kopieren</button>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="toast" class="toast">Text kopiert!</div>
+
+    <script>
+        const editor = document.getElementById('editor');
+        const htmlPreview = document.getElementById('html-preview');
+        const btnInsertLink = document.getElementById('btn-insert-link');
+        const btnClear = document.getElementById('btn-clear');
+        const toast = document.getElementById('toast');
+
+        // Text & URL inputs
+        const linkTextIn = document.getElementById('link-text');
+        const linkUrlIn = document.getElementById('link-url');
+
+        // Presets
+        const btnPreset1 = document.getElementById('btn-insert-preset1');
+        const btnPreset2 = document.getElementById('btn-insert-preset2');
+
+        // Copy actions
+        const btnCopyXss = document.getElementById('btn-copy-xss');
+        const btnCopyMarkdown = document.getElementById('btn-copy-markdown');
+
+        // Show Toast helper
+        function showToast(message) {
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2500);
+        }
+
+        // --- REALTIME PREVIEW UPDATE ---
+        function updatePreviews() {
+            // Escape HTML entities to display safely in code block
+            let htmlStr = editor.innerHTML;
+            let formattedHtml = htmlStr
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            
+            // Highlight pills in the source code preview
+            formattedHtml = formattedHtml.replace(
+                /(&lt;span class="link-pill"[^&]*&gt;.*?&lt;\/span&gt;)/g,
+                '<span class="html-highlight">$1</span>'
+            );
+            
+            htmlPreview.innerHTML = formattedHtml || '<span style="color: var(--text-muted)">Leer</span>';
+        }
+
+        editor.addEventListener('input', updatePreviews);
+        // Initial call
+        updatePreviews();
+
+
+        // --- LINK PILL INSERTION LOGIC ---
+        function insertLinkPill(text, url) {
+            if (!text || !url) return;
+            
+            // Basic check for safe protocol
+            const normalizedUrl = url.trim();
+            if (normalizedUrl.toLowerCase().startsWith('javascript:')) {
+                alert('Bösartige Protokolle (javascript:) sind nicht erlaubt.');
+                return;
+            }
+
+            editor.focus();
+            
+            // Create pill element
+            const pill = document.createElement('span');
+            pill.className = 'link-pill';
+            pill.setAttribute('contenteditable', 'false');
+            pill.setAttribute('data-url', normalizedUrl);
+            pill.textContent = text;
+
+            // Zero-width space node to allow natural typing after the pill
+            const spaceNode = document.createTextNode('\u200B');
+
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+
+            // Verify if selection is inside editor, if not append to end
+            if (!editor.contains(range.commonAncestorContainer)) {
+                editor.appendChild(pill);
+                editor.appendChild(spaceNode);
+                
+                // Move caret after the space node
+                const newRange = document.createRange();
+                newRange.setStartAfter(spaceNode);
+                newRange.collapse(true);
+                selection.removeAllRanges();
+                selection.addRange(newRange);
+                updatePreviews();
+                return;
+            }
+
+            range.deleteContents();
+            
+            // Insert in order: pill, then zero-width space
+            range.insertNode(spaceNode);
+            range.insertNode(pill);
+
+            // Move caret right after the zero-width space
+            const newRange = document.createRange();
+            newRange.setStartAfter(spaceNode);
+            newRange.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(newRange);
+
+            updatePreviews();
+        }
+
+        // Wire insertion button
+        btnInsertLink.addEventListener('click', () => {
+            const text = linkTextIn.value.trim();
+            const url = linkUrlIn.value.trim();
+            if (text && url) {
+                insertLinkPill(text, url);
+                linkTextIn.value = '';
+                linkUrlIn.value = 'app://event/';
+            } else {
+                alert('Bitte geben Sie einen Anzeigetext und eine URL an.');
+            }
+        });
+
+        // Wire presets
+        btnPreset1.addEventListener('click', () => {
+            insertLinkPill('Was mit Mond machen', 'app://event/12');
+        });
+        btnPreset2.addEventListener('click', () => {
+            insertLinkPill('Geburtstag feiern', 'app://event/45');
+        });
+
+        btnClear.addEventListener('click', () => {
+            editor.innerHTML = '';
+            updatePreviews();
+            editor.focus();
+        });
+
+
+        // --- COPY & CUT EVENT HANDLING ---
+        function handleCopy(e) {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            
+            // Create a temporary element to hold a copy of the selected nodes
+            const container = document.createElement('div');
+            container.appendChild(range.cloneContents());
+
+            // 1. Process for Plain Text clipboard (e.g. Notepad)
+            // Replace link-pill elements with [Text](URL) markdown string
+            const pills = container.querySelectorAll('.link-pill');
+            pills.forEach(pill => {
+                const text = pill.textContent || '';
+                const url = pill.getAttribute('data-url') || '';
+                const mdText = document.createTextNode(`[${text}](${url})`);
+                pill.parentNode.replaceChild(mdText, pill);
+            });
+
+            const plainTextMarkdown = container.textContent;
+
+            // 2. Process for HTML clipboard (internal copying/pasting)
+            const htmlContainer = document.createElement('div');
+            htmlContainer.appendChild(range.cloneContents());
+            const htmlText = htmlContainer.innerHTML;
+
+            // Set data to clipboard
+            e.clipboardData.setData('text/plain', plainTextMarkdown);
+            e.clipboardData.setData('text/html', htmlText);
+            e.preventDefault(); // Intercept default action
+        }
+
+        editor.addEventListener('copy', handleCopy);
+
+        editor.addEventListener('cut', (e) => {
+            handleCopy(e);
+            
+            const selection = window.getSelection();
+            if (selection.rangeCount) {
+                selection.getRangeAt(0).deleteContents();
+            }
+            updatePreviews();
+        });
+
+
+        // --- PASTE EVENT HANDLING & XSS CLEANING ---
+        // Basic HTML Sanitizer to prevent XSS
+        function sanitizeAndParseHtml(html) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const body = doc.body;
+
+            // List of forbidden elements
+            const forbiddenTags = [
+                'script', 'iframe', 'object', 'embed', 'style', 'meta', 'link', 
+                'applet', 'frameset', 'frame', 'audio', 'video', 'canvas', 'svg'
+            ];
+            forbiddenTags.forEach(tag => {
+                const els = body.querySelectorAll(tag);
+                els.forEach(el => el.remove());
+            });
+
+            // Strip inline handlers & validate URLs
+            const allElements = body.querySelectorAll('*');
+            allElements.forEach(el => {
+                // Remove inline handlers (onclick, onerror, onload, etc.)
+                const attrs = Array.from(el.attributes);
+                attrs.forEach(attr => {
+                    if (attr.name.toLowerCase().startsWith('on')) {
+                        el.removeAttribute(attr.name);
+                    }
+                    
+                    // Filter out javascript: links
+                    if (['href', 'src', 'data-url'].includes(attr.name.toLowerCase())) {
+                        if (attr.value.trim().toLowerCase().startsWith('javascript:')) {
+                            el.removeAttribute(attr.name);
+                        }
+                    }
+                });
+            });
+
+            // Convert ordinary <a> links to link-pills for consistent rich styling
+            const anchors = body.querySelectorAll('a');
+            anchors.forEach(a => {
+                const text = a.textContent || '';
+                const href = a.getAttribute('href') || '';
+                if (text && href && !href.trim().toLowerCase().startsWith('javascript:')) {
+                    const pill = document.createElement('span');
+                    pill.className = 'link-pill';
+                    pill.setAttribute('contenteditable', 'false');
+                    pill.setAttribute('data-url', href);
+                    pill.textContent = text;
+                    a.parentNode.replaceChild(pill, a);
+                } else {
+                    a.remove();
+                }
+            });
+
+            // Double check existing link-pills
+            const pills = body.querySelectorAll('.link-pill');
+            pills.forEach(pill => {
+                pill.setAttribute('contenteditable', 'false');
+                const url = pill.getAttribute('data-url') || '';
+                if (url.trim().toLowerCase().startsWith('javascript:')) {
+                    pill.removeAttribute('data-url');
+                }
+            });
+
+            return body.innerHTML;
+        }
+
+        // Parse Plaintext: convert markdown links to link-pills
+        function parseMarkdownToHtml(text) {
+            // HTML escape the plain text to prevent XSS injection via plain text!
+            let escaped = text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+
+            // Regex for [Text](URL)
+            const mdRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+
+            escaped = escaped.replace(mdRegex, (match, textVal, urlVal) => {
+                const cleanUrl = urlVal.trim();
+                // Ensure URL doesn't have javascript: protocol
+                if (cleanUrl.toLowerCase().startsWith('javascript:')) {
+                    return match; // Keep it as raw text
+                }
+                return `<span class="link-pill" contenteditable="false" data-url="${cleanUrl}">${textVal}</span>\u200B`;
+            });
+
+            // Convert newlines to <br> to respect paste formatting
+            return escaped.replace(/\n/g, '<br>');
+        }
+
+        function insertHtmlAtCaret(html) {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            selection.deleteFromDocument();
+            const range = selection.getRangeAt(0);
+
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+
+            const fragment = document.createDocumentFragment();
+            let node;
+            let lastNode = null;
+
+            while ((node = tempDiv.firstChild)) {
+                lastNode = fragment.appendChild(node);
+            }
+
+            range.insertNode(fragment);
+
+            if (lastNode) {
+                const newRange = document.createRange();
+                newRange.setStartAfter(lastNode);
+                newRange.collapse(true);
+                selection.removeAllRanges();
+                selection.addRange(newRange);
+            }
+        }
+
+        editor.addEventListener('paste', (e) => {
+            e.preventDefault();
+
+            const htmlData = e.clipboardData.getData('text/html');
+            const plainText = e.clipboardData.getData('text/plain');
+
+            let parsedHtml = '';
+
+            if (htmlData) {
+                // If HTML content exists, sanitize and parse it
+                parsedHtml = sanitizeAndParseHtml(htmlData);
+            } else if (plainText) {
+                // If only plaintext, convert markdown links [text](url) to pills
+                parsedHtml = parseMarkdownToHtml(plainText);
+            }
+
+            if (parsedHtml) {
+                insertHtmlAtCaret(parsedHtml);
+            }
+            updatePreviews();
+        });
+
+
+        // --- ROBUST KEYDOWN SELECTION AND BACKSPACE/DELETE HANDLING ---
+        editor.addEventListener('keydown', (e) => {
+            const selection = window.getSelection();
+            if (!selection.rangeCount || !selection.isCollapsed) return;
+
+            const range = selection.getRangeAt(0);
+            const container = range.startContainer;
+            const offset = range.startOffset;
+
+            // Handle Backspace Key
+            if (e.key === 'Backspace') {
+                // Case A: Cursor is in text node, at offset 0 (beginning of text node)
+                if (container.nodeType === Node.TEXT_NODE && offset === 0) {
+                    const prev = container.previousSibling;
+                    if (prev && prev.classList && prev.classList.contains('link-pill')) {
+                        prev.remove();
+                        e.preventDefault();
+                        updatePreviews();
+                        return;
+                    }
+                }
+                // Case B: Cursor is in the editor wrapper itself, right after a node
+                else if (container.nodeType === Node.ELEMENT_NODE && offset > 0) {
+                    const child = container.childNodes[offset - 1];
+                    if (child && child.classList && child.classList.contains('link-pill')) {
+                        child.remove();
+                        e.preventDefault();
+                        updatePreviews();
+                        return;
+                    }
+                }
+            }
+
+            // Handle Delete Key
+            if (e.key === 'Delete') {
+                // Case A: Cursor is in text node, at the end of it
+                if (container.nodeType === Node.TEXT_NODE && offset === container.length) {
+                    const next = container.nextSibling;
+                    if (next && next.classList && next.classList.contains('link-pill')) {
+                        next.remove();
+                        e.preventDefault();
+                        updatePreviews();
+                        return;
+                    }
+                }
+                // Case B: Cursor is in the editor wrapper itself, right before a node
+                else if (container.nodeType === Node.ELEMENT_NODE && offset < container.childNodes.length) {
+                    const child = container.childNodes[offset];
+                    if (child && child.classList && child.classList.contains('link-pill')) {
+                        child.remove();
+                        e.preventDefault();
+                        updatePreviews();
+                        return;
+                    }
+                }
+            }
+        });
+
+
+        // --- XSS PAYLOAD & MARKDOWN COPY UTILITIES (FOR DEMO TESTING) ---
+        btnCopyXss.addEventListener('click', () => {
+            const malpayload = `<p>Test XSS: <img src="x" onerror="alert('XSS gehandhabt! Script-Ausführung blockiert.')"> und ein bösartiger Script-Tag <script>alert('XSS!')<\/script> und ein JS-Link <a href="javascript:alert('evil')">Böser Link</a>.</p>`;
+            
+            // Clipboard API to write HTML and Plain Text
+            const blobHtml = new Blob([malpayload], { type: 'text/html' });
+            const blobText = new Blob([`Böser Plaintext Link: [evil](javascript:alert(1))`].slice(), { type: 'text/plain' });
+            
+            const item = new ClipboardItem({
+                'text/html': blobHtml,
+                'text/plain': blobText
+            });
+
+            navigator.clipboard.write([item]).then(() => {
+                showToast("Bösartiges HTML in die Zwischenablage kopiert! Füge es links ein.");
+            }).catch(err => {
+                // Fallback if writing multiple blobs fails
+                navigator.clipboard.writeText(malpayload).then(() => {
+                    showToast("Bösartiger HTML-Text kopiert!");
+                });
+            });
+        });
+
+        btnCopyMarkdown.addEventListener('click', () => {
+            const mdPayload = `Hier ist ein externer Link: [Mondflug 2026](app://event/22) und noch einer [Apollo 11](app://event/11).`;
+            navigator.clipboard.writeText(mdPayload).then(() => {
+                showToast("Markdown-Link kopiert! Füge ihn links ein.");
+            });
+        });
+
+    </script>
+</body>
+</html>

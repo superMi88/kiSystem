@@ -351,6 +351,35 @@
             outline: none;
         }
 
+        #user-input[data-placeholder]:empty:before {
+            content: attr(data-placeholder);
+            color: rgba(255, 255, 255, 0.45);
+            cursor: text;
+        }
+
+        #user-input .link-pill {
+            display: inline-flex;
+            align-items: center;
+            background-color: rgba(137, 180, 250, 0.15);
+            color: #89b4fa;
+            border: 1px solid rgba(137, 180, 250, 0.3);
+            border-radius: 4px;
+            padding: 2px 6px;
+            margin: 0 2px;
+            font-weight: 500;
+            user-select: all;
+            cursor: pointer;
+            box-decoration-break: clone;
+            -webkit-box-decoration-break: clone;
+            transition: all 0.2s ease;
+        }
+
+        #user-input .link-pill:hover {
+            background-color: rgba(137, 180, 250, 0.25);
+            border-color: rgba(137, 180, 250, 0.5);
+            box-shadow: 0 0 6px rgba(137, 180, 250, 0.2);
+        }
+
         #plus-btn, #mic-btn, #send-btn {
             background: transparent !important;
             border: none !important;
@@ -1769,7 +1798,7 @@
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255, 255, 255, 0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                         </button>
                         <input type="file" id="file-input" style="display: none;" accept="image/*" multiple>
-                        <textarea id="user-input" placeholder="Nachricht an Gemini..." rows="1"></textarea>
+                        <div id="user-input" contenteditable="true" data-placeholder="Nachricht an Gemini..."></div>
                         <button id="mic-btn" title="Spracheingabe">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255, 255, 255, 0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
                         </button>
@@ -2105,14 +2134,47 @@
         function insertEntityLinkIntoChat(label, type, id) {
             const userInput = document.getElementById('user-input');
             if (userInput) {
-                const linkStr = `[${label}](app://${type}/${id})`;
-                const currentValue = userInput.value;
-                if (currentValue.length > 0 && !currentValue.endsWith(' ')) {
-                    userInput.value = currentValue + ' ' + linkStr + ' ';
-                } else {
-                    userInput.value = currentValue + linkStr + ' ';
-                }
+                const url = `app://${type}/${id}`;
                 userInput.focus();
+
+                const pill = document.createElement('span');
+                pill.className = 'link-pill';
+                pill.setAttribute('contenteditable', 'false');
+                pill.setAttribute('data-url', url);
+                pill.textContent = label;
+
+                const spaceNode = document.createTextNode('\u200B'); // Zero-width space
+
+                const selection = window.getSelection();
+                if (selection && selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    // Ensure focus is inside the userInput container
+                    if (userInput.contains(range.commonAncestorContainer)) {
+                        range.deleteContents();
+                        range.insertNode(spaceNode);
+                        range.insertNode(pill);
+
+                        // Move caret after the space node
+                        const newRange = document.createRange();
+                        newRange.setStartAfter(spaceNode);
+                        newRange.collapse(true);
+                        selection.removeAllRanges();
+                        selection.addRange(newRange);
+                    } else {
+                        // Append to the end
+                        userInput.appendChild(pill);
+                        userInput.appendChild(spaceNode);
+                        const newRange = document.createRange();
+                        newRange.setStartAfter(spaceNode);
+                        newRange.collapse(true);
+                        selection.removeAllRanges();
+                        selection.addRange(newRange);
+                    }
+                } else {
+                    userInput.appendChild(pill);
+                    userInput.appendChild(spaceNode);
+                }
+
                 if (typeof autoResizeInput === 'function') {
                     autoResizeInput();
                 }
@@ -3039,9 +3101,9 @@
                 if (inputRow) {
                     inputRow.classList.add('recording');
                 }
-                userInput.placeholder = "Ich höre zu...";
+                userInput.setAttribute('data-placeholder', "Ich höre zu...");
             } catch (err) {
-                userInput.placeholder = "Fehler: Mikrofon-Zugriff verweigert.";
+                userInput.setAttribute('data-placeholder', "Fehler: Mikrofon-Zugriff verweigert.");
             }
         }
 
@@ -3053,7 +3115,7 @@
                 if (inputRow) {
                     inputRow.classList.remove('recording');
                 }
-                userInput.placeholder = "Nachricht an Gemini...";
+                userInput.setAttribute('data-placeholder', "Nachricht an Gemini...");
             }
         }
 
@@ -3133,7 +3195,7 @@
                 if (isElectron && ipcRenderer) {
                     ipcRenderer.send('widgets-updated');
                 }
-                userInput.placeholder = "Nachricht an Gemini...";
+                userInput.setAttribute('data-placeholder', "Nachricht an Gemini...");
             } catch (e) {
                 clearInterval(pollInterval);
                 thinkingDiv.remove();
@@ -3266,7 +3328,7 @@
         }
 
         async function sendMessage() {
-            const text = userInput.value.trim();
+            const text = getUserInputMarkdown().trim();
             if (!text && attachedFiles.length === 0) return;
 
             if (document.body.classList.contains('mobile-mode')) {
@@ -3275,7 +3337,7 @@
 
             const attachmentsToSend = [...attachedFiles];
             addMessage(text, true, null, attachmentsToSend);
-            userInput.value = '';
+            userInput.innerHTML = '';
             autoResizeInput();
 
             console.log("Sende Nachricht mit Anhängen:", attachmentsToSend.length);
@@ -3840,8 +3902,123 @@
 
         window.completeTask = completeTask;
 
+        function getUserInputMarkdown() {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = userInput.innerHTML;
+
+            const pills = tempDiv.querySelectorAll('.link-pill');
+            pills.forEach(pill => {
+                const text = pill.textContent || '';
+                const url = pill.getAttribute('data-url') || '';
+                const mdText = document.createTextNode(`[${text}](${url})`);
+                pill.parentNode.replaceChild(mdText, pill);
+            });
+
+            const brs = tempDiv.querySelectorAll('br');
+            brs.forEach(br => {
+                br.parentNode.replaceChild(document.createTextNode('\n'), br);
+            });
+
+            return tempDiv.textContent || '';
+        }
+
+        function sanitizeAndParseHtml(html) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const body = doc.body;
+
+            const forbiddenTags = ['script', 'iframe', 'object', 'embed', 'style', 'meta', 'link'];
+            forbiddenTags.forEach(tag => {
+                body.querySelectorAll(tag).forEach(el => el.remove());
+            });
+
+            body.querySelectorAll('*').forEach(el => {
+                const attrs = Array.from(el.attributes);
+                attrs.forEach(attr => {
+                    if (attr.name.toLowerCase().startsWith('on')) {
+                        el.removeAttribute(attr.name);
+                    }
+                    if (['href', 'src', 'data-url'].includes(attr.name.toLowerCase())) {
+                        if (attr.value.trim().toLowerCase().startsWith('javascript:')) {
+                            el.removeAttribute(attr.name);
+                        }
+                    }
+                });
+            });
+
+            body.querySelectorAll('a').forEach(a => {
+                const text = a.textContent || '';
+                const href = a.getAttribute('href') || '';
+                if (text && href && !href.trim().toLowerCase().startsWith('javascript:')) {
+                    const pill = document.createElement('span');
+                    pill.className = 'link-pill';
+                    pill.setAttribute('contenteditable', 'false');
+                    pill.setAttribute('data-url', href);
+                    pill.textContent = text;
+                    a.parentNode.replaceChild(pill, a);
+                } else {
+                    a.remove();
+                }
+            });
+
+            body.querySelectorAll('.link-pill').forEach(pill => {
+                pill.setAttribute('contenteditable', 'false');
+            });
+
+            return body.innerHTML;
+        }
+
+        function parseMarkdownToHtml(text) {
+            let escaped = text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+
+            const mdRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+            escaped = escaped.replace(mdRegex, (match, label, urlVal) => {
+                const cleanUrl = urlVal.trim();
+                if (cleanUrl.toLowerCase().startsWith('javascript:')) {
+                    return match;
+                }
+                return `<span class="link-pill" contenteditable="false" data-url="${cleanUrl}">${label}</span>\u200B`;
+            });
+
+            return escaped.replace(/\n/g, '<br>');
+        }
+
+        function insertHtmlAtCaret(html) {
+            const selection = window.getSelection();
+            if (!selection || !selection.rangeCount) return;
+
+            selection.deleteFromDocument();
+            const range = selection.getRangeAt(0);
+
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+
+            const fragment = document.createDocumentFragment();
+            let node;
+            let lastNode = null;
+
+            while ((node = tempDiv.firstChild)) {
+                lastNode = fragment.appendChild(node);
+            }
+
+            range.insertNode(fragment);
+
+            if (lastNode) {
+                const newRange = document.createRange();
+                newRange.setStartAfter(lastNode);
+                newRange.collapse(true);
+                selection.removeAllRanges();
+                selection.addRange(newRange);
+            }
+        }
+
         function updateInputRowButtons() {
-            const text = userInput.value.trim();
+            const text = getUserInputMarkdown().trim();
             const hasContent = text.length > 0 || (typeof attachedFiles !== 'undefined' && attachedFiles.length > 0);
             if (hasContent) {
                 micBtn.style.display = 'none';
@@ -3854,7 +4031,7 @@
 
         function autoResizeInput() {
             userInput.style.height = 'auto';
-            if (!userInput.value) {
+            if (!userInput.textContent.trim()) {
                 userInput.style.height = '40px';
                 userInput.style.overflowY = 'hidden';
                 updateInputRowButtons();
@@ -3872,13 +4049,139 @@
         }
 
         sendBtn.onclick = sendMessage;
+
         userInput.addEventListener('keydown', (e) => {
+            const selection = window.getSelection();
+            if (selection && selection.rangeCount > 0 && selection.isCollapsed) {
+                const range = selection.getRangeAt(0);
+                const container = range.startContainer;
+                const offset = range.startOffset;
+
+                // Handle Backspace Key
+                if (e.key === 'Backspace') {
+                    if (container.nodeType === Node.TEXT_NODE && offset === 0) {
+                        const prev = container.previousSibling;
+                        if (prev && prev.classList && prev.classList.contains('link-pill')) {
+                            prev.remove();
+                            e.preventDefault();
+                            autoResizeInput();
+                            return;
+                        }
+                    } else if (container.nodeType === Node.ELEMENT_NODE && offset > 0) {
+                        const child = container.childNodes[offset - 1];
+                        if (child && child.classList && child.classList.contains('link-pill')) {
+                            child.remove();
+                            e.preventDefault();
+                            autoResizeInput();
+                            return;
+                        }
+                    }
+                }
+
+                // Handle Delete Key
+                if (e.key === 'Delete') {
+                    if (container.nodeType === Node.TEXT_NODE && offset === container.length) {
+                        const next = container.nextSibling;
+                        if (next && next.classList && next.classList.contains('link-pill')) {
+                            next.remove();
+                            e.preventDefault();
+                            autoResizeInput();
+                            return;
+                        }
+                    } else if (container.nodeType === Node.ELEMENT_NODE && offset < container.childNodes.length) {
+                        const child = container.childNodes[offset];
+                        if (child && child.classList && child.classList.contains('link-pill')) {
+                            child.remove();
+                            e.preventDefault();
+                            autoResizeInput();
+                            return;
+                        }
+                    }
+                }
+            }
+
             if (e.key === 'Enter') {
                 // Let browser insert newline naturally and resize input
                 setTimeout(autoResizeInput, 0);
             }
         });
+
         userInput.addEventListener('input', autoResizeInput);
+
+        userInput.addEventListener('copy', (e) => {
+            const selection = window.getSelection();
+            if (!selection || !selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            const container = document.createElement('div');
+            container.appendChild(range.cloneContents());
+
+            const pills = container.querySelectorAll('.link-pill');
+            pills.forEach(pill => {
+                const text = pill.textContent || '';
+                const url = pill.getAttribute('data-url') || '';
+                const mdText = document.createTextNode(`[${text}](${url})`);
+                pill.parentNode.replaceChild(mdText, pill);
+            });
+
+            const plainTextMarkdown = container.textContent || '';
+
+            const htmlContainer = document.createElement('div');
+            htmlContainer.appendChild(range.cloneContents());
+            const htmlText = htmlContainer.innerHTML;
+
+            e.clipboardData.setData('text/plain', plainTextMarkdown);
+            e.clipboardData.setData('text/html', htmlText);
+            e.preventDefault();
+        });
+
+        userInput.addEventListener('cut', (e) => {
+            const selection = window.getSelection();
+            if (!selection || !selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            const container = document.createElement('div');
+            container.appendChild(range.cloneContents());
+
+            const pills = container.querySelectorAll('.link-pill');
+            pills.forEach(pill => {
+                const text = pill.textContent || '';
+                const url = pill.getAttribute('data-url') || '';
+                const mdText = document.createTextNode(`[${text}](${url})`);
+                pill.parentNode.replaceChild(mdText, pill);
+            });
+            const plainTextMarkdown = container.textContent || '';
+
+            const htmlContainer = document.createElement('div');
+            htmlContainer.appendChild(range.cloneContents());
+            const htmlText = htmlContainer.innerHTML;
+
+            e.clipboardData.setData('text/plain', plainTextMarkdown);
+            e.clipboardData.setData('text/html', htmlText);
+            e.preventDefault();
+
+            selection.getRangeAt(0).deleteContents();
+            autoResizeInput();
+        });
+
+        userInput.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const htmlData = e.clipboardData.getData('text/html');
+            const plainText = e.clipboardData.getData('text/plain');
+
+            let parsedHtml = '';
+            if (htmlData) {
+                parsedHtml = sanitizeAndParseHtml(htmlData);
+            } else if (plainText) {
+                parsedHtml = parseMarkdownToHtml(plainText);
+            }
+
+            if (parsedHtml) {
+                insertHtmlAtCaret(parsedHtml);
+                autoResizeInput();
+            }
+        });
+
         updateInputRowButtons();
 
         // Plus button and file input listeners
