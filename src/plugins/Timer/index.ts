@@ -63,10 +63,32 @@ export const timerPlugin: Plugin = {
       },
       handler: async (args, { prisma }) => {
         const id = Number(args.id);
-        await prisma.timer.delete({
-          where: { id }
+        await prisma.timer.update({
+          where: { id },
+          data: { isDeleted: true }
         });
         return { status: "success", message: "Timer gelöscht." };
+      }
+    },
+    {
+      definition: {
+        name: "wiederherstellen_timer",
+        description: "Stellt einen gelöschten oder abgebrochenen Timer wieder her.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            id: { type: SchemaType.INTEGER, description: "Die ID des wiederherzustellenden Timers" }
+          },
+          required: ["id"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const id = Number(args.id);
+        await prisma.timer.update({
+          where: { id },
+          data: { isDeleted: false }
+        });
+        return { status: "success", message: "Timer erfolgreich wiederhergestellt." };
       }
     },
     {
@@ -92,9 +114,9 @@ export const timerPlugin: Plugin = {
     }
   ],
   getTopWidgets: async ({ prisma }) => {
-    // Hole alle aktiven (nicht quittierten) Timer
+    // Hole alle aktiven (nicht quittierten und nicht gelöschten) Timer
     const timers = await prisma.timer.findMany({
-      where: { completed: false },
+      where: { completed: false, isDeleted: false },
       orderBy: { expiresAt: "asc" }
     });
 

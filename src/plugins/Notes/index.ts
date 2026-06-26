@@ -11,11 +11,15 @@ export const notesPlugin: Plugin = {
         description: "Ruft alle vorhandenen persönlichen Notizen ab.",
         parameters: {
           type: SchemaType.OBJECT,
-          properties: {}
+          properties: {
+            zeigeGeloeschte: { type: SchemaType.BOOLEAN, description: "Wenn true, werden nur gelöschte Notizen zurückgegeben (für Wiederherstellung). Standard ist false." }
+          }
         } as any
       },
-      handler: async (_, { prisma }) => {
+      handler: async (args, { prisma }) => {
+        const zeigeGeloeschte = !!args.zeigeGeloeschte;
         const notes = await prisma.note.findMany({
+          where: { isDeleted: zeigeGeloeschte },
           orderBy: { createdAt: "desc" }
         });
         return {
@@ -112,18 +116,44 @@ export const notesPlugin: Plugin = {
       },
       handler: async (args, { prisma }) => {
         const id = Number(args.id);
-        await prisma.note.delete({
-          where: { id }
+        await prisma.note.update({
+          where: { id },
+          data: { isDeleted: true }
         });
         return {
           status: "success",
           message: `Notiz mit ID ${id} wurde gelöscht.`
         };
       }
+    },
+    {
+      definition: {
+        name: "wiederherstellen_notiz",
+        description: "Stellt eine gelöschte persönliche Notiz anhand ihrer ID wieder her.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            id: { type: SchemaType.INTEGER, description: "Die ID der wiederherzustellenden Notiz" }
+          },
+          required: ["id"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const id = Number(args.id);
+        await prisma.note.update({
+          where: { id },
+          data: { isDeleted: false }
+        });
+        return {
+          status: "success",
+          message: `Notiz mit ID ${id} wurde erfolgreich wiederhergestellt.`
+        };
+      }
     }
   ],
   getTopWidgets: async ({ prisma }) => {
     const notes = await prisma.note.findMany({
+      where: { isDeleted: false },
       orderBy: { createdAt: "desc" }
     });
 

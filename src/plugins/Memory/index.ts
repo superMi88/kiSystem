@@ -96,13 +96,21 @@ export const memoryPlugin: Plugin = {
         let memories: any[];
         if (personId) {
           memories = await prisma.$queryRawUnsafe(
-            `SELECT content, metadata, "createdAt" FROM "SemanticMemory" WHERE "personId" = $1 ORDER BY embedding <=> $2::vector LIMIT 5`,
+            `SELECT sm.content, sm.metadata, sm."createdAt" 
+             FROM "SemanticMemory" sm
+             JOIN "Person" p ON sm."personId" = p.id
+             WHERE sm."personId" = $1 AND p."isDeleted" = false
+             ORDER BY sm.embedding <=> $2::vector LIMIT 5`,
             personId,
             `[${embedding.join(",")}]`
           );
         } else {
           memories = await prisma.$queryRawUnsafe(
-            `SELECT content, metadata, "createdAt" FROM "SemanticMemory" ORDER BY embedding <=> $1::vector LIMIT 5`,
+            `SELECT sm.content, sm.metadata, sm."createdAt" 
+             FROM "SemanticMemory" sm
+             LEFT JOIN "Person" p ON sm."personId" = p.id
+             WHERE sm."personId" IS NULL OR p."isDeleted" = false
+             ORDER BY sm.embedding <=> $1::vector LIMIT 5`,
             `[${embedding.join(",")}]`
           );
         }
@@ -126,31 +134,47 @@ export const memoryPlugin: Plugin = {
           type: SchemaType.OBJECT,
           properties: {
             personId: { type: SchemaType.INTEGER, description: "Die ID der Person (bevorzugt verwenden)" },
-            name: { type: SchemaType.STRING, description: "Alternativ: Name oder Spitzname der Person" }
+            name: { type: SchemaType.STRING, description: "Alternativ: Name oder Spitzname der Person" },
+            zeigeGeloeschte: { type: SchemaType.BOOLEAN, description: "Wenn true, werden auch gelöschte Fakten und Personen zurückgegeben (für Wiederherstellung). Standard ist false." }
           },
           required: []
         } as any
       },
       handler: async (args, { prisma }) => {
         const { personId, name } = args;
+        const zeigeGeloeschte = !!args.zeigeGeloeschte;
         
         let person: any = null;
         if (personId) {
           person = await prisma.person.findUnique({
             where: { id: Number(personId) },
-            include: { aliases: true, facts: true }
+            include: { 
+              aliases: true, 
+              facts: {
+                where: { isDeleted: zeigeGeloeschte }
+              } 
+            }
           });
         } else if (name) {
           const alias = await prisma.personAlias.findUnique({
             where: { name },
-            include: { person: { include: { aliases: true, facts: true } } }
+            include: { 
+              person: { 
+                include: { 
+                  aliases: true, 
+                  facts: {
+                    where: { isDeleted: zeigeGeloeschte }
+                  } 
+                } 
+              } 
+            }
           });
           if (alias) {
             person = alias.person;
           }
         }
         
-        if (!person) {
+        if (!person || (person.isDeleted && !zeigeGeloeschte)) {
           return { status: "not_found", message: `Person wurde im System nicht gefunden.` };
         }
         
@@ -292,10 +316,74 @@ export const memoryPlugin: Plugin = {
         if (!fact) {
           return { status: "error", message: `Fakt mit ID ${faktId} wurde nicht gefunden.` };
         }
-        await prisma.fact.delete({
-          where: { id: Number(faktId) }
+        await prisma.fact.update({
+          where: { id: Number(faktId) },
+          data: { isDeleted: true }
         });
         return { status: "success", message: `Fakt mit ID ${faktId} wurde gelöscht.` };
+      }
+    },
+    {
+      definition: {
+        name: "wiederherstellen_person_fakt",
+        description: "Stellt einen gelöschten Fakt einer Person anhand seiner ID wieder her.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            faktId: { type: SchemaType.INTEGER, description: "Die ID des Fakts" }
+          },
+          required: ["faktId"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const { faktId } = args;
+        await prisma.fact.update({
+          where: { id: Number(faktId) },
+          data: { isDeleted: false }
+        });
+        return { status: "success", message: `Fakt mit ID ${faktId} wurde wiederhergestellt.` };
+      }
+    },
+    {
+      definition: {
+        name: "loesche_person",
+        description: "Löscht (archiviert) das Profil einer Person.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            personId: { type: SchemaType.INTEGER, description: "Die ID der zu löschenden Person" }
+          },
+          required: ["personId"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const personId = Number(args.personId);
+        await prisma.person.update({
+          where: { id: personId },
+          data: { isDeleted: true }
+        });
+        return { status: "success", message: `Personenprofil mit ID ${personId} wurde gelöscht (als gelöscht markiert).` };
+      }
+    },
+    {
+      definition: {
+        name: "wiederherstellen_person",
+        description: "Stellt ein gelöschtes Personenprofil wieder her.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            personId: { type: SchemaType.INTEGER, description: "Die ID der wiederherzustellenden Person" }
+          },
+          required: ["personId"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const personId = Number(args.personId);
+        await prisma.person.update({
+          where: { id: personId },
+          data: { isDeleted: false }
+        });
+        return { status: "success", message: `Personenprofil mit ID ${personId} wurde erfolgreich wiederhergestellt.` };
       }
     },
     {
@@ -354,6 +442,7 @@ export const memoryPlugin: Plugin = {
   getTopWidgets: async ({ prisma }) => {
     try {
       const people = await prisma.person.findMany({
+        where: { isDeleted: false },
         select: {
           id: true,
           biography: true,
