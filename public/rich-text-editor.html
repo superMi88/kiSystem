@@ -160,6 +160,7 @@
             font-weight: 500;
             user-select: none;
             -webkit-user-select: none;
+            pointer-events: none;
             cursor: pointer;
             box-decoration-break: clone;
             -webkit-box-decoration-break: clone;
@@ -805,6 +806,77 @@
             navigator.clipboard.writeText(mdPayload).then(() => {
                 showToast("Markdown-Link kopiert! Füge ihn links ein.");
             });
+        });
+
+        document.addEventListener('selectionchange', () => {
+            if (document.activeElement !== editor) return;
+            const selection = window.getSelection();
+            if (!selection || !selection.rangeCount || !selection.isCollapsed) return;
+
+            const range = selection.getRangeAt(0);
+            const container = range.startContainer;
+            const offset = range.startOffset;
+
+            let targetPill = null;
+            let pushDirection = 'after';
+
+            if (container.nodeType === Node.TEXT_NODE) {
+                const parent = container.parentNode;
+                if (parent && parent.classList && parent.classList.contains('link-pill')) {
+                    targetPill = parent;
+                    pushDirection = 'after';
+                }
+            } else if (container.nodeType === Node.ELEMENT_NODE) {
+                if (container.classList.contains('link-pill')) {
+                    targetPill = container;
+                    pushDirection = 'after';
+                } else {
+                    if (offset < container.childNodes.length) {
+                        const child = container.childNodes[offset];
+                        if (child && child.nodeType === Node.ELEMENT_NODE && child.classList.contains('link-pill')) {
+                            targetPill = child;
+                            pushDirection = 'before';
+                        }
+                    }
+                    if (!targetPill && offset > 0) {
+                        const child = container.childNodes[offset - 1];
+                        if (child && child.nodeType === Node.ELEMENT_NODE && child.classList.contains('link-pill')) {
+                            targetPill = child;
+                            pushDirection = 'after';
+                        }
+                    }
+                }
+            }
+
+            if (targetPill) {
+                let textNode = null;
+                if (pushDirection === 'after') {
+                    let next = targetPill.nextSibling;
+                    if (!next || next.nodeType !== Node.TEXT_NODE) {
+                        next = document.createTextNode('\u200B');
+                        targetPill.parentNode.insertBefore(next, targetPill.nextSibling);
+                    }
+                    textNode = next;
+                    const newRange = document.createRange();
+                    newRange.setStart(textNode, 0);
+                    newRange.collapse(true);
+                    selection.removeAllRanges();
+                    selection.addRange(newRange);
+                } else {
+                    let prev = targetPill.previousSibling;
+                    if (!prev || prev.nodeType !== Node.TEXT_NODE) {
+                        prev = document.createTextNode('\u200B');
+                        targetPill.parentNode.insertBefore(prev, targetPill);
+                    }
+                    textNode = prev;
+                    const newRange = document.createRange();
+                    newRange.setStart(textNode, textNode.length);
+                    newRange.collapse(true);
+                    selection.removeAllRanges();
+                    selection.addRange(newRange);
+                }
+                editor.focus();
+            }
         });
 
     </script>

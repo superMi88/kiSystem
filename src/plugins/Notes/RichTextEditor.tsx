@@ -358,11 +358,88 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     handleInput();
   };
 
-  // Expose insertion method on editor ref if requested
+  // Expose insertion method on editor ref if requested and register selectionchange tracking
   useEffect(() => {
     if (editorRef.current) {
       (editorRef.current as any).insertLink = insertLink;
     }
+
+    const handleSelectionChange = () => {
+      if (!editorRef.current || document.activeElement !== editorRef.current) return;
+      const selection = window.getSelection();
+      if (!selection || !selection.rangeCount || !selection.isCollapsed) return;
+
+      const range = selection.getRangeAt(0);
+      const container = range.startContainer;
+      const offset = range.startOffset;
+
+      let targetPill: HTMLElement | null = null;
+      let pushDirection: 'before' | 'after' = 'after';
+
+      if (container.nodeType === Node.TEXT_NODE) {
+        const parent = container.parentNode as HTMLElement | null;
+        if (parent && parent.classList && parent.classList.contains('link-pill')) {
+          targetPill = parent;
+          pushDirection = 'after';
+        }
+      } else if (container.nodeType === Node.ELEMENT_NODE) {
+        const elem = container as HTMLElement;
+        if (elem.classList.contains('link-pill')) {
+          targetPill = elem;
+          pushDirection = 'after';
+        } else {
+          if (offset < container.childNodes.length) {
+            const child = container.childNodes[offset] as HTMLElement | null;
+            if (child && child.nodeType === Node.ELEMENT_NODE && child.classList.contains('link-pill')) {
+              targetPill = child;
+              pushDirection = 'before';
+            }
+          }
+          if (!targetPill && offset > 0) {
+            const child = container.childNodes[offset - 1] as HTMLElement | null;
+            if (child && child.nodeType === Node.ELEMENT_NODE && child.classList.contains('link-pill')) {
+              targetPill = child;
+              pushDirection = 'after';
+            }
+          }
+        }
+      }
+
+      if (targetPill) {
+        let textNode: Text | null = null;
+        if (pushDirection === 'after') {
+          let next = targetPill.nextSibling as Text | null;
+          if (!next || next.nodeType !== Node.TEXT_NODE) {
+            next = document.createTextNode('\u200B');
+            targetPill.parentNode?.insertBefore(next, targetPill.nextSibling);
+          }
+          textNode = next;
+          const newRange = document.createRange();
+          newRange.setStart(textNode, 0);
+          newRange.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+        } else {
+          let prev = targetPill.previousSibling as Text | null;
+          if (!prev || prev.nodeType !== Node.TEXT_NODE) {
+            prev = document.createTextNode('\u200B');
+            targetPill.parentNode?.insertBefore(prev, targetPill);
+          }
+          textNode = prev;
+          const newRange = document.createRange();
+          newRange.setStart(textNode, textNode.length);
+          newRange.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+        }
+        editorRef.current?.focus();
+      }
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange);
+    };
   }, []);
 
   return (
@@ -403,7 +480,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           font-weight: 500;
           user-select: none;
           -webkit-user-select: none;
-          cursor: pointer;
+          pointer-events: none;
           box-decoration-break: clone;
           -webkit-box-decoration-break: clone;
           transition: all 0.2s ease;

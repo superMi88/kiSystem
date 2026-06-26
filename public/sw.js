@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gemini-light-v3';
+const CACHE_NAME = 'gemini-light-v4';
 const ASSETS = [
   '/',
   '/#chat',
@@ -15,7 +15,18 @@ self.addEventListener('install', (e) => {
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(self.clients.claim());
+  e.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            console.log("Deleting old cache:", key);
+            return caches.delete(key);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener('fetch', (e) => {
