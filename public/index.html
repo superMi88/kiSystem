@@ -2144,7 +2144,8 @@
                 pill.setAttribute('data-url', url);
                 pill.textContent = label;
 
-                const spaceNode = document.createTextNode('\u200B'); // Zero-width space
+                const spaceNodeBefore = document.createTextNode('\u200B');
+                const spaceNodeAfter = document.createTextNode('\u200B');
 
                 const selection = window.getSelection();
                 if (selection && selection.rangeCount > 0) {
@@ -2152,28 +2153,32 @@
                     // Ensure focus is inside the userInput container
                     if (userInput.contains(range.commonAncestorContainer)) {
                         range.deleteContents();
-                        range.insertNode(spaceNode);
+                        range.insertNode(spaceNodeAfter);
                         range.insertNode(pill);
+                        range.insertNode(spaceNodeBefore);
 
                         // Move caret after the space node
                         const newRange = document.createRange();
-                        newRange.setStartAfter(spaceNode);
+                        newRange.setStartAfter(spaceNodeAfter);
                         newRange.collapse(true);
                         selection.removeAllRanges();
                         selection.addRange(newRange);
                     } else {
                         // Append to the end
+                        userInput.appendChild(spaceNodeBefore);
                         userInput.appendChild(pill);
-                        userInput.appendChild(spaceNode);
+                        userInput.appendChild(spaceNodeAfter);
+                        
                         const newRange = document.createRange();
-                        newRange.setStartAfter(spaceNode);
+                        newRange.setStartAfter(spaceNodeAfter);
                         newRange.collapse(true);
                         selection.removeAllRanges();
                         selection.addRange(newRange);
                     }
                 } else {
+                    userInput.appendChild(spaceNodeBefore);
                     userInput.appendChild(pill);
-                    userInput.appendChild(spaceNode);
+                    userInput.appendChild(spaceNodeAfter);
                 }
 
                 if (typeof autoResizeInput === 'function') {
@@ -3956,6 +3961,11 @@
                     pill.setAttribute('contenteditable', 'false');
                     pill.setAttribute('data-url', href);
                     pill.textContent = text;
+                    
+                    const before = document.createTextNode('\u200B');
+                    const after = document.createTextNode('\u200B');
+                    a.parentNode.insertBefore(before, a);
+                    a.parentNode.insertBefore(after, a.nextSibling);
                     a.parentNode.replaceChild(pill, a);
                 } else {
                     a.remove();
@@ -3983,7 +3993,7 @@
                 if (cleanUrl.toLowerCase().startsWith('javascript:')) {
                     return match;
                 }
-                return `<span class="link-pill" contenteditable="false" data-url="${cleanUrl}">${label}</span>\u200B`;
+                return `\u200B<span class="link-pill" contenteditable="false" data-url="${cleanUrl}">${label}</span>\u200B`;
             });
 
             return escaped.replace(/\n/g, '<br>');
@@ -4182,6 +4192,32 @@
                 autoResizeInput();
             }
         });
+
+        userInput.addEventListener('touchstart', handlePillTouch, { passive: false });
+        userInput.addEventListener('mousedown', handlePillTouch);
+
+        function handlePillTouch(e) {
+            const pill = e.target.closest('.link-pill');
+            if (pill) {
+                e.preventDefault();
+                userInput.focus();
+                
+                let nextNode = pill.nextSibling;
+                if (!nextNode || nextNode.nodeType !== Node.TEXT_NODE) {
+                    nextNode = document.createTextNode('\u200B');
+                    pill.parentNode.insertBefore(nextNode, pill.nextSibling);
+                }
+                
+                const range = document.createRange();
+                const selection = window.getSelection();
+                if (selection) {
+                    range.setStart(nextNode, 0);
+                    range.collapse(true);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                }
+            }
+        }
 
         updateInputRowButtons();
 
