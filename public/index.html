@@ -268,9 +268,60 @@
             background: rgba(0, 0, 0, 0.2);
             border-top: 1px solid rgba(255, 255, 255, 0.05);
             display: flex;
-            gap: 12px;
+            flex-direction: column;
+            gap: 8px;
             border-bottom-left-radius: 12px;
             border-bottom-right-radius: 12px;
+        }
+
+        .linked-pills-bar {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            overflow-x: auto;
+            white-space: nowrap;
+            padding: 2px 2px 6px 2px;
+            width: 100%;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .linked-pills-bar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .linked-pills-bar .link-pill {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-weight: 500;
+            font-size: 0.8rem;
+            gap: 6px;
+            transition: all 0.2s ease;
+            user-select: none;
+            -webkit-user-select: none;
+            flex-shrink: 0;
+        }
+        .linked-pills-bar .link-pill:hover {
+            filter: brightness(1.2);
+            box-shadow: 0 0 6px rgba(255, 255, 255, 0.1);
+        }
+        .linked-pills-bar .link-pill .pill-close {
+            cursor: pointer;
+            opacity: 0.6;
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-left: 2px;
+            transition: opacity 0.2s, color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 14px;
+            height: 14px;
+        }
+        .linked-pills-bar .link-pill .pill-close:hover {
+            opacity: 1;
+            color: #f38ba8;
         }
 
         .input-row {
@@ -1764,6 +1815,8 @@
                         </button>
                     </div>
 
+                    <div id="linked-pills-bar" class="linked-pills-bar"></div>
+
                     <div class="input-row">
                         <button id="plus-btn" title="Bild hochladen">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255, 255, 255, 0.7)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -2102,23 +2155,72 @@
         }
         window.handleEntityClick = handleEntityClick;
 
+        function addLinkedPill(label, type, id) {
+            const container = document.getElementById('linked-pills-bar');
+            if (!container) return;
+
+            // Prevent duplicates
+            const existing = container.querySelector(`.link-pill[data-type="${type}"][data-id="${id}"]`);
+            if (existing) return;
+
+            const url = `app://${type}/${id}`;
+            const pill = document.createElement('span');
+            pill.className = 'link-pill';
+            pill.setAttribute('data-type', type);
+            pill.setAttribute('data-id', id);
+            pill.setAttribute('data-url', url);
+            pill.setAttribute('data-label', label);
+
+            const config = entityConfigs[type] || { icon: '🔗', color: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' };
+            pill.style.background = config.color;
+            pill.style.border = `1px solid ${config.borderColor}`;
+            pill.style.color = config.borderColor;
+
+            const iconSpan = document.createElement('span');
+            iconSpan.textContent = config.icon + ' ';
+            pill.appendChild(iconSpan);
+
+            const labelSpan = document.createElement('span');
+            labelSpan.className = 'pill-label';
+            labelSpan.textContent = label;
+            labelSpan.style.cursor = 'pointer';
+            labelSpan.onclick = (e) => {
+                handleEntityClick(e, type, id);
+            };
+            pill.appendChild(labelSpan);
+
+            const closeSpan = document.createElement('span');
+            closeSpan.className = 'pill-close';
+            closeSpan.innerHTML = ' &times;';
+            closeSpan.onclick = (e) => {
+                e.stopPropagation();
+                pill.remove();
+                updateLinkedPillsBarVisibility();
+            };
+            pill.appendChild(closeSpan);
+
+            container.appendChild(pill);
+            updateLinkedPillsBarVisibility();
+            
+            // Auto scroll to make new pill visible
+            container.scrollLeft = container.scrollWidth;
+        }
+
+        function updateLinkedPillsBarVisibility() {
+            const container = document.getElementById('linked-pills-bar');
+            if (!container) return;
+            const pills = container.querySelectorAll('.link-pill');
+            if (pills.length > 0) {
+                container.style.display = 'flex';
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
         function insertEntityLinkIntoChat(label, type, id) {
-            const userInput = document.getElementById('user-input');
-            if (userInput) {
-                const linkStr = `[${label}](app://${type}/${id})`;
-                const currentValue = userInput.value;
-                if (currentValue.length > 0 && !currentValue.endsWith(' ')) {
-                    userInput.value = currentValue + ' ' + linkStr + ' ';
-                } else {
-                    userInput.value = currentValue + linkStr + ' ';
-                }
-                userInput.focus();
-                if (typeof autoResizeInput === 'function') {
-                    autoResizeInput();
-                }
-                if (document.body.classList.contains('mobile-mode')) {
-                    switchMobileView('chat');
-                }
+            addLinkedPill(label, type, id);
+            if (document.body.classList.contains('mobile-mode')) {
+                switchMobileView('chat');
             }
         }
         window.insertEntityLinkIntoChat = insertEntityLinkIntoChat;
@@ -3267,16 +3369,47 @@
 
         async function sendMessage() {
             const text = userInput.value.trim();
-            if (!text && attachedFiles.length === 0) return;
+            
+            // Collect linked items from the pills bar
+            const pillsBar = document.getElementById('linked-pills-bar');
+            const links = [];
+            if (pillsBar) {
+                const pills = pillsBar.querySelectorAll('.link-pill');
+                pills.forEach(pill => {
+                    const label = pill.getAttribute('data-label');
+                    const url = pill.getAttribute('data-url');
+                    links.push(`[${label}](${url})`);
+                });
+            }
+
+            if (!text && attachedFiles.length === 0 && links.length === 0) return;
 
             if (document.body.classList.contains('mobile-mode')) {
                 switchMobileView('chat');
             }
 
+            // Construct userDisplayMessage to show in the chat bubble (including links so they render as badges)
+            let userDisplayMessage = text;
+            if (links.length > 0) {
+                userDisplayMessage += (userDisplayMessage ? '\n\n' : '') + 'Verlinkte Referenzen:\n' + links.join('\n');
+            }
+
             const attachmentsToSend = [...attachedFiles];
-            addMessage(text, true, null, attachmentsToSend);
+            addMessage(userDisplayMessage, true, null, attachmentsToSend);
             userInput.value = '';
             autoResizeInput();
+
+            // Construct exact text to send to the backend
+            let textToSend = text;
+            if (links.length > 0) {
+                textToSend += (textToSend ? '\n\n' : '') + 'Verlinkte Referenzen:\n' + links.join('\n');
+            }
+
+            // Clear the linked pills bar
+            if (pillsBar) {
+                pillsBar.innerHTML = '';
+                updateLinkedPillsBarVisibility();
+            }
 
             console.log("Sende Nachricht mit Anhängen:", attachmentsToSend.length);
             attachedFiles = [];
@@ -3338,7 +3471,7 @@
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ 
-                        message: text,
+                        message: textToSend,
                         attachments: attachmentsToSend,
                         conversationId: currentConversationId 
                     })

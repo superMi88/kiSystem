@@ -331,10 +331,41 @@ WICHTIGE VERHALTENSREGELN:
       history: chatHistory
     });
 
+    // Resolve any app:// link entities in the message and inject their contents as context for the AI
+    let resolvedContext = "";
+    if (message) {
+      const entityRegex = /\[([^\]]+)\]\((app:\/\/([^/]+)\/(\d+))\)/g;
+      let match;
+      const resolvedEntities = new Set<string>();
+
+      while ((match = entityRegex.exec(message)) !== null) {
+        const fullUrl = match[2];
+        const type = match[3];
+        const id = parseInt(match[4], 10);
+        const entityKey = `${type}-${id}`;
+
+        if (!resolvedEntities.has(entityKey)) {
+          resolvedEntities.add(entityKey);
+          try {
+            const entity = await pluginManager.resolveEntity(type, id);
+            if (entity) {
+              resolvedContext += `\n--- Verlinktes Element: [${match[1]}] (${fullUrl}) ---\n${JSON.stringify(entity, null, 2)}\n`;
+            }
+          } catch (err) {
+            console.error(`Fehler beim Auflösen der Entity ${type}:${id}`, err);
+          }
+        }
+      }
+    }
+
     // Baue die Nachricht für Gemini zusammen
     const promptParts: any[] = [];
     if (message) {
-      promptParts.push(message);
+      let promptText = message;
+      if (resolvedContext) {
+        promptText += `\n\n[Kontext der verlinkten Elemente]:\n${resolvedContext}`;
+      }
+      promptParts.push(promptText);
     } else if (attachments && attachments.length > 0) {
       promptParts.push("Analysiere diesen Anhang."); // Default prompt if only image is sent
     }
