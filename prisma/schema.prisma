@@ -44,6 +44,7 @@ model Person {
   aliases   PersonAlias[]
   facts     Fact[]
   memories  SemanticMemory[]
+  isDeleted Boolean          @default(false)
 }
 
 model PersonAlias {
@@ -61,6 +62,7 @@ model Fact {
   personId  Int
   person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
 }
 
 model SemanticMemory {
@@ -79,6 +81,7 @@ model Timer {
   expiresAt DateTime
   createdAt DateTime @default(now())
   completed Boolean  @default(false)
+  isDeleted Boolean  @default(false)
 }
 
 model Note {
@@ -87,6 +90,7 @@ model Note {
   content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  isDeleted Boolean  @default(false)
 }
 
 model Event {
@@ -125,6 +129,7 @@ model RecurrencePattern {
   events          Event[]   // Overridden instances linked to this pattern
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+  isDeleted       Boolean   @default(false)
 }
 
 
@@ -138,6 +143,7 @@ model Task {
   listTitle   String   @default("Standard")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  isDeleted   Boolean  @default(false)
 }
 
 

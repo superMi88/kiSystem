@@ -89,6 +89,7 @@ export const calendarPlugin: Plugin = {
         // 2. Fetch all recurrence patterns that could occur on this day
         const dbPatterns = await prisma.recurrencePattern.findMany({
           where: {
+            isDeleted: false,
             originalStart: { lte: endOfDay },
             OR: [
               { recurrenceEnd: null },
@@ -236,6 +237,7 @@ export const calendarPlugin: Plugin = {
 
           const dbPatterns = await prisma.recurrencePattern.findMany({
             where: {
+              isDeleted: false,
               originalStart: { lte: endOfDay },
               OR: [
                 { recurrenceEnd: null },
@@ -374,15 +376,24 @@ export const calendarPlugin: Plugin = {
                 });
               }
             } else if (id) {
-              // Deleting a one-off event is just normal deletion
-              await prisma.event.delete({ where: { id } });
+              // Soft delete one-off event
+              await prisma.event.update({
+                where: { id },
+                data: { isDeleted: true }
+              });
             }
           } else {
             // Delete entire series or the one-off event
             if (recurrenceId) {
-              await prisma.recurrencePattern.delete({ where: { id: recurrenceId } });
+              await prisma.recurrencePattern.update({
+                where: { id: recurrenceId },
+                data: { isDeleted: true }
+              });
             } else if (id) {
-              await prisma.event.delete({ where: { id } });
+              await prisma.event.update({
+                where: { id },
+                data: { isDeleted: true }
+              });
             }
           }
 
@@ -401,6 +412,7 @@ export const calendarPlugin: Plugin = {
 
           const dbPatterns = await prisma.recurrencePattern.findMany({
             where: {
+              isDeleted: false,
               originalStart: { lte: endOfDay },
               OR: [
                 { recurrenceEnd: null },
@@ -474,6 +486,74 @@ export const calendarPlugin: Plugin = {
           };
         } catch (e: any) {
           return { status: "error", message: `Fehler beim Löschen: ${e.message}` };
+        }
+      }
+    },
+    {
+      definition: {
+        name: "wiederherstellen_termin",
+        description: "Stellt einen gelöschten Termin, eine gelöschte Wiederholungsserie oder ein gelöschtes Vorkommen wieder her.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            eventId: { type: SchemaType.STRING, description: "Die ID des Termins (z. B. 'rec-ID-Timestamp' oder eine einfache numerische ID)" }
+          },
+          required: ["eventId"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        try {
+          let id: number | null = null;
+          let recurrenceId: number | null = null;
+          let originalOccurrenceDate: Date | null = null;
+
+          if (args.eventId.startsWith('rec-')) {
+            const parts = args.eventId.split('-');
+            recurrenceId = Number(parts[1]);
+            originalOccurrenceDate = new Date(Number(parts[2]));
+          } else {
+            id = Number(args.eventId);
+            const ev = await prisma.event.findUnique({ where: { id } });
+            if (ev && ev.recurrenceId) {
+              recurrenceId = ev.recurrenceId;
+              originalOccurrenceDate = ev.originalOccurrenceDate;
+            }
+          }
+
+          if (recurrenceId && originalOccurrenceDate) {
+            const existingOverride = await prisma.event.findFirst({
+              where: { recurrenceId, originalOccurrenceDate }
+            });
+
+            if (existingOverride) {
+              const pattern = await prisma.recurrencePattern.findUnique({ where: { id: recurrenceId } });
+              if (existingOverride.title === pattern?.title && existingOverride.isDeleted) {
+                // If it was created purely to mark it deleted, delete the override record to restore original behavior
+                await prisma.event.delete({ where: { id: existingOverride.id } });
+              } else {
+                await prisma.event.update({
+                  where: { id: existingOverride.id },
+                  data: { isDeleted: false }
+                });
+              }
+            }
+          } else if (recurrenceId) {
+            // Restore recurrence pattern
+            await prisma.recurrencePattern.update({
+              where: { id: recurrenceId },
+              data: { isDeleted: false }
+            });
+          } else if (id) {
+            // Restore one-off event
+            await prisma.event.update({
+              where: { id },
+              data: { isDeleted: false }
+            });
+          }
+
+          return { status: "success", message: "Termin erfolgreich wiederhergestellt." };
+        } catch (e: any) {
+          return { status: "error", message: `Fehler beim Wiederherstellen: ${e.message}` };
         }
       }
     },
@@ -653,6 +733,7 @@ export const calendarPlugin: Plugin = {
 
           const dbPatterns = await prisma.recurrencePattern.findMany({
             where: {
+              isDeleted: false,
               originalStart: { lte: endOfDay },
               OR: [
                 { recurrenceEnd: null },
@@ -751,6 +832,7 @@ export const calendarPlugin: Plugin = {
 
       const dbPatterns = await prisma.recurrencePattern.findMany({
         where: {
+          isDeleted: false,
           originalStart: { lte: inSevenDays },
           OR: [
             { recurrenceEnd: null },

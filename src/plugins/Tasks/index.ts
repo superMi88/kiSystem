@@ -11,12 +11,15 @@ export const tasksPlugin: Plugin = {
         description: "Ruft alle unvollständigen Aufgaben aus der lokalen Datenbank ab.",
         parameters: {
           type: SchemaType.OBJECT,
-          properties: {}
+          properties: {
+            zeigeGeloeschte: { type: SchemaType.BOOLEAN, description: "Wenn true, werden nur gelöschte Aufgaben zurückgegeben. Standard ist false." }
+          }
         } as any
       },
-      handler: async (_, { prisma }) => {
+      handler: async (args, { prisma }) => {
+        const zeigeGeloeschte = !!args.zeigeGeloeschte;
         const tasks = await prisma.task.findMany({
-          where: { completed: false },
+          where: { completed: false, isDeleted: zeigeGeloeschte },
           orderBy: { createdAt: "desc" }
         });
         return {
@@ -100,13 +103,67 @@ export const tasksPlugin: Plugin = {
           return { status: "error", message: `Fehler: ${e.message}` };
         }
       }
+    },
+    {
+      definition: {
+        name: "loesche_aufgabe",
+        description: "Löscht eine Aufgabe aus der lokalen Datenbank (markiert als gelöscht).",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            taskId: { type: SchemaType.STRING, description: "Die ID der zu löschenden Aufgabe" }
+          },
+          required: ["taskId"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        try {
+          await prisma.task.update({
+            where: { id: Number(args.taskId) },
+            data: { isDeleted: true }
+          });
+          return {
+            status: "success",
+            message: "Aufgabe erfolgreich gelöscht."
+          };
+        } catch (e: any) {
+          return { status: "error", message: `Fehler beim Löschen: ${e.message}` };
+        }
+      }
+    },
+    {
+      definition: {
+        name: "wiederherstellen_aufgabe",
+        description: "Stellt eine gelöschte Aufgabe wieder her.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            taskId: { type: SchemaType.STRING, description: "Die ID der wiederherzustellenden Aufgabe" }
+          },
+          required: ["taskId"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        try {
+          await prisma.task.update({
+            where: { id: Number(args.taskId) },
+            data: { isDeleted: false }
+          });
+          return {
+            status: "success",
+            message: "Aufgabe erfolgreich wiederhergestellt."
+          };
+        } catch (e: any) {
+          return { status: "error", message: `Fehler beim Wiederherstellen: ${e.message}` };
+        }
+      }
     }
   ],
   getTopWidgets: async ({ prisma }) => {
     let tasks: any[] = [];
     try {
       tasks = await prisma.task.findMany({
-        where: { completed: false },
+        where: { completed: false, isDeleted: false },
         orderBy: { createdAt: "asc" }
       });
     } catch (e) {
