@@ -1,6 +1,81 @@
 import { Plugin } from "../types.js";
 import { SchemaType } from "@google/generative-ai";
 
+function getFuzzyTimeRange(date: Date, fuzzy: string): { start: Date; end: Date } {
+  const start = new Date(date);
+  start.setSeconds(0);
+  start.setMilliseconds(0);
+  const end = new Date(date);
+  end.setSeconds(0);
+  end.setMilliseconds(0);
+
+  switch (fuzzy.toLowerCase()) {
+    case 'morgens':
+      start.setHours(8, 0);
+      end.setHours(10, 0);
+      break;
+    case 'vormittag':
+      start.setHours(10, 0);
+      end.setHours(12, 0);
+      break;
+    case 'mittags':
+      start.setHours(12, 0);
+      end.setHours(14, 0);
+      break;
+    case 'nachmittag':
+      start.setHours(15, 0);
+      end.setHours(17, 0);
+      break;
+    case 'abends':
+      start.setHours(18, 0);
+      end.setHours(21, 0);
+      break;
+    default:
+      start.setHours(12, 0);
+      end.setHours(13, 0);
+      break;
+  }
+  return { start, end };
+}
+
+async function matchPersonsForEvents(events: any[], prisma: any): Promise<any[]> {
+  try {
+    const persons = await prisma.person.findMany({
+      where: { isDeleted: false },
+      include: { aliases: true }
+    });
+
+    return events.map(event => {
+      const titleAndDesc = `${event.title} ${event.description || ""}`;
+      const matched: { id: number; name: string }[] = [];
+
+      for (const p of persons) {
+        const hasMatch = p.aliases.some((alias: any) => {
+          const escaped = alias.name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+          const regex = new RegExp(`\\b${escaped}\\b`, 'i');
+          return regex.test(titleAndDesc);
+        });
+
+        if (hasMatch) {
+          const primaryAlias = p.aliases.find((a: any) => a.isPrimary) || p.aliases[0];
+          matched.push({
+            id: p.id,
+            name: primaryAlias ? primaryAlias.name : "Unbekannt"
+          });
+        }
+      }
+
+      return {
+        ...event,
+        persons: matched
+      };
+    });
+  } catch (err) {
+    console.error("Error matching persons for events:", err);
+    return events.map(e => ({ ...e, persons: [] }));
+  }
+}
+
 function getOccurrences(pattern: any, startRange: Date, endRange: Date, overrides: any[]): any[] {
   const occurrences: any[] = [];
   const originalStart = new Date(pattern.originalStart);
@@ -35,7 +110,8 @@ function getOccurrences(pattern: any, startRange: Date, endRange: Date, override
           isAllDay: pattern.isAllDay,
           isRecurring: true,
           recurrenceId: pattern.id,
-          originalOccurrenceDate: new Date(currentStart)
+          originalOccurrenceDate: new Date(currentStart),
+          fuzzyTime: pattern.fuzzyTime
         });
       }
     }
@@ -52,6 +128,79 @@ function getOccurrences(pattern: any, startRange: Date, endRange: Date, override
   }
 
   return occurrences;
+}
+
+export async function getEventsForRange(start: Date, end: Date, prisma: any): Promise<any[]> {
+  let occurrences: any[] = [];
+  let dbEvents: any[] = [];
+  try {
+    dbEvents = await prisma.event.findMany({
+      where: {
+        isDeleted: false,
+        start: { lte: end },
+        end: { gte: start }
+      }
+    });
+
+    const dbPatterns = await prisma.recurrencePattern.findMany({
+      where: {
+        isDeleted: false,
+        originalStart: { lte: end },
+        OR: [
+          { recurrenceEnd: null },
+          { recurrenceEnd: { gte: start } }
+        ]
+      }
+    });
+
+    const patternIds = dbPatterns.map((p: any) => p.id);
+    const overrides = patternIds.length > 0 ? await prisma.event.findMany({
+      where: { recurrenceId: { in: patternIds } }
+    }) : [];
+
+    for (const pattern of dbPatterns) {
+      occurrences.push(...getOccurrences(pattern, start, end, overrides));
+    }
+  } catch (e) {
+    console.warn("Fehler beim Abrufen der lokalen Kalender-Daten:", e);
+  }
+
+  const allEvents = [
+    ...dbEvents.map((e: any) => ({
+      id: String(e.id),
+      title: e.title,
+      description: e.description || "",
+      time: e.start.toISOString(),
+      endTime: e.end.toISOString(),
+      isAllDay: e.isAllDay,
+      recurring: e.recurrenceId !== null,
+      occurrenceDate: e.originalOccurrenceDate ? e.originalOccurrenceDate.toISOString().split('T')[0] : null,
+      isCancelled: e.isCancelled,
+      cancellationReason: e.cancellationReason || null,
+      originalStart: e.originalStart ? e.originalStart.toISOString() : null,
+      originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null,
+      fuzzyTime: e.fuzzyTime
+    })),
+    ...occurrences.map((o: any) => ({
+      id: o.id,
+      title: o.title,
+      description: o.description || "",
+      time: o.start.toISOString(),
+      endTime: o.end.toISOString(),
+      isAllDay: o.isAllDay,
+      recurring: true,
+      occurrenceDate: o.originalOccurrenceDate.toISOString().split('T')[0],
+      isCancelled: false,
+      cancellationReason: null,
+      originalStart: null,
+      originalEnd: null,
+      fuzzyTime: o.fuzzyTime
+    }))
+  ];
+
+  allEvents.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
+  return matchPersonsForEvents(allEvents, prisma);
 }
 
 export const calendarPlugin: Plugin = {
@@ -125,7 +274,8 @@ export const calendarPlugin: Plugin = {
             isCancelled: e.isCancelled,
             cancellationReason: e.cancellationReason || null,
             originalStart: e.originalStart,
-            originalEnd: e.originalEnd
+            originalEnd: e.originalEnd,
+            fuzzyTime: e.fuzzyTime
           })),
           ...occurrences.map(o => ({
             id: o.id,
@@ -140,16 +290,19 @@ export const calendarPlugin: Plugin = {
             isCancelled: false,
             cancellationReason: null,
             originalStart: null,
-            originalEnd: null
+            originalEnd: null,
+            fuzzyTime: o.fuzzyTime
           }))
         ];
 
         allEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
 
+        const matchedEvents = await matchPersonsForEvents(allEvents, prisma);
+
         return {
           type: "calendar_widget",
           date: args.datum,
-          events: allEvents.map(e => ({
+          events: matchedEvents.map(e => ({
             id: e.id,
             title: e.title,
             time: e.start.toISOString(),
@@ -163,7 +316,9 @@ export const calendarPlugin: Plugin = {
             isCancelled: e.isCancelled,
             cancellationReason: e.cancellationReason,
             originalStart: e.originalStart ? e.originalStart.toISOString() : null,
-            originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null
+            originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null,
+            fuzzyTime: e.fuzzyTime,
+            persons: e.persons
           }))
         };
       }
@@ -182,19 +337,27 @@ export const calendarPlugin: Plugin = {
             ganztaegig: { type: SchemaType.BOOLEAN, description: "Ob der Termin ganztägig ist (optional)" },
             wiederkehrend: { type: SchemaType.BOOLEAN, description: "Ob der Termin sich wiederholt (optional)" },
             wiederholungsTyp: { type: SchemaType.STRING, description: "Typ der Wiederholung: 'DAILY', 'WEEKLY' oder 'MONTHLY' (optional)" },
-            wiederholungsEnde: { type: SchemaType.STRING, description: "Enddatum der Wiederholung YYYY-MM-DD (optional)" }
+            wiederholungsEnde: { type: SchemaType.STRING, description: "Enddatum der Wiederholung YYYY-MM-DD (optional)" },
+            tageszeit: { type: SchemaType.STRING, description: "Uhrzeit-Abschnitt, falls nicht minutengenau: 'morgens', 'vormittag', 'mittags', 'nachmittag' oder 'abends' (optional)" }
           },
           required: ["titel", "datum"]
         } as any
       },
       handler: async (args, { prisma }) => {
-        const start = new Date(args.datum);
-        const end = args.enddatum ? new Date(args.enddatum) : new Date(start.getTime() + 60 * 60 * 1000);
+        let start = new Date(args.datum);
+        let end = args.enddatum ? new Date(args.enddatum) : new Date(start.getTime() + 60 * 60 * 1000);
 
         const isRecurring = !!args.wiederkehrend;
         const recurrenceType = args.wiederholungsTyp || "WEEKLY";
         const recurrenceEnd = args.wiederholungsEnde ? new Date(args.wiederholungsEnde) : null;
         const isAllDay = !!args.ganztaegig;
+        const fuzzyTime = args.tageszeit || null;
+
+        if (fuzzyTime) {
+          const range = getFuzzyTimeRange(start, fuzzyTime);
+          start = range.start;
+          end = range.end;
+        }
 
         try {
           if (isRecurring) {
@@ -206,7 +369,8 @@ export const calendarPlugin: Plugin = {
                 originalEnd: end,
                 isAllDay,
                 recurrenceType,
-                recurrenceEnd
+                recurrenceEnd,
+                fuzzyTime
               }
             });
           } else {
@@ -216,7 +380,8 @@ export const calendarPlugin: Plugin = {
                 description: args.beschreibung || null,
                 start,
                 end,
-                isAllDay
+                isAllDay,
+                fuzzyTime
               }
             });
           }
@@ -260,6 +425,7 @@ export const calendarPlugin: Plugin = {
             ...dbEvents.map(e => ({
               id: String(e.id),
               title: e.title,
+              description: e.description || "",
               start: e.start,
               end: e.end,
               isAllDay: e.isAllDay,
@@ -269,11 +435,13 @@ export const calendarPlugin: Plugin = {
               isCancelled: e.isCancelled,
               cancellationReason: e.cancellationReason || null,
               originalStart: e.originalStart,
-              originalEnd: e.originalEnd
+              originalEnd: e.originalEnd,
+              fuzzyTime: e.fuzzyTime
             })),
             ...occurrences.map(o => ({
               id: o.id,
               title: o.title,
+              description: o.description || "",
               start: o.start,
               end: o.end,
               isAllDay: o.isAllDay,
@@ -283,22 +451,26 @@ export const calendarPlugin: Plugin = {
               isCancelled: false,
               cancellationReason: null,
               originalStart: null,
-              originalEnd: null
+              originalEnd: null,
+              fuzzyTime: o.fuzzyTime
             }))
           ];
 
           allEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
 
+          const matchedEvents = await matchPersonsForEvents(allEvents, prisma);
+
           return { 
             type: "calendar_widget",
             date: args.datum.split('T')[0],
             message: `Termin '${args.titel}' wurde erstellt.`,
-            events: allEvents.map(e => ({ 
+            events: matchedEvents.map(e => ({ 
               id: e.id, 
               title: e.title, 
               time: e.start.toISOString(), 
               endTime: e.end.toISOString(),
               type: "local",
+              description: e.description,
               isAllDay: e.isAllDay,
               isRecurring: e.isRecurring,
               recurrenceId: e.recurrenceId,
@@ -306,7 +478,9 @@ export const calendarPlugin: Plugin = {
               isCancelled: e.isCancelled,
               cancellationReason: e.cancellationReason,
               originalStart: e.originalStart ? e.originalStart.toISOString() : null,
-              originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null
+              originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null,
+              fuzzyTime: e.fuzzyTime,
+              persons: e.persons
             }))
           };
         } catch (e: any) {
@@ -435,6 +609,7 @@ export const calendarPlugin: Plugin = {
             ...dbEvents.map(e => ({
               id: String(e.id),
               title: e.title,
+              description: e.description || "",
               start: e.start,
               end: e.end,
               isAllDay: e.isAllDay,
@@ -444,11 +619,13 @@ export const calendarPlugin: Plugin = {
               isCancelled: e.isCancelled,
               cancellationReason: e.cancellationReason || null,
               originalStart: e.originalStart,
-              originalEnd: e.originalEnd
+              originalEnd: e.originalEnd,
+              fuzzyTime: e.fuzzyTime
             })),
             ...occurrences.map(o => ({
               id: o.id,
               title: o.title,
+              description: o.description || "",
               start: o.start,
               end: o.end,
               isAllDay: o.isAllDay,
@@ -458,22 +635,26 @@ export const calendarPlugin: Plugin = {
               isCancelled: false,
               cancellationReason: null,
               originalStart: null,
-              originalEnd: null
+              originalEnd: null,
+              fuzzyTime: o.fuzzyTime
             }))
           ];
 
           allEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
 
+          const matchedEvents = await matchPersonsForEvents(allEvents, prisma);
+
           return { 
             type: "calendar_widget",
             date: args.datum,
             message: `Termin wurde gelöscht.`,
-            events: allEvents.map(e => ({ 
+            events: matchedEvents.map(e => ({ 
               id: e.id, 
               title: e.title, 
               time: e.start.toISOString(), 
               endTime: e.end.toISOString(),
               type: "local",
+              description: e.description,
               isAllDay: e.isAllDay,
               isRecurring: e.isRecurring,
               recurrenceId: e.recurrenceId,
@@ -481,7 +662,9 @@ export const calendarPlugin: Plugin = {
               isCancelled: e.isCancelled,
               cancellationReason: e.cancellationReason,
               originalStart: e.originalStart ? e.originalStart.toISOString() : null,
-              originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null
+              originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null,
+              fuzzyTime: e.fuzzyTime,
+              persons: e.persons
             }))
           };
         } catch (e: any) {
@@ -574,7 +757,8 @@ export const calendarPlugin: Plugin = {
             ganztaegig: { type: SchemaType.BOOLEAN, description: "Ob der Termin ganztägig ist (optional)" },
             ausgefallen: { type: SchemaType.BOOLEAN, description: "Ob das Event ausfällt (optional)" },
             ausfallGrund: { type: SchemaType.STRING, description: "Grund für den Ausfall (optional)" },
-            geloescht: { type: SchemaType.BOOLEAN, description: "Ob der Termin an diesem Tag gelöscht werden soll (optional)" }
+            geloescht: { type: SchemaType.BOOLEAN, description: "Ob der Termin an diesem Tag gelöscht werden soll (optional)" },
+            tageszeit: { type: SchemaType.STRING, description: "Uhrzeit-Abschnitt, falls nicht minutengenau: 'morgens', 'vormittag', 'mittags', 'nachmittag' oder 'abends' (optional)" }
           },
           required: ["eventId", "datum"]
         } as any
@@ -598,6 +782,11 @@ export const calendarPlugin: Plugin = {
             }
           }
 
+          let pattern: any = null;
+          if (recurrenceId) {
+            pattern = await prisma.recurrencePattern.findUnique({ where: { id: recurrenceId } });
+          }
+
           if (args.nurDiesesVorkommen) {
             if (recurrenceId && originalOccurrenceDate) {
               const existingOverride = await prisma.event.findFirst({
@@ -612,13 +801,23 @@ export const calendarPlugin: Plugin = {
               if (args.ausfallGrund !== undefined) data.cancellationReason = args.ausfallGrund;
               if (args.geloescht !== undefined) data.isDeleted = !!args.geloescht;
 
-              if (args.neues_datum) {
+              if (args.tageszeit !== undefined) {
+                const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
+                data.fuzzyTime = fuzzyVal;
+                if (fuzzyVal) {
+                  const baseDate = args.neues_datum ? new Date(args.neues_datum) : (existingOverride ? existingOverride.start : originalOccurrenceDate);
+                  const range = getFuzzyTimeRange(baseDate, fuzzyVal);
+                  data.start = range.start;
+                  data.end = range.end;
+                } else {
+                  data.fuzzyTime = null;
+                }
+              } else if (args.neues_datum) {
                 data.start = new Date(args.neues_datum);
                 const duration = args.neues_enddatum ? (new Date(args.neues_enddatum).getTime() - data.start.getTime()) : (60 * 60 * 1000);
                 data.end = new Date(data.start.getTime() + duration);
                 
                 data.originalStart = originalOccurrenceDate;
-                const pattern = await prisma.recurrencePattern.findUnique({ where: { id: recurrenceId } });
                 if (pattern) {
                   const patternDuration = pattern.originalEnd.getTime() - pattern.originalStart.getTime();
                   data.originalEnd = new Date(originalOccurrenceDate.getTime() + patternDuration);
@@ -631,7 +830,6 @@ export const calendarPlugin: Plugin = {
                   data
                 });
               } else {
-                const pattern = await prisma.recurrencePattern.findUnique({ where: { id: recurrenceId } });
                 if (!pattern) throw new Error("Wiederholungsmuster nicht gefunden.");
                 
                 await prisma.event.create({
@@ -658,7 +856,18 @@ export const calendarPlugin: Plugin = {
               if (args.ausfallGrund !== undefined) data.cancellationReason = args.ausfallGrund;
               if (args.geloescht !== undefined) data.isDeleted = !!args.geloescht;
 
-              if (args.neues_datum) {
+              if (args.tageszeit !== undefined) {
+                const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
+                data.fuzzyTime = fuzzyVal;
+                if (fuzzyVal) {
+                  const baseDate = args.neues_datum ? new Date(args.neues_datum) : (currentEvent ? currentEvent.start : new Date());
+                  const range = getFuzzyTimeRange(baseDate, fuzzyVal);
+                  data.start = range.start;
+                  data.end = range.end;
+                } else {
+                  data.fuzzyTime = null;
+                }
+              } else if (args.neues_datum) {
                 if (currentEvent) {
                   data.originalStart = currentEvent.start;
                   data.originalEnd = currentEvent.end;
@@ -681,7 +890,18 @@ export const calendarPlugin: Plugin = {
               if (args.neue_beschreibung !== undefined) data.description = args.neue_beschreibung;
               if (args.ganztaegig !== undefined) data.isAllDay = !!args.ganztaegig;
 
-              if (args.neues_datum) {
+              if (args.tageszeit !== undefined) {
+                const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
+                data.fuzzyTime = fuzzyVal;
+                if (fuzzyVal) {
+                  const baseDate = args.neues_datum ? new Date(args.neues_datum) : (pattern ? pattern.originalStart : new Date());
+                  const range = getFuzzyTimeRange(baseDate, fuzzyVal);
+                  data.originalStart = range.start;
+                  data.originalEnd = range.end;
+                } else {
+                  data.fuzzyTime = null;
+                }
+              } else if (args.neues_datum) {
                 data.originalStart = new Date(args.neues_datum);
                 const duration = args.neues_enddatum ? (new Date(args.neues_enddatum).getTime() - data.originalStart.getTime()) : (60 * 60 * 1000);
                 data.originalEnd = new Date(data.originalStart.getTime() + duration);
@@ -700,7 +920,18 @@ export const calendarPlugin: Plugin = {
               if (args.ausgefallen !== undefined) data.isCancelled = !!args.ausgefallen;
               if (args.ausfallGrund !== undefined) data.cancellationReason = args.ausfallGrund;
 
-              if (args.neues_datum) {
+              if (args.tageszeit !== undefined) {
+                const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
+                data.fuzzyTime = fuzzyVal;
+                if (fuzzyVal) {
+                  const baseDate = args.neues_datum ? new Date(args.neues_datum) : (currentEvent ? currentEvent.start : new Date());
+                  const range = getFuzzyTimeRange(baseDate, fuzzyVal);
+                  data.start = range.start;
+                  data.end = range.end;
+                } else {
+                  data.fuzzyTime = null;
+                }
+              } else if (args.neues_datum) {
                 if (currentEvent) {
                   data.originalStart = currentEvent.start;
                   data.originalEnd = currentEvent.end;
@@ -756,6 +987,7 @@ export const calendarPlugin: Plugin = {
             ...dbEvents.map(e => ({
               id: String(e.id),
               title: e.title,
+              description: e.description || "",
               start: e.start,
               end: e.end,
               isAllDay: e.isAllDay,
@@ -765,11 +997,13 @@ export const calendarPlugin: Plugin = {
               isCancelled: e.isCancelled,
               cancellationReason: e.cancellationReason || null,
               originalStart: e.originalStart,
-              originalEnd: e.originalEnd
+              originalEnd: e.originalEnd,
+              fuzzyTime: e.fuzzyTime
             })),
             ...occurrences.map(o => ({
               id: o.id,
               title: o.title,
+              description: o.description || "",
               start: o.start,
               end: o.end,
               isAllDay: o.isAllDay,
@@ -779,22 +1013,26 @@ export const calendarPlugin: Plugin = {
               isCancelled: false,
               cancellationReason: null,
               originalStart: null,
-              originalEnd: null
+              originalEnd: null,
+              fuzzyTime: o.fuzzyTime
             }))
           ];
 
           allEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
 
+          const matchedEvents = await matchPersonsForEvents(allEvents, prisma);
+
           return { 
             type: "calendar_widget",
             date: targetDate.split('T')[0],
             message: `Termin wurde aktualisiert.`,
-            events: allEvents.map(e => ({ 
+            events: matchedEvents.map(e => ({ 
               id: e.id, 
               title: e.title, 
               time: e.start.toISOString(), 
               endTime: e.end.toISOString(),
               type: "local",
+              description: e.description,
               isAllDay: e.isAllDay,
               isRecurring: e.isRecurring,
               recurrenceId: e.recurrenceId,
@@ -802,7 +1040,9 @@ export const calendarPlugin: Plugin = {
               isCancelled: e.isCancelled,
               cancellationReason: e.cancellationReason,
               originalStart: e.originalStart ? e.originalStart.toISOString() : null,
-              originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null
+              originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null,
+              fuzzyTime: e.fuzzyTime,
+              persons: e.persons
             }))
           };
         } catch (e: any) {
@@ -811,85 +1051,23 @@ export const calendarPlugin: Plugin = {
       }
     }
   ],
-  getTopWidgets: async ({ prisma }) => {
+  getTopWidgets: async ({ prisma, calendarDays }: { prisma: any, calendarDays?: number }) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    const inSevenDays = new Date();
-    inSevenDays.setDate(today.getDate() + 7);
-    inSevenDays.setHours(23, 59, 59, 999);
+    const days = calendarDays || 7;
+    const inDays = new Date();
+    inDays.setDate(today.getDate() + days);
+    inDays.setHours(23, 59, 59, 999);
 
-    let occurrences: any[] = [];
-    let dbEvents: any[] = [];
-    try {
-      dbEvents = await prisma.event.findMany({
-        where: {
-          isDeleted: false,
-          start: { lte: inSevenDays },
-          end: { gte: today }
-        }
-      });
-
-      const dbPatterns = await prisma.recurrencePattern.findMany({
-        where: {
-          isDeleted: false,
-          originalStart: { lte: inSevenDays },
-          OR: [
-            { recurrenceEnd: null },
-            { recurrenceEnd: { gte: today } }
-          ]
-        }
-      });
-
-      const patternIds = dbPatterns.map(p => p.id);
-      const overrides = patternIds.length > 0 ? await prisma.event.findMany({
-        where: { recurrenceId: { in: patternIds } }
-      }) : [];
-
-      for (const pattern of dbPatterns) {
-        occurrences.push(...getOccurrences(pattern, today, inSevenDays, overrides));
-      }
-    } catch (e) {
-      console.warn("Fehler beim Abrufen der lokalen Kalender-Daten:", e);
-    }
-
-    const allEvents = [
-      ...dbEvents.map(e => ({
-        id: String(e.id),
-        title: e.title,
-        time: e.start.toISOString(),
-        endTime: e.end.toISOString(),
-        isAllDay: e.isAllDay,
-        recurring: e.recurrenceId !== null,
-        occurrenceDate: e.originalOccurrenceDate ? e.originalOccurrenceDate.toISOString().split('T')[0] : null,
-        isCancelled: e.isCancelled,
-        cancellationReason: e.cancellationReason || null,
-        originalStart: e.originalStart ? e.originalStart.toISOString() : null,
-        originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null
-      })),
-      ...occurrences.map(o => ({
-        id: o.id,
-        title: o.title,
-        time: o.start.toISOString(),
-        endTime: o.end.toISOString(),
-        isAllDay: o.isAllDay,
-        recurring: true,
-        occurrenceDate: o.originalOccurrenceDate.toISOString().split('T')[0],
-        isCancelled: false,
-        cancellationReason: null,
-        originalStart: null,
-        originalEnd: null
-      }))
-    ];
-
-    allEvents.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+    const matchedEvents = await getEventsForRange(today, inDays, prisma);
 
     return [
       {
         pluginName: "Calendar",
         type: "calendar_overview",
         data: {
-          events: allEvents
+          events: matchedEvents
         }
       }
     ];

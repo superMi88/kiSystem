@@ -111,7 +111,7 @@ export class PluginManager {
     return alerts;
   }
 
-  async getAllTopWidgets() {
+  async getAllTopWidgets(options?: { calendarDays?: number }) {
     const settings = getSettings();
     const disabled = settings.disabledPlugins || [];
     
@@ -120,7 +120,7 @@ export class PluginManager {
       if (disabled.includes(plugin.name)) continue;
       if (plugin.getTopWidgets) {
         try {
-          const pluginWidgets = await plugin.getTopWidgets({ prisma: this.prisma });
+          const pluginWidgets = await plugin.getTopWidgets({ prisma: this.prisma, ...options } as any);
           widgets.push(...pluginWidgets);
         } catch (e) {
           console.error(`Fehler beim Laden der Top-Widgets von ${plugin.name}:`, e);

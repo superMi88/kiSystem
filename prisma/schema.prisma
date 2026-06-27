@@ -100,6 +100,7 @@ model Event {
   start                  DateTime
   end                    DateTime
   isAllDay               Boolean            @default(false)
+  fuzzyTime              String?
   
   recurrenceId           Int?
   recurrence             RecurrencePattern? @relation(fields: [recurrenceId], references: [id], onDelete: Cascade)
@@ -124,6 +125,7 @@ model RecurrencePattern {
   originalStart   DateTime
   originalEnd     DateTime
   isAllDay        Boolean   @default(false)
+  fuzzyTime       String?
   recurrenceType  String    // "DAILY" | "WEEKLY" | "MONTHLY"
   recurrenceEnd   DateTime?
   events          Event[]   // Overridden instances linked to this pattern

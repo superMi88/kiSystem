@@ -15,6 +15,7 @@ import os from "os";
 import { PluginManager } from "./plugins/index.js";
 import { getSettings, saveSettings } from "./settings.js";
 import { runAutomaticMigration } from "./migrate.js";
+import { getEventsForRange } from "./plugins/Calendar/index.js";
 
 dotenv.config();
 
@@ -105,8 +106,26 @@ app.get("/alerts", async (req, res) => {
 });
 
 app.get("/widgets", async (req, res) => {
-  const widgets = await pluginManager.getAllTopWidgets();
+  const calendarDays = req.query.calendarDays ? parseInt(req.query.calendarDays as string) : 7;
+  const widgets = await pluginManager.getAllTopWidgets({ calendarDays });
   res.json(widgets);
+});
+
+app.get("/api/calendar/events", async (req, res) => {
+  try {
+    const startStr = req.query.start as string;
+    const endStr = req.query.end as string;
+    if (!startStr || !endStr) {
+      return res.status(400).json({ error: "start und end Parameter sind erforderlich." });
+    }
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    const events = await getEventsForRange(start, end, prisma);
+    res.json(events);
+  } catch (e: any) {
+    console.error("Fehler beim Abrufen der Kalender-Events:", e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post("/api/tools/call", async (req, res) => {
