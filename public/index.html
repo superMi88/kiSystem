@@ -3533,6 +3533,24 @@
         let isCalendarLoadingMore = false;
         let calendarLoadedUntil = null;
         let calendarLastRenderedDayKey = null;
+        let calendarCanScrollLoad = true;
+        let calendarJumpsCount = 0;
+
+        function checkAndLoadMoreIfNoScrollbar() {
+            const topPanel = document.querySelector('.top-panel');
+            const widgetCalendar = document.getElementById('widget-calendar');
+            if (widgetCalendar && topPanel) {
+                if (topPanel.scrollHeight <= topPanel.clientHeight && calendarCanScrollLoad && !isCalendarLoadingMore) {
+                    const today = new Date();
+                    const loadedDays = Math.ceil((calendarLoadedUntil - today) / (1000 * 60 * 60 * 24));
+                    if (loadedDays < 60) {
+                        loadMoreCalendarEvents().then(() => {
+                            setTimeout(checkAndLoadMoreIfNoScrollbar, 200);
+                        });
+                    }
+                }
+            }
+        }
 
         function renderCalendarEvents(events, isAppend = false) {
             if (!events || events.length === 0) {
@@ -3672,10 +3690,23 @@
 
                 const res = await fetch(getApiUrl(`/api/calendar/events?start=${start.toISOString()}&end=${end.toISOString()}`));
                 if (!res.ok) throw new Error("Fehler beim Laden");
-                const events = await res.json();
+                const data = await res.json();
+                
+                const events = data.events;
+                const hasMore = data.hasMore;
+
+                if (events.length === 0 && hasMore && calendarJumpsCount < 10) {
+                    calendarJumpsCount++;
+                    calendarLoadedUntil = end;
+                    isCalendarLoadingMore = false;
+                    loadMoreCalendarEvents();
+                    return;
+                }
+
+                calendarJumpsCount = 0; // Reset on success or hard stop
 
                 const eventsListDiv = document.getElementById('calendar-events-list');
-                if (eventsListDiv) {
+                if (eventsListDiv && events.length > 0) {
                     const newHtml = renderCalendarEvents(events, true);
                     if (newHtml) {
                         const emptyMsg = document.getElementById('calendar-empty-msg');
@@ -3685,6 +3716,12 @@
                 }
                 
                 calendarLoadedUntil = end;
+
+                if (!hasMore) {
+                    calendarCanScrollLoad = false;
+                } else {
+                    calendarCanScrollLoad = true;
+                }
             } catch (e) {
                 console.error("Fehler beim Nachladen der Termine:", e);
             } finally {
@@ -3713,6 +3750,8 @@
                     
                     if (widget.type === 'calendar_overview') {
                         calendarLastRenderedDayKey = null;
+                        calendarCanScrollLoad = true;
+                        calendarJumpsCount = 0; // Reset
                         const today = new Date();
                         today.setHours(0, 0, 0, 0);
                         calendarLoadedUntil = new Date(today);
@@ -3728,6 +3767,8 @@
                         html += `</div>`;
                         
                         html += `<div id="calendar-loading-more" style="display: none; text-align: center; padding: 8px; font-size: 0.75rem; color: var(--accent); opacity: 0.8;">Lade weitere Termine...</div>`;
+
+                        setTimeout(checkAndLoadMoreIfNoScrollbar, 200);
  
                         if (widget.data.tasks && Array.isArray(widget.data.tasks)) {
                             html += `<h4 style="margin: 15px 0 10px 0; color: var(--accent); font-size: 0.8rem;">Offene Aufgaben</h4>`;
@@ -4300,7 +4341,7 @@
             if (topPanel) {
                 topPanel.addEventListener('scroll', () => {
                     const widgetCalendar = document.getElementById('widget-calendar');
-                    if (widgetCalendar && !isCalendarLoadingMore) {
+                    if (widgetCalendar && !isCalendarLoadingMore && calendarCanScrollLoad) {
                         if (topPanel.scrollHeight - topPanel.scrollTop - topPanel.clientHeight < 100) {
                             loadMoreCalendarEvents();
                         }

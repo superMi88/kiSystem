@@ -121,7 +121,30 @@ app.get("/api/calendar/events", async (req, res) => {
     const start = new Date(startStr);
     const end = new Date(endStr);
     const events = await getEventsForRange(start, end, prisma);
-    res.json(events);
+
+    const futureEventsCount = await prisma.event.count({
+      where: {
+        isDeleted: false,
+        start: { gt: end }
+      }
+    });
+
+    const activeFuturePatternsCount = await prisma.recurrencePattern.count({
+      where: {
+        isDeleted: false,
+        OR: [
+          { recurrenceEnd: null },
+          { recurrenceEnd: { gt: end } }
+        ]
+      }
+    });
+
+    const hasMore = (futureEventsCount > 0) || (activeFuturePatternsCount > 0);
+
+    res.json({
+      events,
+      hasMore
+    });
   } catch (e: any) {
     console.error("Fehler beim Abrufen der Kalender-Events:", e);
     res.status(500).json({ error: e.message });
