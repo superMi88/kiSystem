@@ -3324,32 +3324,68 @@
 
             if (data.type === 'calendar_widget') {
                 widgetDiv.classList.add('calendar-widget');
+                widgetDiv.style.background = 'transparent';
+                widgetDiv.style.border = 'none';
+                widgetDiv.style.padding = '0';
+                widgetDiv.style.boxShadow = 'none';
+                
                 const dateStr = new Date(data.date).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long' });
-                let html = `<h4>📅 Termine für ${dateStr}</h4>`;
+                
+                let html = `<div class="calendar-day-box" style="display: flex; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%;">`;
+                html += `<div style="width: 5px; background-color: #2ecc71; flex-shrink: 0;"></div>`;
+                html += `<div style="flex: 1; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;">`;
+                html += `<div style="font-size: 0.85rem; font-weight: bold; color: var(--accent); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">📅 Termine für ${dateStr}</div>`;
                 
                 if (data.events.length === 0) {
-                    html += `<p style="font-size:0.8rem; opacity:0.6;">Keine Termine für diesen Tag.</p>`;
+                    html += `<p style="font-size:0.8rem; opacity:0.6; margin: 5px 0;">Keine Termine für diesen Tag.</p>`;
                 } else {
+                    html += `<div style="display: flex; flex-direction: column; gap: 8px;">`;
                     data.events.forEach(ev => {
-                        const repeatBadge = ev.isRecurring ? ` <span style="font-size: 0.7rem; color: var(--accent);" title="Wiederkehrender Termin">🔄</span>` : '';
-                        const rescheduleBadge = ev.originalStart ? ` <span style="background: rgba(249, 226, 175, 0.15); color: #f9e2af; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-left: 6px; text-transform: uppercase;" title="Dieser Termin wurde verschoben">verschoben</span>` : '';
-                        const timeHtml = formatEventTime(ev);
-
+                        const isRec = ev.recurring || ev.isRecurring;
+                        const repeatBadge = isRec ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
+                        const rescheduleBadge = ev.originalStart ? ` <span style="background: rgba(249, 226, 175, 0.15); color: #f9e2af; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase;" title="Dieser Termin wurde verschoben">verschoben</span>` : '';
+                        
                         const cancelStyle = ev.isCancelled ? 'color: var(--off); text-decoration: line-through;' : '';
-                        const titleCancelStyle = ev.isCancelled ? 'color: var(--off);' : '';
+                        const titleCancelStyle = ev.isCancelled ? 'color: var(--off); font-weight: 500;' : 'font-weight: 500;';
                         const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.75rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.75rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
+                        const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
+
+                        const timeBadgeHtml = getEventTimeBadge(ev);
+
+                        let personsHtml = "";
+                        if (ev.persons && ev.persons.length > 0) {
+                            ev.persons.forEach(p => {
+                                personsHtml += `
+                                    <span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.color='var(--accent)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.color='rgba(255,255,255,0.7)'">
+                                      👤 ${escapeHtml(p.name)}
+                                    </span>
+                                `;
+                            });
+                        }
 
                         html += `
-                            <div class="event-item" style="align-items: flex-start; flex-direction: column; gap: 4px; padding: 8px 0; ${cancelStyle}">
-                                <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
-                                    <span class="event-type type-${ev.type}">${ev.type}</span>
-                                    <span class="event-title" style="${titleCancelStyle}">${escapeHtml(ev.title)}${repeatBadge}${rescheduleBadge}${reasonHtml}</span>
+                            <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.02); ${cancelStyle}">
+                                <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
+                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                        <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
+                                        ${repeatBadge}
+                                        ${rescheduleBadge}
+                                        ${reasonHtml}
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px;">
+                                        ${timeBadgeHtml}
+                                        ${personsHtml}
+                                    </div>
                                 </div>
-                                <div class="event-time" style="margin-left: 46px; ${ev.isCancelled ? 'text-decoration: line-through;' : ''}">${timeHtml}</div>
+                                <div style="display: flex; align-items: center; gap: 2px; align-self: center; margin-left: 8px;">
+                                    <button onclick="insertEntityLinkIntoChat('${escTitle}', 'event', ${ev.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.8rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
+                                </div>
                             </div>
                         `;
                     });
+                    html += `</div>`;
                 }
+                html += `</div></div>`;
                 widgetDiv.innerHTML = html;
             } else if (data.status === 'auth_required') {
                 widgetDiv.innerHTML = `
@@ -3494,6 +3530,168 @@
             }
         }
 
+        let isCalendarLoadingMore = false;
+        let calendarLoadedUntil = null;
+        let calendarLastRenderedDayKey = null;
+
+        function renderCalendarEvents(events, isAppend = false) {
+            if (!events || events.length === 0) {
+                if (!isAppend) {
+                    return `<p id="calendar-empty-msg" style="font-size: 0.75rem; opacity: 0.6; margin: 10px 0; text-align: center;">Keine Termine.</p>`;
+                }
+                return '';
+            }
+
+            // 1. Group events by local date
+            const eventsByDay = {};
+            events.forEach(ev => {
+                const dateObj = new Date(ev.time);
+                const key = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+                
+                if (!eventsByDay[key]) {
+                    const weekday = dateObj.toLocaleDateString('de-DE', { weekday: 'short' }).replace(/\.$/, '');
+                    const dayAndMonth = dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+                    const displayDate = `${weekday}. ${dayAndMonth}`;
+                    
+                    eventsByDay[key] = {
+                        displayDate: displayDate,
+                        dateObj: dateObj,
+                        events: []
+                    };
+                }
+                eventsByDay[key].events.push(ev);
+            });
+
+            // 2. Sort and iterate over grouped days
+            const sortedKeys = Object.keys(eventsByDay).sort();
+            let html = '';
+            
+            for (let i = 0; i < sortedKeys.length; i++) {
+                const currentKey = sortedKeys[i];
+                const dayData = eventsByDay[currentKey];
+                
+                // Render gap divider if there is a day gap (diff > 1 day)
+                if (calendarLastRenderedDayKey) {
+                    const prevDate = new Date(calendarLastRenderedDayKey + 'T00:00:00');
+                    const currDate = new Date(currentKey + 'T00:00:00');
+                    const diffTime = Math.abs(currDate - prevDate);
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    if (diffDays > 1) {
+                        html += `<div style="border-top: 1px dashed rgba(255, 255, 255, 0.15); margin: 12px 0; width: 100%;"></div>`;
+                    }
+                }
+                
+                calendarLastRenderedDayKey = currentKey;
+                
+                // Render Day Box with a left green bar
+                html += `
+                    <div class="calendar-day-box" style="display: flex; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); margin-bottom: 4px;">
+                        <!-- Grüner Balken links -->
+                        <div style="width: 5px; background-color: #2ecc71; flex-shrink: 0;"></div>
+                        
+                        <div style="flex: 1; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;">
+                            <!-- Datum Header -->
+                            <div style="font-size: 0.85rem; font-weight: bold; color: var(--accent); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
+                                ${dayData.displayDate}
+                            </div>
+                            
+                            <!-- Events list -->
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                `;
+                
+                dayData.events.forEach(ev => {
+                    const isRec = ev.recurring || ev.isRecurring;
+                    const repeatBadge = isRec ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
+                    const rescheduleBadge = ev.originalStart ? ` <span style="background: rgba(249, 226, 175, 0.15); color: #f9e2af; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase;" title="Dieser Termin wurde verschoben">verschoben</span>` : '';
+                    const targetDate = ev.occurrenceDate || ev.time.split('T')[0];
+                    
+                    const cancelStyle = ev.isCancelled ? 'color: var(--off); text-decoration: line-through;' : '';
+                    const titleCancelStyle = ev.isCancelled ? 'color: var(--off); font-weight: 500;' : 'font-weight: 500;';
+                    const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
+                    
+                    const rescheduleBorder = ev.originalStart ? 'border-left: 3px solid #f9e2af; padding-left: 6px;' : '';
+                    const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
+                    
+                    const timeBadgeHtml = getEventTimeBadge(ev);
+                    
+                    let personsHtml = "";
+                    if (ev.persons && ev.persons.length > 0) {
+                        ev.persons.forEach(p => {
+                            personsHtml += `
+                                <span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.color='var(--accent)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.color='rgba(255,255,255,0.7)'">
+                                  👤 ${escapeHtml(p.name)}
+                                </span>
+                            `;
+                        });
+                    }
+
+                    html += `
+                        <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.02); ${rescheduleBorder} ${cancelStyle}">
+                            <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
+                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                    <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
+                                    ${repeatBadge}
+                                    ${rescheduleBadge}
+                                    ${reasonHtml}
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px;">
+                                    ${timeBadgeHtml}
+                                    ${personsHtml}
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 4px; align-self: center; margin-left: 8px;">
+                                <button onclick="insertEntityLinkIntoChat('${escTitle}', 'event', ${ev.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
+                                <button onclick="deleteCalendarEvent('${ev.id}', '${targetDate}', ${isRec})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Termin löschen">✖</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            return html;
+        }
+
+        async function loadMoreCalendarEvents() {
+            if (isCalendarLoadingMore || !calendarLoadedUntil) return;
+            isCalendarLoadingMore = true;
+
+            const loadingIndicator = document.getElementById('calendar-loading-more');
+            if (loadingIndicator) loadingIndicator.style.display = 'block';
+
+            try {
+                const start = new Date(calendarLoadedUntil.getTime() + 1);
+                const end = new Date(calendarLoadedUntil);
+                end.setDate(end.getDate() + 14); // load next 14 days
+                end.setHours(23, 59, 59, 999);
+
+                const res = await fetch(getApiUrl(`/api/calendar/events?start=${start.toISOString()}&end=${end.toISOString()}`));
+                if (!res.ok) throw new Error("Fehler beim Laden");
+                const events = await res.json();
+
+                const eventsListDiv = document.getElementById('calendar-events-list');
+                if (eventsListDiv) {
+                    const newHtml = renderCalendarEvents(events, true);
+                    if (newHtml) {
+                        const emptyMsg = document.getElementById('calendar-empty-msg');
+                        if (emptyMsg) emptyMsg.remove();
+                        eventsListDiv.insertAdjacentHTML('beforeend', newHtml);
+                    }
+                }
+                
+                calendarLoadedUntil = end;
+            } catch (e) {
+                console.error("Fehler beim Nachladen der Termine:", e);
+            } finally {
+                isCalendarLoadingMore = false;
+                if (loadingIndicator) loadingIndicator.style.display = 'none';
+            }
+        }
 
         async function loadTopWidgets() {
             try {
@@ -3514,46 +3712,22 @@
                     }
                     
                     if (widget.type === 'calendar_overview') {
-                        let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; display: flex; flex-direction: column; gap: 6px;">`;
+                        calendarLastRenderedDayKey = null;
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        calendarLoadedUntil = new Date(today);
+                        calendarLoadedUntil.setDate(today.getDate() + 7);
+                        calendarLoadedUntil.setHours(23, 59, 59, 999);
+
+                        let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; display: flex; flex-direction: column; gap: 8px;">`;
                         
-                        html += `<h4 style="margin: 0 0 10px 0; color: var(--accent); font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">Termine (nächste 7 Tage)</h4>`;
-                        if (widget.data.events.length === 0) {
-                            html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 10px 0; text-align: center;">Keine Termine.</p>`;
-                        } else {
-                            widget.data.events.forEach(ev => {
-                                const isRec = ev.recurring || ev.isRecurring;
-                                const repeatBadge = isRec ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
-                                const rescheduleBadge = ev.originalStart ? ` <span style="background: rgba(249, 226, 175, 0.15); color: #f9e2af; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase;" title="Dieser Termin wurde verschoben">verschoben</span>` : '';
-                                const targetDate = ev.occurrenceDate || ev.time.split('T')[0];
-                                
-                                const timeHtml = formatEventTime(ev);
- 
-                                const cancelStyle = ev.isCancelled ? 'color: var(--off); text-decoration: line-through;' : '';
-                                const titleCancelStyle = ev.isCancelled ? 'color: var(--off); font-weight: 500;' : 'font-weight: 500;';
-                                const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
- 
-                                const rescheduleBorder = ev.originalStart ? 'border-left: 3px solid #f9e2af;' : '';
-                                const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
- 
-                                html += `
-                                    <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; background: rgba(255,255,255,0.03); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04); ${rescheduleBorder} ${cancelStyle}">
-                                        <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
-                                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                                <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
-                                                ${repeatBadge}
-                                                ${rescheduleBadge}
-                                                ${reasonHtml}
-                                            </div>
-                                            <div style="${ev.isCancelled ? 'text-decoration: line-through; opacity: 0.5;' : ''}">${timeHtml}</div>
-                                        </div>
-                                        <div style="display: flex; align-items: center; gap: 4px; align-self: center;">
-                                            <button onclick="insertEntityLinkIntoChat('${escTitle}', 'event', ${ev.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
-                                            <button onclick="deleteCalendarEvent('${ev.id}', '${targetDate}', ${isRec})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Termin löschen">✖</button>
-                                        </div>
-                                    </div>
-                                `;
-                            });
-                        }
+                        html += `<h4 style="margin: 0 0 10px 0; color: var(--accent); font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">Termine</h4>`;
+                        
+                        html += `<div id="calendar-events-list" style="display: flex; flex-direction: column; gap: 8px;">`;
+                        html += renderCalendarEvents(widget.data.events);
+                        html += `</div>`;
+                        
+                        html += `<div id="calendar-loading-more" style="display: none; text-align: center; padding: 8px; font-size: 0.75rem; color: var(--accent); opacity: 0.8;">Lade weitere Termine...</div>`;
  
                         if (widget.data.tasks && Array.isArray(widget.data.tasks)) {
                             html += `<h4 style="margin: 15px 0 10px 0; color: var(--accent); font-size: 0.8rem;">Offene Aufgaben</h4>`;
@@ -4120,6 +4294,19 @@
                     }, 1000);
                 }
             }
+
+            // Scroll-Listener für Infinite Scroll im Terminkalender
+            const topPanel = document.querySelector('.top-panel');
+            if (topPanel) {
+                topPanel.addEventListener('scroll', () => {
+                    const widgetCalendar = document.getElementById('widget-calendar');
+                    if (widgetCalendar && !isCalendarLoadingMore) {
+                        if (topPanel.scrollHeight - topPanel.scrollTop - topPanel.clientHeight < 100) {
+                            loadMoreCalendarEvents();
+                        }
+                    }
+                });
+            }
         }
         initializeApp();
         setInterval(loadAlerts, 3000); // Alle 3 Sekunden prüfen
@@ -4267,6 +4454,42 @@
             }
             
             return `<span style="font-size: 0.75rem; opacity: 0.75;">${timeStr}</span>`;
+        }
+
+        function getEventTimeBadge(ev) {
+            let text = "";
+            let style = "";
+            
+            if (ev.isAllDay) {
+                text = "ganztägig";
+                style = "background: rgba(149, 165, 166, 0.12); color: #bdc3c7; border: 1px solid rgba(149, 165, 166, 0.25);";
+            } else if (ev.fuzzyTime) {
+                text = ev.fuzzyTime;
+                if (ev.fuzzyTime === "morgens") {
+                    style = "background: rgba(241, 196, 15, 0.12); color: #f1c40f; border: 1px solid rgba(241, 196, 15, 0.25);";
+                } else if (ev.fuzzyTime === "vormittag") {
+                    style = "background: rgba(230, 126, 34, 0.12); color: #e67e22; border: 1px solid rgba(230, 126, 34, 0.25);";
+                } else if (ev.fuzzyTime === "mittags") {
+                    style = "background: rgba(46, 204, 113, 0.12); color: #2ecc71; border: 1px solid rgba(46, 204, 113, 0.25);";
+                } else if (ev.fuzzyTime === "nachmittag") {
+                    style = "background: rgba(52, 152, 219, 0.12); color: #3498db; border: 1px solid rgba(52, 152, 219, 0.25);";
+                } else if (ev.fuzzyTime === "abends") {
+                    style = "background: rgba(155, 89, 182, 0.12); color: #9b59b6; border: 1px solid rgba(155, 89, 182, 0.25);";
+                }
+            } else {
+                const start = new Date(ev.time || ev.start);
+                const end = ev.endTime ? new Date(ev.endTime) : (ev.end ? new Date(ev.end) : start);
+                const formatTime = (d) => d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                
+                if (start.toDateString() === end.toDateString()) {
+                    text = `${formatTime(start)} - ${formatTime(end)}`;
+                } else {
+                    text = `${start.toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit'})} ${formatTime(start)} - ${end.toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit'})} ${formatTime(end)}`;
+                }
+                style = "background: rgba(137, 180, 250, 0.12); color: #89b4fa; border: 1px solid rgba(137, 180, 250, 0.25);";
+            }
+            
+            return `<span style="font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 500; font-family: monospace; ${style}">${text}</span>`;
         }
 
         // Mobile Drawer and Model Selector Handlers
