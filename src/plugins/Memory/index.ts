@@ -389,12 +389,12 @@ export const memoryPlugin: Plugin = {
     {
       definition: {
         name: "verwalte_person_alias",
-        description: "Fügt einen neuen Spitznamen hinzu oder löscht einen vorhandenen Alias einer Person.",
+        description: "Fügt einen neuen Spitznamen hinzu, löscht einen vorhandenen Alias oder setzt einen Alias als Primärnamen einer Person.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
             personId: { type: SchemaType.INTEGER, description: "ID der Person" },
-            aktion: { type: SchemaType.STRING, description: "Aktion: 'add' oder 'delete'" },
+            aktion: { type: SchemaType.STRING, description: "Aktion: 'add', 'delete' oder 'set_primary'" },
             aliasName: { type: SchemaType.STRING, description: "Name des Spitznamens/Alias" }
           },
           required: ["personId", "aktion", "aliasName"]
@@ -433,8 +433,45 @@ export const memoryPlugin: Plugin = {
             where: { id: alias.id }
           });
           return { status: "success", message: `Spitzname '${aliasName}' gelöscht.` };
+        } else if (aktion === "set_primary") {
+          const existing = await prisma.personAlias.findUnique({
+            where: { name: aliasName }
+          });
+
+          if (existing) {
+            if (existing.personId === personId) {
+              await prisma.$transaction([
+                prisma.personAlias.updateMany({
+                  where: { personId },
+                  data: { isPrimary: false }
+                }),
+                prisma.personAlias.update({
+                  where: { id: existing.id },
+                  data: { isPrimary: true }
+                })
+              ]);
+              return { status: "success", message: `Der Name '${aliasName}' wurde als primärer Name festgelegt.` };
+            } else {
+              return { status: "error", message: `Der Name '${aliasName}' wird bereits von einer anderen Person verwendet.` };
+            }
+          } else {
+            await prisma.$transaction([
+              prisma.personAlias.updateMany({
+                where: { personId },
+                data: { isPrimary: false }
+              }),
+              prisma.personAlias.create({
+                data: {
+                  personId,
+                  name: aliasName,
+                  isPrimary: true
+                }
+              })
+            ]);
+            return { status: "success", message: `Der Name '${aliasName}' wurde erstellt und als primärer Name festgelegt.` };
+          }
         } else {
-          return { status: "error", message: "Ungültige Aktion. Nur 'add' und 'delete' sind erlaubt." };
+          return { status: "error", message: "Ungültige Aktion. Nur 'add', 'delete' und 'set_primary' sind erlaubt." };
         }
       }
     }
