@@ -35,8 +35,8 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             height: 100vh;
-            padding: var(--gap);
-            gap: var(--gap);
+            padding: 0;
+            gap: 0;
             width: 100%;
             transform: translateX(-100%);
             opacity: 0;
@@ -54,8 +54,8 @@
         .glass-card {
             background: var(--card);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+            border-radius: 0;
+            box-shadow: none;
         }
 
         /* Linke Spalte (Plugins & Dashboard) */
@@ -270,8 +270,8 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
-            border-bottom-left-radius: 12px;
-            border-bottom-right-radius: 12px;
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
         }
 
         .linked-pills-bar {
@@ -1943,7 +1943,7 @@
             const titleEl = document.getElementById('plugin-view-title');
             if (titleEl) {
                 const titles = {
-                    'calendar': 'Kalender & Termine',
+                    'calendar': 'Kalender',
                     'timer': 'Timer & Wecker',
                     'tasks': 'Aufgaben',
                     'notes': 'Notizen',
@@ -3758,9 +3758,7 @@
                         calendarLoadedUntil.setDate(today.getDate() + 7);
                         calendarLoadedUntil.setHours(23, 59, 59, 999);
 
-                        let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; display: flex; flex-direction: column; gap: 8px;">`;
-                        
-                        html += `<h4 style="margin: 0 0 10px 0; color: var(--accent); font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">Termine</h4>`;
+                        let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 8px;">`;
                         
                         html += `<div id="calendar-events-list" style="display: flex; flex-direction: column; gap: 8px;">`;
                         html += renderCalendarEvents(widget.data.events);
@@ -3829,7 +3827,7 @@
                         widgetDiv.innerHTML = html;
                     } else if (widget.type === 'custom') {
                         if (widget.data.widgetType === 'notes_list') {
-                            let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; display: flex; flex-direction: column; gap: 8px;">`;
+                            let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 8px;">`;
                             
                             html += `<button onclick="openNoteModal()" class="nav-btn" style="width: 100%; font-size: 0.8rem; margin-bottom: 5px;">➕ Neue Notiz</button>`;
                             
@@ -3861,7 +3859,7 @@
                             html += `</div>`;
                             widgetDiv.innerHTML = html;
                         } else if (widget.data.widgetType === 'memory_people_list') {
-                            let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; display: flex; flex-direction: column; gap: 8px;">`;
+                            let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 8px;">`;
                             if (!widget.data.people || widget.data.people.length === 0) {
                                 html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine Personen im Gedächtnis.</p>`;
                             } else {
@@ -3881,7 +3879,7 @@
                             html += `</div>`;
                             widgetDiv.innerHTML = html;
                         } else if (widget.data.widgetType === 'tasks_overview') {
-                            let html = `<div style="text-align: left; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">`;
+                            let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">`;
                             
                             html += `<button onclick="openTaskModal()" class="nav-btn" style="width: 100%; font-size: 0.8rem; margin-bottom: 5px;">➕ Neue Aufgabe</button>`;
                             
