@@ -157,6 +157,45 @@ export const tasksPlugin: Plugin = {
           return { status: "error", message: `Fehler beim Wiederherstellen: ${e.message}` };
         }
       }
+    },
+    {
+      definition: {
+        name: "aktualisiere_aufgabe",
+        description: "Aktualisiert eine bestehende Aufgabe in der lokalen Datenbank.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            taskId: { type: SchemaType.STRING, description: "Die ID der zu aktualisierenden Aufgabe" },
+            titel: { type: SchemaType.STRING, description: "Der neue Titel der Aufgabe (optional)" },
+            notizen: { type: SchemaType.STRING, description: "Zusätzliche Notizen oder Beschreibung der Aufgabe (optional)" },
+            datum: { type: SchemaType.STRING, description: "Fälligkeitsdatum im Format YYYY-MM-DD (optional, 'null' zum Entfernen)" },
+            aufgabenlisteTitel: { type: SchemaType.STRING, description: "Die Aufgabenliste/Kategorie (optional)" }
+          },
+          required: ["taskId"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        try {
+          const updateData: any = {};
+          if (args.titel !== undefined) updateData.title = args.titel;
+          if (args.notizen !== undefined) updateData.notes = args.notizen || null;
+          if (args.datum !== undefined) {
+            updateData.due = args.datum && args.datum !== "null" ? new Date(args.datum) : null;
+          }
+          if (args.aufgabenlisteTitel !== undefined) updateData.listTitle = args.aufgabenlisteTitel || "Standard";
+
+          await prisma.task.update({
+            where: { id: Number(args.taskId) },
+            data: updateData
+          });
+          return {
+            status: "success",
+            message: "Aufgabe erfolgreich aktualisiert."
+          };
+        } catch (e: any) {
+          return { status: "error", message: `Fehler beim Aktualisieren: ${e.message}` };
+        }
+      }
     }
   ],
   getTopWidgets: async ({ prisma }) => {
@@ -180,6 +219,7 @@ export const tasksPlugin: Plugin = {
             id: String(t.id),
             tasklistId: t.listTitle,
             title: t.title,
+            notes: t.notes || "",
             due: t.due ? t.due.toISOString() : null,
             listTitle: t.listTitle
           }))
