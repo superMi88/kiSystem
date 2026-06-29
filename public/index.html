@@ -3805,6 +3805,129 @@
                                     html += `</div>`;
                                 });
                             }
+                        }
+                        
+                        html += `</div>`;
+                        widgetDiv.innerHTML = html;
+                    } else if (widget.type === 'timer_list') {
+                        let html = `<div class="timer-list-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%;">`;
+                        if (widget.data.timers.length === 0) {
+                            html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 0; padding: 10px; text-align: center; background: rgba(0,0,0,0.15); border-radius: 8px;">Keine aktiven Timer.</p>`;
+                        } else {
+                            widget.data.timers.forEach(t => {
+                                const escTitle = escapeHtml(t.title).replace(/'/g, "\\'");
+                                html += `
+                                    <div class="timer-card" id="timer-card-${t.id}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" style="padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); transition: all 0.3s; position: relative;">
+                                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+                                            <span style="font-size: 0.85rem; font-weight: bold; color: var(--text);">${escapeHtml(t.title)}</span>
+                                            <div style="display: flex; align-items: center; gap: 4px;">
+                                                <button onclick="insertEntityLinkIntoChat('${escTitle}', 'timer', ${t.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
+                                                <button onclick="callTool('loesche_timer', {id: ${t.id}})" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Timer löschen">✖</button>
+                                            </div>
+                                        </div>
+                                        <div class="timer-countdown" style="font-family: monospace; font-size: 1.1rem; font-weight: bold; color: var(--accent); margin-bottom: 6px;">--:--:--</div>
+                                        <div class="timer-progress-bg" style="width: 100%; height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; margin-bottom: 4px;">
+                                            <div class="timer-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--on)); border-radius: 2px; transition: width 0.5s linear;"></div>
+                                        </div>
+                                        <div style="font-size: 0.65rem; opacity: 0.4;">Bis: ${new Date(t.expiresAt).toLocaleTimeString('de-DE', {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</div>
+                                    </div>
+                                `;
+                            });
+                        }
+                        html += `</div>`;
+                        widgetDiv.innerHTML = html;
+                    } else if (widget.type === 'custom') {
+                        if (widget.data.widgetType === 'notes_list') {
+                            let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 8px;">`;
+                            
+                            html += `<button onclick="openNoteModal()" class="nav-btn" style="width: 100%; font-size: 0.8rem; margin-bottom: 5px;">➕ Neue Notiz</button>`;
+                            
+                            if (!widget.data.notes || widget.data.notes.length === 0) {
+                                html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine Notizen.</p>`;
+                            } else {
+                                widget.data.notes.forEach(note => {
+                                    const rawTitle = note.title;
+                                    const rawContent = note.content;
+                                    const cleanTitle = escapeHtml(rawTitle);
+                                    const cleanContent = escapeHtml(rawContent);
+                                    const escTitle = cleanTitle.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+                                    const escContent = cleanContent.replace(/'/g, "\\'").replace(/"/g, "&quot;").replace(/\n/g, "\\n");
+                                    html += `
+                                        <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); padding: 8px 10px; border-radius: 8px; position: relative;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                                <strong style="font-size: 0.8rem; color: var(--accent);">${cleanTitle}</strong>
+                                                <div style="display: flex; gap: 8px; align-items: center;">
+                                                    <button onclick="insertEntityLinkIntoChat('${escTitle}', 'note', ${note.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 0 4px;" title="In Chat verlinken">🔗</button>
+                                                    <button onclick="openNoteModal(${note.id}, '${escTitle}', '${escContent}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 0 4px;" title="Bearbeiten">✏️</button>
+                                                    <button onclick="deleteNote(${note.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 0 4px;" title="Löschen">✖</button>
+                                                </div>
+                                            </div>
+                                            <div style="font-size: 0.75rem; opacity: 0.8; white-space: pre-wrap; word-break: break-word; line-height: 1.3;">${cleanContent}</div>
+                                        </div>
+                                    `;
+                                });
+                            }
+                            html += `</div>`;
+                            widgetDiv.innerHTML = html;
+                        } else if (widget.data.widgetType === 'memory_people_list') {
+                            let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 8px;">`;
+                            if (!widget.data.people || widget.data.people.length === 0) {
+                                html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine Personen im Gedächtnis.</p>`;
+                            } else {
+                                widget.data.people.forEach(p => {
+                                    const escName = escapeHtml(p.name).replace(/'/g, "\\'");
+                                    html += `
+                                        <div onclick="openPersonProfileModal(${p.id})" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+                                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                <strong style="font-size: 0.85rem; color: var(--accent);">${escapeHtml(p.name)}</strong>
+                                                <button onclick="event.stopPropagation(); insertEntityLinkIntoChat('${escName}', 'person', ${p.id})" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--accent); cursor: pointer; border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'" title="In Chat verlinken">🔗 Link</button>
+                                            </div>
+                                            <div style="font-size: 0.75rem; opacity: 0.8; white-space: pre-wrap; word-break: break-word; line-height: 1.3; margin-top: 4px;">${escapeHtml(p.notes)}</div>
+                                        </div>
+                                    `;
+                                });
+                            }
+                            html += `</div>`;
+                            widgetDiv.innerHTML = html;
+                        } else if (widget.data.widgetType === 'tasks_overview') {
+                            let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">`;
+                            
+                            html += `<button onclick="openTaskModal()" class="nav-btn" style="width: 100%; font-size: 0.8rem; margin-bottom: 5px;">➕ Neue Aufgabe</button>`;
+                            
+                            if (!widget.data.tasks || widget.data.tasks.length === 0) {
+                                html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine offenen Aufgaben.</p>`;
+                            } else {
+                                const groupedTasks = {};
+                                widget.data.tasks.forEach(t => {
+                                    const listName = t.listTitle || "Meine Aufgaben";
+                                    if (!groupedTasks[listName]) groupedTasks[listName] = [];
+                                    groupedTasks[listName].push(t);
+                                });
+  
+                                Object.keys(groupedTasks).forEach(listName => {
+                                    html += `<div style="font-weight: 600; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin: 8px 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px;">${listName}</div>`;
+                                    html += `<div style="display: flex; flex-direction: column; gap: 4px;">`;
+                                    groupedTasks[listName].forEach(t => {
+                                         const repeatBadge = t.recurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrende Aufgabe">🔄</span>` : '';
+                                         const escTitle = escapeHtml(t.title).replace(/'/g, "\\'");
+                                         const escNotes = escapeHtml(t.notes || '').replace(/'/g, "\\'");
+                                         const escListTitle = escapeHtml(t.listTitle || '').replace(/'/g, "\\'");
+                                         html += `
+                                             <div class="task-item" style="font-size: 0.8rem; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); transition: all 0.2s; margin-bottom: 4px; width: 100%;">
+                                                 <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                                                     <input type="checkbox" data-task-id="${t.id}" data-tasklist-id="${t.tasklistId}" onchange="completeTask(this)" style="accent-color: var(--accent); cursor: pointer; width: 14px; height: 14px; flex-shrink: 0; margin: 0;">
+                                                     <span style="line-height: 1.4; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(t.title)}${repeatBadge}</span>
+                                                 </div>
+                                                 <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                                                     <button onclick="insertEntityLinkIntoChat('${escTitle}', 'task', ${t.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="In Chat verlinken">🔗</button>
+                                                     <button onclick="editTask(${t.id}, '${escTitle}', '${escNotes}', '${t.due || ''}', '${escListTitle}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Bearbeiten">✏️</button>
+                                                     <button onclick="deleteTask(${t.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Löschen">✖</button>
+                                                 </div>
+                                             </div>`;
+                                    });
+                                    html += `</div>`;
+                                });
+                            }
                             html += `</div>`;
                             widgetDiv.innerHTML = html;
                         }
