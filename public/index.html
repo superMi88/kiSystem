@@ -367,7 +367,7 @@
             color: rgba(243, 139, 168, 0.7);
         }
 
-        input {
+        input:not([type="checkbox"]):not([type="radio"]) {
             flex: 1;
             background: var(--input);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -378,7 +378,56 @@
             font-size: 0.9rem;
         }
 
-        input:focus { border-color: var(--accent); }
+        input:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--accent); }
+
+        /* Custom styled checkboxes */
+        .task-checkbox {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px !important;
+            height: 16px !important;
+            border: 1.5px solid rgba(255, 255, 255, 0.4) !important;
+            border-radius: 4px !important;
+            background: rgba(255, 255, 255, 0.02) !important;
+            cursor: pointer !important;
+            position: relative !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            flex-shrink: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            transition: all 0.2s ease !important;
+            box-sizing: border-box !important;
+        }
+
+        .task-checkbox:hover {
+            border-color: var(--accent) !important;
+            background: rgba(137, 180, 250, 0.08) !important;
+        }
+
+        .task-checkbox:checked {
+            background: var(--accent) !important;
+            border-color: var(--accent) !important;
+        }
+
+        .task-checkbox:checked::after {
+            content: "" !important;
+            position: absolute !important;
+            left: 4.5px !important;
+            top: 1px !important;
+            width: 4px !important;
+            height: 8px !important;
+            border: solid #11111b !important;
+            border-width: 0 2px 2px 0 !important;
+            transform: rotate(45deg) !important;
+            display: block !important;
+        }
+
+        .task-checkbox:disabled {
+            opacity: 0.5 !important;
+            cursor: not-allowed !important;
+        }
 
         #user-input {
             flex: 1;
@@ -1638,6 +1687,16 @@
                 <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Fälligkeitsdatum (optional)</label>
                 <input type="date" id="task-due-input" style="width: 100%; color-scheme: dark;">
             </div>
+            <div class="settings-group" style="text-align: left; margin-bottom: 20px;">
+                <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Wiederholung (optional)</label>
+                <select id="task-recurrence-input" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.9rem; color-scheme: dark;">
+                    <option value="none">Keine Wiederholung</option>
+                    <option value="daily">Täglich</option>
+                    <option value="weekly">Wöchentlich</option>
+                    <option value="monthly">Monatlich</option>
+                    <option value="yearly">Jährlich</option>
+                </select>
+            </div>
             <div class="modal-btns" style="display: flex; gap: 10px;">
                 <button class="cancel" onclick="closeTaskModal()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Abbrechen</button>
                 <button class="save" onclick="saveTask()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold;">Erstellen</button>
@@ -2084,6 +2143,47 @@
         window.toggleMobileView = toggleMobileView;
 
         const escapeHtml = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+        const recLabels = { daily: 'täglich', weekly: 'wöchentlich', monthly: 'monatlich', yearly: 'jährlich' };
+        function renderSingleTaskHtml(t, isOverdue) {
+            const isRecurring = t.recurrence && t.recurrence !== 'none';
+            const recLabel = recLabels[t.recurrence] || t.recurrence;
+            const repeatBadge = isRecurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrend: ${recLabel}">🔄</span>` : '';
+            
+            let dueBadge = '';
+            if (t.due) {
+                const dateObj = new Date(t.due);
+                const dateStr = dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+                const color = isOverdue ? 'var(--off)' : 'rgba(255,255,255,0.4)';
+                const weight = isOverdue ? 'bold' : 'normal';
+                dueBadge = ` <span style="font-size: 0.7rem; color: ${color}; font-weight: ${weight}; margin-left: 6px; display: inline-flex; align-items: center; gap: 3px;" title="${isOverdue ? 'Überfällig!' : 'Fällig am'} ${dateObj.toLocaleDateString('de-DE')}">📅 ${dateStr}</span>`;
+            }
+
+            const escTitle = escapeHtml(t.title).replace(/'/g, "\\'");
+            const escNotes = escapeHtml(t.notes || '').replace(/'/g, "\\'");
+            const escListTitle = escapeHtml(t.listTitle || '').replace(/'/g, "\\'");
+            const recurrenceVal = t.recurrence || 'none';
+
+            const bg = isOverdue ? 'rgba(243, 139, 168, 0.06)' : 'rgba(255,255,255,0.03)';
+            const border = isOverdue ? '1px solid rgba(243, 139, 168, 0.25)' : '1px solid rgba(255,255,255,0.06)';
+
+            return `
+                 <div class="task-item ${isOverdue ? 'overdue' : ''}" style="font-size: 0.8rem; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; background: ${bg}; border: ${border}; transition: all 0.2s; margin-bottom: 4px; width: 100%;">
+                     <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                         <input type="checkbox" class="task-checkbox" data-task-id="${t.id}" data-tasklist-id="${t.tasklistId || t.listTitle || 'Standard'}" onchange="completeTask(this)">
+                         <span style="line-height: 1.4; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 4px;">
+                            ${escapeHtml(t.title)}
+                            ${repeatBadge}
+                            ${dueBadge}
+                         </span>
+                     </div>
+                     <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                         <button onclick="insertEntityLinkIntoChat('${escTitle}', 'task', ${t.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="In Chat verlinken">🔗</button>
+                         <button onclick="editTask(${t.id}, '${escTitle}', '${escNotes}', '${t.due || ''}', '${escListTitle}', '${recurrenceVal}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Bearbeiten">✏️</button>
+                         <button onclick="deleteTask(${t.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Löschen">✖</button>
+                     </div>
+                 </div>`;
+        }
 
         // Helper to resolve API URLs (either absolute or relative depending on configuration)
         function getApiUrl(path) {
@@ -3768,39 +3868,51 @@
                         html += `<div id="calendar-loading-more" style="display: none; text-align: center; padding: 8px; font-size: 0.75rem; color: var(--accent); opacity: 0.8;">Lade weitere Termine...</div>`;
 
                         setTimeout(checkAndLoadMoreIfNoScrollbar, 200);
- 
+
                         if (widget.data.tasks && Array.isArray(widget.data.tasks)) {
                             html += `<h4 style="margin: 15px 0 10px 0; color: var(--accent); font-size: 0.8rem;">Offene Aufgaben</h4>`;
                             if (widget.data.tasks.length === 0) {
                                 html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 0;">Keine offenen Aufgaben.</p>`;
                             } else {
-                                const groupedTasks = {};
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+
+                                const overdueTasks = [];
+                                const activeTasks = [];
+
                                 widget.data.tasks.forEach(t => {
+                                    if (t.due) {
+                                        const dueObj = new Date(t.due);
+                                        dueObj.setHours(0, 0, 0, 0);
+                                        if (dueObj < today) {
+                                            overdueTasks.push(t);
+                                            return;
+                                        }
+                                    }
+                                    activeTasks.push(t);
+                                });
+
+                                if (overdueTasks.length > 0) {
+                                    html += `<div style="font-weight: 600; font-size: 0.7rem; color: var(--off); margin: 12px 0 6px 0; text-transform: uppercase; letter-spacing: 0.5px;">⚠️ Überfällig</div>`;
+                                    html += `<div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">`;
+                                    overdueTasks.forEach(t => {
+                                        html += renderSingleTaskHtml(t, true);
+                                    });
+                                    html += `</div>`;
+                                }
+
+                                const groupedTasks = {};
+                                activeTasks.forEach(t => {
                                     const listName = t.listTitle || "Meine Aufgaben";
                                     if (!groupedTasks[listName]) groupedTasks[listName] = [];
                                     groupedTasks[listName].push(t);
                                 });
- 
+
                                 Object.keys(groupedTasks).forEach(listName => {
                                     html += `<div style="font-weight: 600; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin: 12px 0 6px 0; text-transform: uppercase; letter-spacing: 0.5px;">${listName}</div>`;
                                     html += `<div style="display: flex; flex-direction: column; gap: 4px;">`;
                                     groupedTasks[listName].forEach(t => {
-                                        const repeatBadge = t.recurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrende Aufgabe">🔄</span>` : '';
-                                        const escTitle = escapeHtml(t.title).replace(/'/g, "\'");
-                                        const escNotes = escapeHtml(t.notes || '').replace(/'/g, "\'");
-                                        const escListTitle = escapeHtml(t.listTitle || '').replace(/'/g, "\'");
-                                        html += `
-                                             <div class="task-item" style="font-size: 0.8rem; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); transition: all 0.2s; margin-bottom: 4px; width: 100%;">
-                                                 <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
-                                                     <input type="checkbox" data-task-id="${t.id}" data-tasklist-id="${t.tasklistId}" onchange="completeTask(this)" style="accent-color: var(--accent); cursor: pointer; width: 14px; height: 14px; flex-shrink: 0; margin: 0;">
-                                                     <span style="line-height: 1.4; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(t.title)}${repeatBadge}</span>
-                                                 </div>
-                                                 <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
-                                                     <button onclick="insertEntityLinkIntoChat('${escTitle}', 'task', ${t.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="In Chat verlinken">🔗</button>
-                                                     <button onclick="editTask(${t.id}, '${escTitle}', '${escNotes}', '${t.due || ''}', '${escListTitle}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Bearbeiten">✏️</button>
-                                                     <button onclick="deleteTask(${t.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Löschen">✖</button>
-                                                 </div>
-                                             </div>`;
+                                        html += renderSingleTaskHtml(t, false);
                                     });
                                     html += `</div>`;
                                 });
@@ -3897,8 +4009,35 @@
                             if (!widget.data.tasks || widget.data.tasks.length === 0) {
                                 html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine offenen Aufgaben.</p>`;
                             } else {
-                                const groupedTasks = {};
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+
+                                const overdueTasks = [];
+                                const activeTasks = [];
+
                                 widget.data.tasks.forEach(t => {
+                                    if (t.due) {
+                                        const dueObj = new Date(t.due);
+                                        dueObj.setHours(0, 0, 0, 0);
+                                        if (dueObj < today) {
+                                            overdueTasks.push(t);
+                                            return;
+                                        }
+                                    }
+                                    activeTasks.push(t);
+                                });
+
+                                if (overdueTasks.length > 0) {
+                                    html += `<div style="font-weight: 600; font-size: 0.7rem; color: var(--off); margin: 8px 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px;">⚠️ Überfällig</div>`;
+                                    html += `<div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">`;
+                                    overdueTasks.forEach(t => {
+                                        html += renderSingleTaskHtml(t, true);
+                                    });
+                                    html += `</div>`;
+                                }
+
+                                const groupedTasks = {};
+                                activeTasks.forEach(t => {
                                     const listName = t.listTitle || "Meine Aufgaben";
                                     if (!groupedTasks[listName]) groupedTasks[listName] = [];
                                     groupedTasks[listName].push(t);
@@ -3908,22 +4047,7 @@
                                     html += `<div style="font-weight: 600; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin: 8px 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px;">${listName}</div>`;
                                     html += `<div style="display: flex; flex-direction: column; gap: 4px;">`;
                                     groupedTasks[listName].forEach(t => {
-                                         const repeatBadge = t.recurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrende Aufgabe">🔄</span>` : '';
-                                         const escTitle = escapeHtml(t.title).replace(/'/g, "\\'");
-                                         const escNotes = escapeHtml(t.notes || '').replace(/'/g, "\\'");
-                                         const escListTitle = escapeHtml(t.listTitle || '').replace(/'/g, "\\'");
-                                         html += `
-                                             <div class="task-item" style="font-size: 0.8rem; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); transition: all 0.2s; margin-bottom: 4px; width: 100%;">
-                                                 <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
-                                                     <input type="checkbox" data-task-id="${t.id}" data-tasklist-id="${t.tasklistId}" onchange="completeTask(this)" style="accent-color: var(--accent); cursor: pointer; width: 14px; height: 14px; flex-shrink: 0; margin: 0;">
-                                                     <span style="line-height: 1.4; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(t.title)}${repeatBadge}</span>
-                                                 </div>
-                                                 <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
-                                                     <button onclick="insertEntityLinkIntoChat('${escTitle}', 'task', ${t.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="In Chat verlinken">🔗</button>
-                                                     <button onclick="editTask(${t.id}, '${escTitle}', '${escNotes}', '${t.due || ''}', '${escListTitle}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Bearbeiten">✏️</button>
-                                                     <button onclick="deleteTask(${t.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Löschen">✖</button>
-                                                 </div>
-                                             </div>`;
+                                         html += renderSingleTaskHtml(t, false);
                                     });
                                     html += `</div>`;
                                 });
@@ -4129,14 +4253,16 @@
         const taskNotesInput = document.getElementById('task-notes-input');
         const taskDueInput = document.getElementById('task-due-input');
 
-        window.openTaskModal = function(taskId = null, title = '', notes = '', due = '', listTitle = '') {
+        window.openTaskModal = function(taskId = null, title = '', notes = '', due = '', listTitle = '', recurrence = 'none') {
             const taskIdInput = document.getElementById('task-id-input');
             const modalTitle = document.querySelector('#task-modal h3');
             const saveBtn = document.querySelector('#task-modal .save');
+            const recurrenceInput = document.getElementById('task-recurrence-input');
             
             if (taskIdInput) taskIdInput.value = taskId || '';
             taskTitleInput.value = title || '';
             taskNotesInput.value = notes || '';
+            if (recurrenceInput) recurrenceInput.value = recurrence || 'none';
             
             if (due) {
                 const dateObj = new Date(due);
@@ -4172,6 +4298,8 @@
             const title = taskTitleInput.value.trim();
             const notes = taskNotesInput.value.trim();
             const due = taskDueInput.value;
+            const recurrenceInput = document.getElementById('task-recurrence-input');
+            const recurrence = recurrenceInput ? recurrenceInput.value : 'none';
             if (!title) {
                 alert("Titel ist erforderlich.");
                 return;
@@ -4182,13 +4310,15 @@
                     taskId: taskId,
                     titel: title,
                     notizen: notes,
-                    datum: due ? due : "null"
+                    datum: due ? due : "null",
+                    recurrence: recurrence
                 };
                 await callTool('aktualisiere_aufgabe', args);
             } else {
                 const args = { titel: title };
                 if (notes) args.notizen = notes;
                 if (due) args.datum = due;
+                if (recurrence && recurrence !== 'none') args.recurrence = recurrence;
                 await callTool('erstelle_aufgabe', args);
             }
             closeTaskModal();
@@ -4200,8 +4330,8 @@
             }
         };
 
-        window.editTask = function(taskId, title, notes, due, listTitle) {
-            openTaskModal(taskId, title, notes, due, listTitle);
+        window.editTask = function(taskId, title, notes, due, listTitle, recurrence = 'none') {
+            openTaskModal(taskId, title, notes, due, listTitle, recurrence);
         };
 
         async function completeTask(checkbox) {
