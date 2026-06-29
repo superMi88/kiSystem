@@ -16,6 +16,7 @@ import { PluginManager } from "./plugins/index.js";
 import { getSettings, saveSettings } from "./settings.js";
 import { runAutomaticMigration } from "./migrate.js";
 import { getEventsForRange } from "./plugins/Calendar/index.js";
+import { calculateNextDueDate } from "./plugins/Tasks/index.js";
 
 dotenv.config();
 
@@ -167,11 +168,24 @@ app.post("/tasks/complete", async (req, res) => {
     return res.status(400).json({ error: "taskId ist erforderlich." });
   }
   try {
-    await prisma.task.update({
-      where: { id: Number(taskId) },
-      data: { completed: true }
-    });
-    res.json({ success: true, message: "Aufgabe erfolgreich erledigt." });
+    const task = await prisma.task.findUnique({ where: { id: Number(taskId) } });
+    if (task && task.recurrence && task.due) {
+      const nextDue = calculateNextDueDate(task.due, task.recurrence);
+      await prisma.task.update({
+        where: { id: Number(taskId) },
+        data: {
+          due: nextDue,
+          completed: false // Keep it open for the next occurrence
+        }
+      });
+      res.json({ success: true, message: "Wiederkehrende Aufgabe auf das nächste Datum verschoben.", nextDue: nextDue.toISOString() });
+    } else {
+      await prisma.task.update({
+        where: { id: Number(taskId) },
+        data: { completed: true }
+      });
+      res.json({ success: true, message: "Aufgabe erfolgreich erledigt." });
+    }
   } catch (e: any) {
     console.error("Fehler beim Erledigen der Aufgabe:", e);
     res.status(500).json({ error: e.message });

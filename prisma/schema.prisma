@@ -143,6 +143,7 @@ model Task {
   due         DateTime?
   completed   Boolean  @default(false)
   listTitle   String   @default("Standard")
+  recurrence  String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   isDeleted   Boolean  @default(false)
