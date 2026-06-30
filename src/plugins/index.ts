@@ -5,7 +5,7 @@ import { memoryPlugin } from "./Memory/index.js";
 import { calendarPlugin } from "./Calendar/index.js";
 import { imageGeneratorPlugin } from "./ImageGenerator/index.js";
 import { timerPlugin } from "./Timer/index.js";
-import { notesPlugin } from "./Notes/index.js";
+import { projectsPlugin } from "./Projects/index.js";
 import { tasksPlugin } from "./Tasks/index.js";
 import { getSettings } from "../settings.js";
 
@@ -20,7 +20,7 @@ export class PluginManager {
     this.registerPlugin(calendarPlugin);
     this.registerPlugin(imageGeneratorPlugin);
     this.registerPlugin(timerPlugin);
-    this.registerPlugin(notesPlugin);
+    this.registerPlugin(projectsPlugin);
     this.registerPlugin(tasksPlugin);
   }
 

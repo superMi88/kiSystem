@@ -75,7 +75,8 @@ export const tasksPlugin: Plugin = {
             notizen: { type: SchemaType.STRING, description: "Zusätzliche Notizen oder Beschreibung der Aufgabe (optional)" },
             datum: { type: SchemaType.STRING, description: "Fälligkeitsdatum im Format YYYY-MM-DD (optional)" },
             aufgabenlisteTitel: { type: SchemaType.STRING, description: "Die Aufgabenliste/Kategorie. Standardwert ist 'Standard' (optional)" },
-            recurrence: { type: SchemaType.STRING, description: "Wiederholungsintervall: 'daily', 'weekly', 'monthly', 'yearly' oder 'none' (optional)" }
+            recurrence: { type: SchemaType.STRING, description: "Wiederholungsintervall: 'daily', 'weekly', 'monthly', 'yearly' oder 'none' (optional)" },
+            projectId: { type: SchemaType.INTEGER, description: "Die ID des Projekts, dem die Aufgabe zugeordnet ist (optional)" }
           },
           required: ["titel"]
         } as any
@@ -83,6 +84,7 @@ export const tasksPlugin: Plugin = {
       handler: async (args, { prisma }) => {
         let due = args.datum ? new Date(args.datum) : undefined;
         const recurrence = args.recurrence && args.recurrence !== "none" ? args.recurrence.toLowerCase() : null;
+        const projectId = args.projectId ? Number(args.projectId) : null;
         
         // If recurrence is set but no due date is provided, default to today
         if (recurrence && !due) {
@@ -97,7 +99,8 @@ export const tasksPlugin: Plugin = {
               notes: args.notizen || null,
               due: due || null,
               listTitle: args.aufgabenlisteTitel || "Standard",
-              recurrence: recurrence
+              recurrence: recurrence,
+              projectId: projectId
             }
           });
           return {
@@ -109,7 +112,8 @@ export const tasksPlugin: Plugin = {
               notizen: task.notes || "",
               faellig: task.due ? task.due.toISOString() : null,
               aufgabenlisteTitel: task.listTitle,
-              recurrence: task.recurrence
+              recurrence: task.recurrence,
+              projectId: task.projectId
             }
           };
         } catch (e: any) {
@@ -227,7 +231,8 @@ export const tasksPlugin: Plugin = {
             notizen: { type: SchemaType.STRING, description: "Zusätzliche Notizen oder Beschreibung der Aufgabe (optional)" },
             datum: { type: SchemaType.STRING, description: "Fälligkeitsdatum im Format YYYY-MM-DD (optional, 'null' zum Entfernen)" },
             aufgabenlisteTitel: { type: SchemaType.STRING, description: "Die Aufgabenliste/Kategorie (optional)" },
-            recurrence: { type: SchemaType.STRING, description: "Neues Wiederholungsintervall: 'daily', 'weekly', 'monthly', 'yearly' oder 'none' (optional)" }
+            recurrence: { type: SchemaType.STRING, description: "Neues Wiederholungsintervall: 'daily', 'weekly', 'monthly', 'yearly' oder 'none' (optional)" },
+            projectId: { type: SchemaType.INTEGER, description: "Die neue ID des Projekts oder 'null' zum Entfernen (optional)" }
           },
           required: ["taskId"]
         } as any
@@ -253,6 +258,9 @@ export const tasksPlugin: Plugin = {
               }
             }
           }
+          if (args.projectId !== undefined) {
+            updateData.projectId = args.projectId === "null" || args.projectId === null ? null : Number(args.projectId);
+          }
 
           await prisma.task.update({
             where: { id: Number(args.taskId) },
@@ -269,34 +277,7 @@ export const tasksPlugin: Plugin = {
     }
   ],
   getTopWidgets: async ({ prisma }) => {
-    let tasks: any[] = [];
-    try {
-      tasks = await prisma.task.findMany({
-        where: { completed: false, isDeleted: false },
-        orderBy: { createdAt: "asc" }
-      });
-    } catch (e) {
-      console.warn("Fehler beim Laden der lokalen Aufgaben:", e);
-    }
-
-    return [
-      {
-        pluginName: "Tasks",
-        type: "custom",
-        data: {
-          widgetType: "tasks_overview",
-          tasks: tasks.map(t => ({
-            id: String(t.id),
-            tasklistId: t.listTitle,
-            title: t.title,
-            notes: t.notes || "",
-            due: t.due ? t.due.toISOString() : null,
-            listTitle: t.listTitle,
-            recurrence: t.recurrence
-          }))
-        }
-      } as any
-    ];
+    return [];
   },
   entityConfig: {
     type: "task",
