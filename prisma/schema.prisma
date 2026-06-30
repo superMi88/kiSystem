@@ -13,140 +13,165 @@ datasource db {
 }
 
 
+/// [Core-System] Repräsentiert eine Chat-Unterhaltung zwischen dem Benutzer und der KI.
 model Conversation {
-  id        String        @id @default(uuid())
-  title     String        @default("Neuer Chat")
-  createdAt DateTime      @default(now())
-  messages  ChatMessage[]
+  id        String        @id @default(uuid()) // Eindeutige ID des Chats (UUID)
+  title     String        @default("Neuer Chat") // Titel des Chats
+  createdAt DateTime      @default(now()) // Erstellungszeitpunkt des Chats
+  messages  ChatMessage[] // Liste der zugehörigen Chat-Nachrichten
 }
 
+/// [Core-System] Speichert die einzelnen Nachrichten innerhalb einer Chat-Unterhaltung.
 model ChatMessage {
-  id             Int          @id @default(autoincrement())
-  role           String       // "user" or "ai"
-  text           String
-  createdAt      DateTime     @default(now())
-  conversationId String?
-  conversation   Conversation? @relation(fields: [conversationId], references: [id])
+  id             Int          @id @default(autoincrement()) // Eindeutige ID der Nachricht
+  role           String       // Rolle des Absenders ("user" oder "ai")
+  text           String       // Der eigentliche Textinhalt der Nachricht
+  createdAt      DateTime     @default(now()) // Sendezeitpunkt der Nachricht
+  conversationId String?      // Fremdschlüssel zur Conversation
+  conversation   Conversation? @relation(fields: [conversationId], references: [id]) // Relation zum Chat
 }
 
+/// [AppLauncher Plugin] Ermöglicht das Verwalten und Starten von externen Anwendungen/Links über Kurzbefehle.
 model AppLauncher {
-  id    Int    @id @default(autoincrement())
-  name  String @unique
-  path  String
+  id    Int    @id @default(autoincrement()) // Eindeutige ID des Launchers
+  name  String @unique // Anzeigename der App/Verknüpfung
+  path  String // Pfad oder Befehl zum Starten der App
 }
 
+/// [Memory Plugin] Repräsentiert Personenprofile im Gedächtnis des Systems mit zugehörigen Fakten und Notizen.
 model Person {
-  id        Int              @id @default(autoincrement())
-  name      String?          // Deprecated, für automatische Migration
-  notes     String?          // Deprecated, für automatische Migration
-  biography String?          // Zuvor 'notes'
-  createdAt DateTime         @default(now())
-  aliases   PersonAlias[]
-  facts     Fact[]
-  memories  SemanticMemory[]
-  isDeleted Boolean          @default(false)
+  id        Int              @id @default(autoincrement()) // Eindeutige ID der Person
+  name      String?          // Veraltet: Name (wird für automatische Migration beibehalten)
+  notes     String?          // Veraltet: Notizen (wird für automatische Migration beibehalten)
+  biography String?          // Biografie oder Notizen zur Person (früher 'notes')
+  createdAt DateTime         @default(now()) // Erstellungszeitpunkt des Personenprofils
+  aliases   PersonAlias[]    // Alternative Namen/Aliase für die Person
+  facts     Fact[]           // Gespeicherte Fakten über diese Person
+  memories  SemanticMemory[] // Semantische Erinnerungen/Verweise auf diese Person
+  isDeleted Boolean          @default(false) // Soft-Delete-Flag (gelöscht ja/nein)
 }
 
+/// [Memory Plugin] Verwaltet alternative Namen oder Schreibweisen (Aliase) für eine Person zur besseren Erkennung im Chat.
 model PersonAlias {
-  id        Int      @id @default(autoincrement())
-  personId  Int
-  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
-  name      String   @unique
-  isPrimary Boolean  @default(false)
+  id        Int      @id @default(autoincrement()) // Eindeutige ID des Alias
+  personId  Int      // ID der verknüpften Person
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade) // Relation zur Person
+  name      String   @unique // Der alternative Name (z. B. Spitzname, Abkürzung)
+  isPrimary Boolean  @default(false) // Flag, ob dies der Hauptname der Person ist
 }
 
+/// [Memory Plugin] Speichert spezifische Fakten oder Eigenschaften zu einer Person (z. B. Hobbys, Vorlieben).
 model Fact {
-  id        Int      @id @default(autoincrement())
-  content   String
-  category  String?  // e.g., "game", "hobby", "personal"
-  personId  Int
-  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  isDeleted Boolean  @default(false)
+  id        Int      @id @default(autoincrement()) // Eindeutige ID des Fakts
+  content   String   // Textinhalt des Fakts (z. B. "Mag Fußball")
+  category  String?  // Kategorie des Fakts (z. B. "Hobby", "Beruf", "Persönliches")
+  personId  Int      // ID der zugehörigen Person
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade) // Relation zur Person
+  createdAt DateTime @default(now()) // Erstellungszeitpunkt des Fakts
+  isDeleted Boolean  @default(false) // Soft-Delete-Flag (gelöscht ja/nein)
 }
 
+/// [Memory Plugin] Speichert semantische Textfragmente inklusive Vektoreinbettungen (Embeddings) für die KI-gestützte Ähnlichkeitssuche.
 model SemanticMemory {
-  id        Int                     @id @default(autoincrement())
-  content   String
-  embedding Unsupported("vector(3072)")
-  metadata  Json?                   // { source: "chat", conversationId: "..." }
-  personId  Int?
-  person    Person?                 @relation(fields: [personId], references: [id], onDelete: Cascade)
-  createdAt DateTime                @default(now())
+  id        Int                     @id @default(autoincrement()) // Eindeutige ID der Erinnerung
+  content   String                  // Textinhalt der semantischen Erinnerung
+  embedding Unsupported("vector(3072)") // Vektoreinbettung des Inhalts (3072 Dimensionen für Vektorsuche)
+  metadata  Json?                   // JSON-Metadaten (z. B. { source: "chat", conversationId: "..." })
+  personId  Int?                    // Optionale ID einer verknüpften Person
+  person    Person?                 @relation(fields: [personId], references: [id], onDelete: Cascade) // Relation zur Person
+  createdAt DateTime                @default(now()) // Erstellungszeitpunkt des Eintrags
 }
 
+/// [Timer Plugin] Verwaltet vom Benutzer gesetzte Timer und Wecker inklusive Ablaufzeitpunkt und Erledigt-Status.
 model Timer {
-  id        Int      @id @default(autoincrement())
-  title     String   @default("Timer")
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  completed Boolean  @default(false)
-  isDeleted Boolean  @default(false)
+  id        Int      @id @default(autoincrement()) // Eindeutige ID des Timers
+  title     String   @default("Timer") // Name/Titel des Timers
+  expiresAt DateTime // Zeitpunkt des Ablaufs des Timers
+  createdAt DateTime @default(now()) // Erstellungszeitpunkt des Timers
+  completed Boolean  @default(false) // Flag, ob der Timer abgelaufen/beendet ist
+  isDeleted Boolean  @default(false) // Soft-Delete-Flag (gelöscht ja/nein)
 }
 
+/// [Projects Plugin] Speichert Notizen (Texte/Markdown), die optional auch einem bestimmten Projekt zugeordnet sein können.
 model Note {
-  id        Int      @id @default(autoincrement())
-  title     String
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  isDeleted Boolean  @default(false)
+  id        Int      @id @default(autoincrement()) // Eindeutige ID der Notiz
+  title     String   // Titel der Notiz
+  content   String   // Textinhalt der Notiz
+  createdAt DateTime @default(now()) // Erstellungszeitpunkt
+  updatedAt DateTime @updatedAt // Zeitpunkt der letzten Änderung
+  isDeleted Boolean  @default(false) // Soft-Delete-Flag
+  projectId Int?     // Optionale ID eines zugeordneten Projekts
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade) // Relation zum Projekt
 }
 
+/// [Calendar Plugin] Repräsentiert Kalendertermine, sowohl Einzeltermine als auch Instanzen/Ausnahmen von wiederkehrenden Terminen.
 model Event {
-  id                     Int                @id @default(autoincrement())
-  title                  String
-  description            String?
-  start                  DateTime
-  end                    DateTime
-  isAllDay               Boolean            @default(false)
-  fuzzyTime              String?
+  id                     Int                @id @default(autoincrement()) // Eindeutige ID des Kalendertermins
+  title                  String             // Titel des Termins
+  description            String?            // Optionale Beschreibung
+  start                  DateTime           // Startzeitpunkt des Termins
+  end                    DateTime           // Endzeitpunkt des Termins
+  isAllDay               Boolean            @default(false) // Flag für ganztägige Termine
+  fuzzyTime              String?            // Ungenaue Zeitbeschreibung (z. B. "nachmittags", "abends")
   
-  recurrenceId           Int?
-  recurrence             RecurrencePattern? @relation(fields: [recurrenceId], references: [id], onDelete: Cascade)
+  recurrenceId           Int?               // Optionale ID des zugehörigen Wiederholungsmusters
+  recurrence             RecurrencePattern? @relation(fields: [recurrenceId], references: [id], onDelete: Cascade) // Relation zum Wiederholungsmuster
   
-  originalOccurrenceDate DateTime?
+  originalOccurrenceDate DateTime?          // Ursprüngliches Datum dieses Vorkommens (wichtig für Abweichungen/Ausnahmen)
   
-  isDeleted              Boolean            @default(false)
-  isCancelled            Boolean            @default(false)
-  cancellationReason     String?
+  isDeleted              Boolean            @default(false) // Soft-Delete-Flag
+  isCancelled            Boolean            @default(false) // Flag, ob dieser spezifische Termin abgesagt/storniert wurde
+  cancellationReason     String?            // Grund für die Absage/Stornierung
   
-  originalStart          DateTime?
-  originalEnd            DateTime?
+  originalStart          DateTime?          // Ursprüngliche Startzeit (falls der Termin verschoben wurde)
+  originalEnd            DateTime?          // Ursprüngliche Endzeit (falls der Termin verschoben wurde)
 
-  createdAt              DateTime           @default(now())
-  updatedAt              DateTime           @updatedAt
+  createdAt              DateTime           @default(now()) // Erstellungszeitpunkt
+  updatedAt              DateTime           @updatedAt // Letzte Aktualisierung
 }
 
+/// [Calendar Plugin] Definiert das Wiederholungsmuster (Serie) für periodisch wiederkehrende Kalendertermine.
 model RecurrencePattern {
-  id              Int       @id @default(autoincrement())
-  title           String
-  description     String?
-  originalStart   DateTime
-  originalEnd     DateTime
-  isAllDay        Boolean   @default(false)
-  fuzzyTime       String?
-  recurrenceType  String    // "DAILY" | "WEEKLY" | "MONTHLY"
-  recurrenceEnd   DateTime?
-  events          Event[]   // Overridden instances linked to this pattern
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  isDeleted       Boolean   @default(false)
+  id              Int       @id @default(autoincrement()) // Eindeutige ID des Wiederholungsmusters
+  title           String    // Titel des Serientermins
+  description     String?   // Optionale Beschreibung der Serie
+  originalStart   DateTime  // Startzeitpunkt des allerersten Termins der Serie
+  originalEnd     DateTime  // Endzeitpunkt des allerersten Termins der Serie
+  isAllDay        Boolean   @default(false) // Flag, ob die Serie ganztägig ist
+  fuzzyTime       String?   // Ungenaue Zeitbeschreibung für die Serie
+  recurrenceType  String    // Art der Wiederholung ("DAILY", "WEEKLY", "MONTHLY")
+  recurrenceEnd   DateTime? // Optionales Enddatum für die Serie
+  events          Event[]   // Zu dieser Serie gehörende Termin-Instanzen/Abweichungen
+  createdAt       DateTime  @default(now()) // Erstellungszeitpunkt
+  updatedAt       DateTime  @updatedAt // Letzte Aktualisierung
+  isDeleted       Boolean   @default(false) // Soft-Delete-Flag
 }
 
-
-
+/// [Tasks Plugin] Repräsentiert Aufgaben (To-Dos) mit optionaler Zuordnung zu einem Projekt, Fälligkeitsdatum und Wiederholungsregeln. Integriert in Tasks-, Calendar- und Projects-Plugin.
 model Task {
-  id          Int      @id @default(autoincrement())
-  title       String
-  notes       String?
-  due         DateTime?
-  completed   Boolean  @default(false)
-  listTitle   String   @default("Standard")
-  recurrence  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  isDeleted   Boolean  @default(false)
+  id          Int      @id @default(autoincrement()) // Eindeutige ID der Aufgabe
+  title       String   // Titel der Aufgabe
+  notes       String?  // Optionale Notizen/Details zur Aufgabe
+  due         DateTime? // Optionales Fälligkeitsdatum (erzeugt Anzeige im Kalender)
+  completed   Boolean  @default(false) // Status, ob die Aufgabe erledigt ist
+  listTitle   String   @default("Standard") // Name der Aufgabenliste (z. B. "Standard", "Einkäufe")
+  recurrence  String?  // Optionales Wiederholungsmuster als Freitext/Regel
+  createdAt   DateTime @default(now()) // Erstellungszeitpunkt
+  updatedAt   DateTime @updatedAt // Zeitpunkt der letzten Aktualisierung
+  isDeleted   Boolean  @default(false) // Soft-Delete-Flag
+  projectId   Int?     // Optionale ID eines zugeordneten Projekts
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade) // Relation zum Projekt
+}
+
+/// [Projects Plugin] Verwaltet Projekte, die als Container für zusammengehörende Aufgaben und Notizen dienen.
+model Project {
+  id        Int      @id @default(autoincrement()) // Eindeutige ID des Projekts
+  name      String   // Name des Projekts
+  createdAt DateTime @default(now()) // Erstellungszeitpunkt
+  updatedAt DateTime @updatedAt // Zeitpunkt der letzten Aktualisierung
+  isDeleted Boolean  @default(false) // Soft-Delete-Flag
+  tasks     Task[]   // Alle dem Projekt zugeordneten Aufgaben
+  notes     Note[]   // Alle dem Projekt zugeordneten Notizen
 }
 
 

@@ -133,6 +133,7 @@ function getOccurrences(pattern: any, startRange: Date, endRange: Date, override
 export async function getEventsForRange(start: Date, end: Date, prisma: any): Promise<any[]> {
   let occurrences: any[] = [];
   let dbEvents: any[] = [];
+  let dbTasks: any[] = [];
   try {
     dbEvents = await prisma.event.findMany({
       where: {
@@ -161,8 +162,19 @@ export async function getEventsForRange(start: Date, end: Date, prisma: any): Pr
     for (const pattern of dbPatterns) {
       occurrences.push(...getOccurrences(pattern, start, end, overrides));
     }
+
+    // Abrufen von Aufgaben, die im Datumsbereich fällig sind
+    dbTasks = await prisma.task.findMany({
+      where: {
+        isDeleted: false,
+        due: {
+          gte: start,
+          lte: end
+        }
+      }
+    });
   } catch (e) {
-    console.warn("Fehler beim Abrufen der lokalen Kalender-Daten:", e);
+    console.warn("Fehler beim Abrufen der lokalen Kalender- und Aufgabendaten:", e);
   }
 
   const allEvents = [
@@ -195,6 +207,19 @@ export async function getEventsForRange(start: Date, end: Date, prisma: any): Pr
       originalStart: null,
       originalEnd: null,
       fuzzyTime: o.fuzzyTime
+    })),
+    ...dbTasks.map((t: any) => ({
+      id: `task-${t.id}`,
+      title: t.title,
+      description: t.notes || "",
+      time: t.due.toISOString(),
+      endTime: t.due.toISOString(),
+      isAllDay: true,
+      isTask: true,
+      completed: t.completed,
+      recurring: t.recurrence !== null && t.recurrence !== "none",
+      recurrence: t.recurrence,
+      listTitle: t.listTitle
     }))
   ];
 
@@ -1062,12 +1087,37 @@ export const calendarPlugin: Plugin = {
 
     const matchedEvents = await getEventsForRange(today, inDays, prisma);
 
+    let overdueTasks: any[] = [];
+    try {
+      overdueTasks = await prisma.task.findMany({
+        where: {
+          completed: false,
+          isDeleted: false,
+          due: {
+            lt: today
+          }
+        },
+        orderBy: { due: "asc" }
+      });
+    } catch (e) {
+      console.warn("Fehler beim Laden überfälliger Aufgaben:", e);
+    }
+
     return [
       {
         pluginName: "Calendar",
         type: "calendar_overview",
         data: {
-          events: matchedEvents
+          events: matchedEvents,
+          overdueTasks: overdueTasks.map((t: any) => ({
+            id: String(t.id),
+            title: t.title,
+            notes: t.notes || "",
+            due: t.due ? t.due.toISOString() : null,
+            listTitle: t.listTitle,
+            recurrence: t.recurrence,
+            isTask: true
+          }))
         }
       }
     ];

@@ -6,7 +6,7 @@
     "build": "tsc",
     "start": "node build/index.js",
     "electron": "electron .",
-    "dev": "npm run build && concurrently \"npm start\" \"electron .\"",
+    "dev": "npx prisma db push --accept-data-loss && npm run build && concurrently \"npm start\" \"electron .\"",
     "cap:sync": "npx cap sync",
     "cap:open": "npx cap open android"
   },

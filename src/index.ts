@@ -158,18 +158,21 @@ app.post("/api/tools/call", async (req, res) => {
     const result = await pluginManager.executeTool(name, args);
     res.json(result);
   } catch (error: any) {
+    console.error(`Fehler bei Tool Call '${name}':`, error);
     res.status(500).json({ error: error.message });
   }
 });
 
 app.post("/tasks/complete", async (req, res) => {
-  const { taskId } = req.body;
+  const { taskId, completed } = req.body;
   if (!taskId) {
     return res.status(400).json({ error: "taskId ist erforderlich." });
   }
+  const targetCompleted = completed !== undefined ? !!completed : true;
+
   try {
     const task = await prisma.task.findUnique({ where: { id: Number(taskId) } });
-    if (task && task.recurrence && task.due) {
+    if (task && task.recurrence && task.due && targetCompleted) {
       const nextDue = calculateNextDueDate(task.due, task.recurrence);
       await prisma.task.update({
         where: { id: Number(taskId) },
@@ -182,12 +185,12 @@ app.post("/tasks/complete", async (req, res) => {
     } else {
       await prisma.task.update({
         where: { id: Number(taskId) },
-        data: { completed: true }
+        data: { completed: targetCompleted }
       });
-      res.json({ success: true, message: "Aufgabe erfolgreich erledigt." });
+      res.json({ success: true, message: `Aufgabe erfolgreich ${targetCompleted ? 'erledigt' : 'wieder geöffnet'}.` });
     }
   } catch (e: any) {
-    console.error("Fehler beim Erledigen der Aufgabe:", e);
+    console.error("Fehler beim Erledigen/Reaktivieren der Aufgabe:", e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -560,16 +563,6 @@ WICHTIGE VERHALTENSREGELN:
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`KI-System Server läuft auf Port ${PORT}`);
-
-  // Automatische Schema-Migration ausführen
-  try {
-    console.log("[Migration] Führe 'prisma db push' aus, um das Schema in der Datenbank zu aktualisieren...");
-    const { execSync } = await import("child_process");
-    execSync("npx prisma db push --accept-data-loss", { stdio: "inherit" });
-    console.log("[Migration] Schema-Migration erfolgreich abgeschlossen.");
-  } catch (error: any) {
-    console.error("[Migration] Fehler bei der Schema-Migration (prisma db push):", error);
-  }
 
   // Automatische Datenmigration ausführen
   await runAutomaticMigration(prisma);

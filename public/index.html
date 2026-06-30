@@ -1012,8 +1012,7 @@
         /* Show only the active plugin widget */
         body.mobile-mode.view-calendar #top-widgets-container > #widget-calendar,
         body.mobile-mode.view-timer #top-widgets-container > #widget-timer,
-        body.mobile-mode.view-tasks #top-widgets-container > #widget-tasks,
-        body.mobile-mode.view-notes #top-widgets-container > #widget-notes,
+        body.mobile-mode.view-projects #top-widgets-container > #widget-projects,
         body.mobile-mode.view-memory #top-widgets-container > #widget-memory {
             display: block !important;
         }
@@ -1657,6 +1656,7 @@
         <div id="note-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 25px; border-radius: 12px; z-index: 300; width: 85%; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px);">
             <h3 id="note-modal-title" style="color: var(--accent); margin-top: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 20px;">Notiz erstellen</h3>
             <input type="hidden" id="note-id-input">
+            <input type="hidden" id="note-project-id-input">
             <div class="settings-group" style="text-align: left; margin-bottom: 15px;">
                 <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Titel</label>
                 <input type="text" id="note-title-input" placeholder="Notiz Titel..." style="width: 100%;">
@@ -1674,6 +1674,7 @@
         <!-- Task Modal -->
         <div id="task-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 25px; border-radius: 12px; z-index: 300; width: 85%; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px);">
             <input type="hidden" id="task-id-input">
+            <input type="hidden" id="task-project-id-input">
             <h3 style="color: var(--accent); margin-top: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 20px;">Aufgabe erstellen</h3>
             <div class="settings-group" style="text-align: left; margin-bottom: 15px;">
                 <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Titel</label>
@@ -1683,11 +1684,11 @@
                 <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Beschreibung (optional)</label>
                 <input type="text" id="task-notes-input" placeholder="Zusätzliche Infos..." style="width: 100%;">
             </div>
-            <div class="settings-group" style="text-align: left; margin-bottom: 20px;">
+            <div class="settings-group" id="task-due-group" style="text-align: left; margin-bottom: 20px;">
                 <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Fälligkeitsdatum (optional)</label>
                 <input type="date" id="task-due-input" style="width: 100%; color-scheme: dark;">
             </div>
-            <div class="settings-group" style="text-align: left; margin-bottom: 20px;">
+            <div class="settings-group" id="task-recurrence-group" style="text-align: left; margin-bottom: 20px;">
                 <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Wiederholung (optional)</label>
                 <select id="task-recurrence-input" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.9rem; color-scheme: dark;">
                     <option value="none">Keine Wiederholung</option>
@@ -1700,6 +1701,20 @@
             <div class="modal-btns" style="display: flex; gap: 10px;">
                 <button class="cancel" onclick="closeTaskModal()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Abbrechen</button>
                 <button class="save" onclick="saveTask()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold;">Erstellen</button>
+            </div>
+        </div>
+
+        <!-- Project Modal -->
+        <div id="project-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 25px; border-radius: 12px; z-index: 300; width: 85%; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px);">
+            <input type="hidden" id="project-id-input">
+            <h3 id="project-modal-title" style="color: var(--accent); margin-top: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 20px;">Projekt erstellen</h3>
+            <div class="settings-group" style="text-align: left; margin-bottom: 20px;">
+                <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Projektname</label>
+                <input type="text" id="project-name-input" placeholder="Z.B. Einkaufsliste..." style="width: 100%;">
+            </div>
+            <div class="modal-btns" style="display: flex; gap: 10px;">
+                <button class="cancel" onclick="closeProjectModal()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Abbrechen</button>
+                <button class="save" onclick="saveProject()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold;">Speichern</button>
             </div>
         </div>
 
@@ -1839,15 +1854,7 @@
                             <span class="badge" id="badge-timer" style="display: none;">0</span>
                         </button>
 
-                        <button class="plugin-nav-btn" id="btn-nav-tasks" onclick="focusWidget('tasks')" title="Aufgaben">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M9 11l3 3L22 4"></path>
-                                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-                            </svg>
-                            <span class="badge" id="badge-tasks" style="display: none;">0</span>
-                        </button>
-
-                        <button class="plugin-nav-btn" id="btn-nav-notes" onclick="focusWidget('notes')" title="Notizen">
+                        <button class="plugin-nav-btn" id="btn-nav-projects" onclick="focusWidget('projects')" title="Projekte">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                                 <polyline points="14 2 14 8 20 8"></polyline>
@@ -1855,7 +1862,7 @@
                                 <line x1="16" y1="17" x2="8" y2="17"></line>
                                 <polyline points="10 9 9 9 8 9"></polyline>
                             </svg>
-                            <span class="badge" id="badge-notes" style="display: none;">0</span>
+                            <span class="badge" id="badge-projects" style="display: none;">0</span>
                         </button>
 
                         <button class="plugin-nav-btn" id="btn-nav-memory" onclick="focusWidget('memory')" title="Gedächtnis">
@@ -1979,6 +1986,18 @@
     <!-- Old Floating Mobile Plugins Bar has been merged inside input-area -->
 
     <script>
+        // Auto-fix api_base_url if page is loaded on localhost but api_base_url points to a different origin
+        (function() {
+            const currentOrigin = window.location.origin;
+            const savedUrl = localStorage.getItem('api_base_url');
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                if (savedUrl && !savedUrl.startsWith(currentOrigin)) {
+                    console.log(`Auto-fixing api_base_url from ${savedUrl} to ${currentOrigin}`);
+                    localStorage.setItem('api_base_url', currentOrigin);
+                }
+            }
+        })();
+
         let entityConfigs = {};
         let lastActiveView = 'chat';
 
@@ -1988,7 +2007,7 @@
             }
 
             // Remove all view classes from body
-            document.body.classList.remove('view-chat', 'view-calendar', 'view-timer', 'view-tasks', 'view-notes', 'view-plugins', 'view-settings', 'view-history', 'view-memory');
+            document.body.classList.remove('view-chat', 'view-calendar', 'view-timer', 'view-tasks', 'view-projects', 'view-plugins', 'view-settings', 'view-history', 'view-memory');
             
             // Add the new active view class
             document.body.classList.add('view-' + viewName);
@@ -2005,8 +2024,7 @@
                 const titles = {
                     'calendar': 'Kalender',
                     'timer': 'Timer & Wecker',
-                    'tasks': 'Aufgaben',
-                    'notes': 'Notizen',
+                    'projects': 'Projekte',
                     'memory': 'Personen & Gedächtnis'
                 };
                 titleEl.textContent = titles[viewName] || 'Plugins & Dashboard';
@@ -2018,8 +2036,7 @@
                 const titles = {
                     'calendar': 'Kalender',
                     'timer': 'Timer',
-                    'tasks': 'Aufgaben',
-                    'notes': 'Notizen',
+                    'projects': 'Projekte',
                     'memory': 'Gedächtnis',
                     'chat': 'Chat',
                     'history': 'Verlauf',
@@ -2244,7 +2261,24 @@
                 } else if (type === 'person') {
                     openPersonProfileModal(id);
                 } else if (type === 'task') {
-                    focusWidget('tasks');
+                    const res = await fetch(getApiUrl(`/api/entities/task/${id}`));
+                    if (res.ok) {
+                        const task = await res.json();
+                        const dueStr = task.due ? new Date(task.due).toISOString().split('T')[0] : '';
+                        openTaskModal(
+                            task.id,
+                            task.title,
+                            task.notes || '',
+                            dueStr,
+                            task.listTitle || '',
+                            task.recurrence || 'none',
+                            task.projectId
+                        );
+                    } else {
+                        alert("Aufgabe konnte nicht geladen werden.");
+                    }
+                } else if (type === 'project') {
+                    focusWidget('projects');
                 } else if (type === 'event') {
                     focusWidget('calendar');
                 } else if (type === 'timer') {
@@ -3720,51 +3754,93 @@
                 `;
                 
                 dayData.events.forEach(ev => {
-                    const isRec = ev.recurring || ev.isRecurring;
-                    const repeatBadge = isRec ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
-                    const rescheduleBadge = ev.originalStart ? ` <span style="background: rgba(249, 226, 175, 0.15); color: #f9e2af; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase;" title="Dieser Termin wurde verschoben">verschoben</span>` : '';
-                    const targetDate = ev.occurrenceDate || ev.time.split('T')[0];
-                    
-                    const cancelStyle = ev.isCancelled ? 'color: var(--off); text-decoration: line-through;' : '';
-                    const titleCancelStyle = ev.isCancelled ? 'color: var(--off); font-weight: 500;' : 'font-weight: 500;';
-                    const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
-                    
-                    const rescheduleBorder = ev.originalStart ? 'border-left: 3px solid #f9e2af; padding-left: 6px;' : '';
-                    const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
-                    
-                    const timeBadgeHtml = getEventTimeBadge(ev);
-                    
-                    let personsHtml = "";
-                    if (ev.persons && ev.persons.length > 0) {
-                        ev.persons.forEach(p => {
-                            personsHtml += `
-                                <span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.color='var(--accent)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.color='rgba(255,255,255,0.7)'">
-                                  👤 ${escapeHtml(p.name)}
-                                </span>
-                            `;
-                        });
-                    }
+                    if (ev.isTask) {
+                        const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
+                        const escNotes = escapeHtml(ev.description || '').replace(/'/g, "\\'");
+                        const escListTitle = escapeHtml(ev.listTitle || '').replace(/'/g, "\\'");
+                        const recurrenceVal = ev.recurrence || 'none';
+                        const isRecurring = ev.recurring || false;
+                        const repeatBadge = isRecurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrend: ${ev.recurrence}">🔄</span>` : '';
+                        
+                        let personsHtml = "";
+                        if (ev.persons && ev.persons.length > 0) {
+                            ev.persons.forEach(p => {
+                                personsHtml += `
+                                    <span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.color='var(--accent)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.color='rgba(255,255,255,0.7)'">
+                                      👤 ${escapeHtml(p.name)}
+                                    </span>
+                                `;
+                            });
+                        }
 
-                    html += `
-                        <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.02); ${rescheduleBorder} ${cancelStyle}">
-                            <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
-                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                    <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
-                                    ${repeatBadge}
-                                    ${rescheduleBadge}
-                                    ${reasonHtml}
+                        const rawTaskId = ev.id.replace('task-', '');
+                        const checkedAttr = ev.completed ? 'checked' : '';
+                        const textStyle = ev.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
+
+                        html += `
+                            <div class="task-item" style="font-size: 0.8rem; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); transition: all 0.2s; margin-bottom: 4px; width: 100%;">
+                                <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                                    <input type="checkbox" class="task-checkbox" data-task-id="${rawTaskId}" data-tasklist-id="${ev.listTitle || 'Standard'}" onchange="completeTask(this)" ${checkedAttr}>
+                                    <span style="line-height: 1.4; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; ${textStyle}">
+                                        <strong>[Aufgabe]</strong> ${escapeHtml(ev.title)}
+                                        ${repeatBadge}
+                                        ${personsHtml}
+                                    </span>
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px;">
-                                    ${timeBadgeHtml}
-                                    ${personsHtml}
+                                <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                                    <button onclick="insertEntityLinkIntoChat('${escTitle}', 'task', ${rawTaskId})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="In Chat verlinken">🔗</button>
+                                    <button onclick="editTask(${rawTaskId}, '${escTitle}', '${escNotes}', '${ev.time || ''}', '${escListTitle}', '${recurrenceVal}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Bearbeiten">✏️</button>
+                                    <button onclick="deleteTask(${rawTaskId})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Löschen">✖</button>
                                 </div>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 4px; align-self: center; margin-left: 8px;">
-                                <button onclick="insertEntityLinkIntoChat('${escTitle}', 'event', ${ev.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
-                                <button onclick="deleteCalendarEvent('${ev.id}', '${targetDate}', ${isRec})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Termin löschen">✖</button>
+                        `;
+                    } else {
+                        const isRec = ev.recurring || ev.isRecurring;
+                        const repeatBadge = isRec ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
+                        const rescheduleBadge = ev.originalStart ? ` <span style="background: rgba(249, 226, 175, 0.15); color: #f9e2af; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase;" title="Dieser Termin wurde verschoben">verschoben</span>` : '';
+                        const targetDate = ev.occurrenceDate || ev.time.split('T')[0];
+                        
+                        const cancelStyle = ev.isCancelled ? 'color: var(--off); text-decoration: line-through;' : '';
+                        const titleCancelStyle = ev.isCancelled ? 'color: var(--off); font-weight: 500;' : 'font-weight: 500;';
+                        const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
+                        
+                        const rescheduleBorder = ev.originalStart ? 'border-left: 3px solid #f9e2af; padding-left: 6px;' : '';
+                        const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
+                        
+                        const timeBadgeHtml = getEventTimeBadge(ev);
+                        
+                        let personsHtml = "";
+                        if (ev.persons && ev.persons.length > 0) {
+                            ev.persons.forEach(p => {
+                                personsHtml += `
+                                    <span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.color='var(--accent)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.color='rgba(255,255,255,0.7)'">
+                                      👤 ${escapeHtml(p.name)}
+                                    </span>
+                                `;
+                            });
+                        }
+
+                        html += `
+                            <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.02); ${rescheduleBorder} ${cancelStyle}">
+                                <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
+                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                        <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
+                                        ${repeatBadge}
+                                        ${rescheduleBadge}
+                                        ${reasonHtml}
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px;">
+                                        ${timeBadgeHtml}
+                                        ${personsHtml}
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 4px; align-self: center; margin-left: 8px;">
+                                    <button onclick="insertEntityLinkIntoChat('${escTitle}', 'event', ${ev.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
+                                    <button onclick="deleteCalendarEvent('${ev.id}', '${targetDate}', ${isRec})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Termin löschen">✖</button>
+                                </div>
                             </div>
-                        </div>
-                    `;
+                        `;
+                    }
                 });
                 
                 html += `
@@ -3861,6 +3937,21 @@
 
                         let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 8px;">`;
                         
+                        html += `
+                            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                <button onclick="openTaskModal()" class="nav-btn" style="flex: 1; font-size: 0.8rem;">➕ Neue Aufgabe</button>
+                            </div>
+                        `;
+
+                        if (widget.data.overdueTasks && widget.data.overdueTasks.length > 0) {
+                            html += `<div style="font-weight: 600; font-size: 0.7rem; color: var(--off); margin: 4px 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px;">⚠️ Überfällige Aufgaben</div>`;
+                            html += `<div style="display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 8px; background: rgba(243, 139, 168, 0.04); border: 1px solid rgba(243, 139, 168, 0.15); margin-bottom: 12px;">`;
+                            widget.data.overdueTasks.forEach(t => {
+                                html += renderSingleTaskHtml(t, true);
+                            });
+                            html += `</div>`;
+                        }
+
                         html += `<div id="calendar-events-list" style="display: flex; flex-direction: column; gap: 8px;">`;
                         html += renderCalendarEvents(widget.data.events);
                         html += `</div>`;
@@ -3868,57 +3959,6 @@
                         html += `<div id="calendar-loading-more" style="display: none; text-align: center; padding: 8px; font-size: 0.75rem; color: var(--accent); opacity: 0.8;">Lade weitere Termine...</div>`;
 
                         setTimeout(checkAndLoadMoreIfNoScrollbar, 200);
-
-                        if (widget.data.tasks && Array.isArray(widget.data.tasks)) {
-                            html += `<h4 style="margin: 15px 0 10px 0; color: var(--accent); font-size: 0.8rem;">Offene Aufgaben</h4>`;
-                            if (widget.data.tasks.length === 0) {
-                                html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 0;">Keine offenen Aufgaben.</p>`;
-                            } else {
-                                const today = new Date();
-                                today.setHours(0, 0, 0, 0);
-
-                                const overdueTasks = [];
-                                const activeTasks = [];
-
-                                widget.data.tasks.forEach(t => {
-                                    if (t.due) {
-                                        const dueObj = new Date(t.due);
-                                        dueObj.setHours(0, 0, 0, 0);
-                                        if (dueObj < today) {
-                                            overdueTasks.push(t);
-                                            return;
-                                        }
-                                    }
-                                    activeTasks.push(t);
-                                });
-
-                                if (overdueTasks.length > 0) {
-                                    html += `<div style="font-weight: 600; font-size: 0.7rem; color: var(--off); margin: 12px 0 6px 0; text-transform: uppercase; letter-spacing: 0.5px;">⚠️ Überfällig</div>`;
-                                    html += `<div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">`;
-                                    overdueTasks.forEach(t => {
-                                        html += renderSingleTaskHtml(t, true);
-                                    });
-                                    html += `</div>`;
-                                }
-
-                                const groupedTasks = {};
-                                activeTasks.forEach(t => {
-                                    const listName = t.listTitle || "Meine Aufgaben";
-                                    if (!groupedTasks[listName]) groupedTasks[listName] = [];
-                                    groupedTasks[listName].push(t);
-                                });
-
-                                Object.keys(groupedTasks).forEach(listName => {
-                                    html += `<div style="font-weight: 600; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin: 12px 0 6px 0; text-transform: uppercase; letter-spacing: 0.5px;">${listName}</div>`;
-                                    html += `<div style="display: flex; flex-direction: column; gap: 4px;">`;
-                                    groupedTasks[listName].forEach(t => {
-                                        html += renderSingleTaskHtml(t, false);
-                                    });
-                                    html += `</div>`;
-                                });
-                            }
-                        }
-                        
                         html += `</div>`;
                         widgetDiv.innerHTML = html;
                     } else if (widget.type === 'timer_list') {
@@ -3949,35 +3989,202 @@
                         html += `</div>`;
                         widgetDiv.innerHTML = html;
                     } else if (widget.type === 'custom') {
-                        if (widget.data.widgetType === 'notes_list') {
-                            let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 8px;">`;
+                        if (widget.data.widgetType === 'projects_list') {
+                            let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 10px;">`;
                             
-                            html += `<button onclick="openNoteModal()" class="nav-btn" style="width: 100%; font-size: 0.8rem; margin-bottom: 5px;">➕ Neue Notiz</button>`;
+                            html += `
+                                <div style="display: flex; gap: 8px; margin-bottom: 5px;">
+                                    <button onclick="openProjectModal()" class="nav-btn" style="flex: 1; font-size: 0.8rem;">📁 Neues Projekt</button>
+                                </div>
+                            `;
                             
-                            if (!widget.data.notes || widget.data.notes.length === 0) {
-                                html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine Notizen.</p>`;
+                            const projects = widget.data.projects || [];
+                            const unassignedTasks = widget.data.unassignedTasks || [];
+                            const unassignedNotes = widget.data.unassignedNotes || [];
+
+                            if (projects.length === 0 && unassignedTasks.length === 0 && unassignedNotes.length === 0) {
+                                html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine Projekte oder Notizen vorhanden.</p>`;
                             } else {
-                                widget.data.notes.forEach(note => {
-                                    const rawTitle = note.title;
-                                    const rawContent = note.content;
-                                    const cleanTitle = escapeHtml(rawTitle);
-                                    const cleanContent = escapeHtml(rawContent);
-                                    const escTitle = cleanTitle.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-                                    const escContent = cleanContent.replace(/'/g, "\\'").replace(/"/g, "&quot;").replace(/\n/g, "\\n");
+                                const collapsedStates = JSON.parse(localStorage.getItem('project_collapsed_states') || '{}');
+
+                                // 1. Render Projects
+                                projects.forEach(p => {
+                                    const escProjName = escapeHtml(p.name).replace(/'/g, "\\'").replace(/"/g, "&quot;");
+                                    const isCollapsed = collapsedStates[p.id] !== false;
+                                    const displayStyle = isCollapsed ? 'none' : 'flex';
+                                    const arrowRotate = isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)';
+
+                                    let personsHtml = "";
+                                    if (p.persons && p.persons.length > 0) {
+                                        p.persons.forEach(person => {
+                                            personsHtml += `
+                                                <span onclick="event.stopPropagation(); openPersonProfileModal(${person.id})" style="display: inline-flex; align-items: center; gap: 2px; font-size: 0.65rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.6); padding: 1px 5px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); cursor: pointer;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='rgba(255,255,255,0.6)'">
+                                                    👤 ${escapeHtml(person.name)}
+                                                </span>
+                                            `;
+                                        });
+                                    }
+
                                     html += `
-                                        <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); padding: 8px 10px; border-radius: 8px; position: relative;">
-                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                                <strong style="font-size: 0.8rem; color: var(--accent);">${cleanTitle}</strong>
-                                                <div style="display: flex; gap: 8px; align-items: center;">
-                                                    <button onclick="insertEntityLinkIntoChat('${escTitle}', 'note', ${note.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 0 4px;" title="In Chat verlinken">🔗</button>
-                                                    <button onclick="openNoteModal(${note.id}, '${escTitle}', '${escContent}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 0 4px;" title="Bearbeiten">✏️</button>
-                                                    <button onclick="deleteNote(${note.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 0 4px;" title="Löschen">✖</button>
+                                        <div class="project-card" id="project-card-${p.id}" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; overflow: hidden; margin-bottom: 6px; transition: all 0.3s;">
+                                            <div onclick="toggleProjectCollapse(${p.id})" style="padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: rgba(255,255,255,0.02);" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'">
+                                                <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;">
+                                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                                        <span class="project-arrow" id="project-arrow-${p.id}" style="font-size: 0.7rem; transition: transform 0.2s; transform: ${arrowRotate};">▶</span>
+                                                        <strong style="font-size: 0.85rem; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(p.name)}</strong>
+                                                    </div>
+                                                    <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-left: 14px;">
+                                                        ${personsHtml}
+                                                    </div>
+                                                </div>
+                                                <div style="display: flex; gap: 6px; align-items: center;" onclick="event.stopPropagation()">
+                                                    <button onclick="insertEntityLinkIntoChat('${escProjName}', 'project', ${p.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="In Chat verlinken">🔗</button>
+                                                    <button onclick="openProjectModal(${p.id}, '${escProjName}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Bearbeiten">✏️</button>
+                                                    <button onclick="deleteProject(${p.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Löschen">✖</button>
                                                 </div>
                                             </div>
-                                            <div style="font-size: 0.75rem; opacity: 0.8; white-space: pre-wrap; word-break: break-word; line-height: 1.3;">${cleanContent}</div>
+                                            
+                                            <div class="project-body" id="project-body-${p.id}" style="display: ${displayStyle}; padding: 10px 12px; border-top: 1px solid rgba(255,255,255,0.04); flex-direction: column; gap: 8px; background: rgba(0,0,0,0.15);">
+                                                <div style="display: flex; gap: 6px; margin-bottom: 4px;">
+                                                    <button onclick="openTaskModal(null, '', '', '', '', 'none', ${p.id})" class="nav-btn" style="flex: 1; font-size: 0.7rem; padding: 4px 8px; height: 26px;">➕ Aufgabe</button>
+                                                    <button onclick="openNoteModal(null, '', '', ${p.id})" class="nav-btn" style="flex: 1; font-size: 0.7rem; padding: 4px 8px; height: 26px;">➕ Notiz</button>
+                                                </div>
+                                                
+                                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    `;
+                                    
+                                    if (p.tasks.length === 0 && p.notes.length === 0) {
+                                        html += `<p style="font-size: 0.75rem; opacity: 0.5; text-align: center; margin: 5px 0;">Projekt ist leer.</p>`;
+                                    } else {
+                                        p.tasks.forEach(t => {
+                                            const escT = escapeHtml(t.title).replace(/'/g, "\\'");
+                                            const escN = escapeHtml(t.notes || '').replace(/'/g, "\\'");
+                                            const checkedAttr = t.completed ? 'checked' : '';
+                                            const textStyle = t.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
+                                            html += `
+                                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); font-size: 0.75rem;">
+                                                    <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+                                                        <input type="checkbox" class="task-checkbox" data-task-id="${t.id}" data-tasklist-id="Standard" onchange="completeTask(this)" ${checkedAttr}>
+                                                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; ${textStyle}">${escapeHtml(t.title)}</span>
+                                                    </div>
+                                                    <div style="display: flex; align-items: center; gap: 2px;">
+                                                        <button onclick="insertEntityLinkIntoChat('${escT}', 'task', ${t.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.7rem;" title="In Chat verlinken">🔗</button>
+                                                        <button onclick="editTask(${t.id}, '${escT}', '${escN}', '', '', 'none', ${p.id})" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.7rem;" title="Bearbeiten">✏️</button>
+                                                        <button onclick="deleteTask(${t.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.7rem;" title="Löschen">✖</button>
+                                                    </div>
+                                                </div>
+                                            `;
+                                        });
+
+                                        p.notes.forEach(n => {
+                                            const escTitle = escapeHtml(n.title).replace(/'/g, "\\'");
+                                            const escContent = escapeHtml(n.content).replace(/'/g, "\\'").replace(/\n/g, "\\n");
+                                            html += `
+                                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 6px; font-size: 0.75rem; display: flex; flex-direction: column; gap: 4px;">
+                                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                        <strong style="color: var(--accent); font-size: 0.75rem;">${escapeHtml(n.title)}</strong>
+                                                        <div style="display: flex; gap: 4px;">
+                                                            <button onclick="insertEntityLinkIntoChat('${escTitle}', 'note', ${n.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.7rem;" title="In Chat verlinken">🔗</button>
+                                                            <button onclick="openNoteModal(${n.id}, '${escTitle}', '${escContent}', ${p.id})" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.7rem;" title="Bearbeiten">✏️</button>
+                                                            <button onclick="deleteNote(${n.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.7rem;" title="Löschen">✖</button>
+                                                        </div>
+                                                    </div>
+                                                    <div style="opacity: 0.8; white-space: pre-wrap; word-break: break-all; line-height: 1.3;">${escapeHtml(n.content)}</div>
+                                                </div>
+                                            `;
+                                        });
+                                    }
+
+                                    html += `
+                                                </div>
+                                            </div>
                                         </div>
                                     `;
                                 });
+
+                                // 2. Render Virtual "Allgemein" Project
+                                if (unassignedTasks.length > 0 || unassignedNotes.length > 0) {
+                                    const isCollapsed = collapsedStates['unassigned'] !== false;
+                                    const displayStyle = isCollapsed ? 'none' : 'flex';
+                                    const arrowRotate = isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)';
+
+                                    html += `
+                                        <div class="project-card" id="project-card-unassigned" style="background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; overflow: hidden; margin-top: 10px;">
+                                            <div onclick="toggleProjectCollapse('unassigned')" style="padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: rgba(255,255,255,0.01);" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='rgba(255,255,255,0.01)'">
+                                                <div style="display: flex; align-items: center; gap: 6px;">
+                                                    <span class="project-arrow" id="project-arrow-unassigned" style="font-size: 0.7rem; transition: transform 0.2s; transform: ${arrowRotate};">▶</span>
+                                                    <strong style="font-size: 0.85rem; color: rgba(255,255,255,0.6);">📥 Allgemein / Inbox</strong>
+                                                </div>
+                                                <div style="font-size: 0.7rem; opacity: 0.5;">
+                                                    ${unassignedTasks.length + unassignedNotes.length} Einträge
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="project-body" id="project-body-unassigned" style="display: ${displayStyle}; padding: 10px 12px; border-top: 1px solid rgba(255,255,255,0.04); flex-direction: column; gap: 8px; background: rgba(0,0,0,0.15);">
+                                                <div style="display: flex; gap: 6px; margin-bottom: 4px;">
+                                                    <button onclick="openTaskModal(null, '', '', '', '', 'none', null)" class="nav-btn" style="flex: 1; font-size: 0.7rem; padding: 4px 8px; height: 26px;">➕ Aufgabe</button>
+                                                    <button onclick="openNoteModal(null, '', '', null)" class="nav-btn" style="flex: 1; font-size: 0.7rem; padding: 4px 8px; height: 26px;">➕ Notiz</button>
+                                                </div>
+                                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    `;
+                                    
+                                    unassignedTasks.forEach(t => {
+                                        const escT = escapeHtml(t.title).replace(/'/g, "\\'");
+                                        const escN = escapeHtml(t.notes || '').replace(/'/g, "\\'");
+                                        const checkedAttr = t.completed ? 'checked' : '';
+                                        const textStyle = t.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
+                                        html += `
+                                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); font-size: 0.75rem;">
+                                                <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+                                                    <input type="checkbox" class="task-checkbox" data-task-id="${t.id}" data-tasklist-id="Standard" onchange="completeTask(this)" ${checkedAttr}>
+                                                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; ${textStyle}">${escapeHtml(t.title)}</span>
+                                                </div>
+                                                <div style="display: flex; align-items: center; gap: 2px;">
+                                                    <button onclick="insertEntityLinkIntoChat('${escT}', 'task', ${t.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.7rem;" title="In Chat verlinken">🔗</button>
+                                                    <button onclick="editTask(${t.id}, '${escT}', '${escN}', '', '', 'none', null)" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.7rem;" title="Bearbeiten">✏️</button>
+                                                    <button onclick="deleteTask(${t.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.7rem;" title="Löschen">✖</button>
+                                                </div>
+                                            </div>
+                                        `;
+                                    });
+
+                                    unassignedNotes.forEach(n => {
+                                        const escTitle = escapeHtml(n.title).replace(/'/g, "\\'");
+                                        const escContent = escapeHtml(n.content).replace(/'/g, "\\'").replace(/\n/g, "\\n");
+                                        
+                                        let notePersonsHtml = "";
+                                        if (n.persons && n.persons.length > 0) {
+                                            n.persons.forEach(person => {
+                                                notePersonsHtml += `
+                                                    <span onclick="event.stopPropagation(); openPersonProfileModal(${person.id})" style="display: inline-flex; align-items: center; gap: 2px; font-size: 0.65rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.6); padding: 1px 5px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); cursor: pointer; margin-top: 2px;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='rgba(255, 255, 255, 0.6)'">
+                                                        👤 ${escapeHtml(person.name)}
+                                                    </span>
+                                                `;
+                                            });
+                                        }
+
+                                        html += `
+                                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 6px; font-size: 0.75rem; display: flex; flex-direction: column; gap: 4px;">
+                                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                    <strong style="color: var(--accent); font-size: 0.75rem;">${escapeHtml(n.title)}</strong>
+                                                    <div style="display: flex; gap: 4px;">
+                                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'note', ${n.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.7rem;" title="In Chat verlinken">🔗</button>
+                                                        <button onclick="openNoteModal(${n.id}, '${escTitle}', '${escContent}', null)" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.7rem;" title="Bearbeiten">✏️</button>
+                                                        <button onclick="deleteNote(${n.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.7rem;" title="Löschen">✖</button>
+                                                    </div>
+                                                </div>
+                                                <div style="opacity: 0.8; white-space: pre-wrap; word-break: break-all; line-height: 1.3;">${escapeHtml(n.content)}</div>
+                                                <div style="display: flex; flex-wrap: wrap; gap: 4px;">${notePersonsHtml}</div>
+                                            </div>
+                                        `;
+                                    });
+
+                                    html += `
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
+                                }
                             }
                             html += `</div>`;
                             widgetDiv.innerHTML = html;
@@ -4103,12 +4310,12 @@
             const btnCal = document.getElementById('btn-nav-calendar');
             const btnTimer = document.getElementById('btn-nav-timer');
             const btnTasks = document.getElementById('btn-nav-tasks');
-            const btnNotes = document.getElementById('btn-nav-notes');
+            const btnProjects = document.getElementById('btn-nav-projects');
 
             if (btnCal) btnCal.style.display = activePluginNames.has('Calendar') ? 'flex' : 'none';
             if (btnTimer) btnTimer.style.display = activePluginNames.has('Timer') ? 'flex' : 'none';
             if (btnTasks) btnTasks.style.display = activePluginNames.has('Tasks') ? 'flex' : 'none';
-            if (btnNotes) btnNotes.style.display = activePluginNames.has('Notes') ? 'flex' : 'none';
+            if (btnProjects) btnProjects.style.display = activePluginNames.has('Projects') ? 'flex' : 'none';
 
             // Update Calendar badge
             const calBadge = document.getElementById('badge-calendar');
@@ -4186,12 +4393,14 @@
         // Notes and Tasks JS Modals Logic
         const noteModal = document.getElementById('note-modal');
         const noteIdInput = document.getElementById('note-id-input');
+        const noteProjectIdInput = document.getElementById('note-project-id-input');
         const noteTitleInput = document.getElementById('note-title-input');
         const noteContentInput = document.getElementById('note-content-input');
         const noteModalTitle = document.getElementById('note-modal-title');
 
-        window.openNoteModal = function(id = null, title = '', content = '') {
+        window.openNoteModal = function(id = null, title = '', content = '', projectId = null) {
             noteIdInput.value = id || '';
+            noteProjectIdInput.value = projectId || '';
             noteTitleInput.value = title;
             noteContentInput.value = content;
             noteModalTitle.textContent = id ? 'Notiz bearbeiten' : 'Notiz erstellen';
@@ -4206,16 +4415,23 @@
 
         window.saveNote = async function() {
             const id = noteIdInput.value;
+            const projectId = noteProjectIdInput.value;
             const title = noteTitleInput.value.trim();
             const content = noteContentInput.value.trim();
             if (!title || !content) {
                 alert("Titel und Inhalt sind erforderlich.");
                 return;
             }
+            const args = {
+                titel: title,
+                inhalt: content,
+                projectId: projectId ? parseInt(projectId) : null
+            };
             if (id) {
-                await callTool('bearbeite_notiz', { id: parseInt(id), titel: title, inhalt: content });
+                args.id = parseInt(id);
+                await callTool('bearbeite_notiz', args);
             } else {
-                await callTool('erstelle_notiz', { titel: title, inhalt: content });
+                await callTool('erstelle_notiz', args);
             }
             closeNoteModal();
         };
@@ -4253,26 +4469,38 @@
         const taskNotesInput = document.getElementById('task-notes-input');
         const taskDueInput = document.getElementById('task-due-input');
 
-        window.openTaskModal = function(taskId = null, title = '', notes = '', due = '', listTitle = '', recurrence = 'none') {
+        window.openTaskModal = function(taskId = null, title = '', notes = '', due = '', listTitle = '', recurrence = 'none', projectId = null) {
             const taskIdInput = document.getElementById('task-id-input');
             const modalTitle = document.querySelector('#task-modal h3');
             const saveBtn = document.querySelector('#task-modal .save');
             const recurrenceInput = document.getElementById('task-recurrence-input');
             
             if (taskIdInput) taskIdInput.value = taskId || '';
+            const taskProjectIdInput = document.getElementById('task-project-id-input');
+            if (taskProjectIdInput) taskProjectIdInput.value = projectId || '';
             taskTitleInput.value = title || '';
             taskNotesInput.value = notes || '';
             if (recurrenceInput) recurrenceInput.value = recurrence || 'none';
             
-            if (due) {
-                const dateObj = new Date(due);
-                if (!isNaN(dateObj.getTime())) {
-                    taskDueInput.value = dateObj.toISOString().split('T')[0];
+            const dueGroup = document.getElementById('task-due-group');
+            const recGroup = document.getElementById('task-recurrence-group');
+            if (projectId) {
+                if (dueGroup) dueGroup.style.display = 'none';
+                if (recGroup) recGroup.style.display = 'none';
+                taskDueInput.value = '';
+            } else {
+                if (dueGroup) dueGroup.style.display = 'block';
+                if (recGroup) recGroup.style.display = 'block';
+                if (due) {
+                    const dateObj = new Date(due);
+                    if (!isNaN(dateObj.getTime())) {
+                        taskDueInput.value = dateObj.toISOString().split('T')[0];
+                    } else {
+                        taskDueInput.value = '';
+                    }
                 } else {
                     taskDueInput.value = '';
                 }
-            } else {
-                taskDueInput.value = '';
             }
             
             if (taskId) {
@@ -4295,6 +4523,8 @@
         window.saveTask = async function() {
             const taskIdInput = document.getElementById('task-id-input');
             const taskId = taskIdInput ? taskIdInput.value : '';
+            const taskProjectIdInput = document.getElementById('task-project-id-input');
+            const projectId = taskProjectIdInput ? taskProjectIdInput.value : '';
             const title = taskTitleInput.value.trim();
             const notes = taskNotesInput.value.trim();
             const due = taskDueInput.value;
@@ -4311,11 +4541,15 @@
                     titel: title,
                     notizen: notes,
                     datum: due ? due : "null",
-                    recurrence: recurrence
+                    recurrence: recurrence,
+                    projectId: projectId ? parseInt(projectId) : null
                 };
                 await callTool('aktualisiere_aufgabe', args);
             } else {
-                const args = { titel: title };
+                const args = {
+                    titel: title,
+                    projectId: projectId ? parseInt(projectId) : null
+                };
                 if (notes) args.notizen = notes;
                 if (due) args.datum = due;
                 if (recurrence && recurrence !== 'none') args.recurrence = recurrence;
@@ -4330,8 +4564,62 @@
             }
         };
 
-        window.editTask = function(taskId, title, notes, due, listTitle, recurrence = 'none') {
-            openTaskModal(taskId, title, notes, due, listTitle, recurrence);
+        window.editTask = function(taskId, title, notes, due, listTitle, recurrence = 'none', projectId = null) {
+            openTaskModal(taskId, title, notes, due, listTitle, recurrence, projectId);
+        };
+
+        // --- PROJECTS JS LOGIC ---
+        const projectModal = document.getElementById('project-modal');
+        const projectIdInput = document.getElementById('project-id-input');
+        const projectNameInput = document.getElementById('project-name-input');
+        const projectModalTitle = document.getElementById('project-modal-title');
+
+        window.openProjectModal = function(id = null, name = '') {
+            projectIdInput.value = id || '';
+            projectNameInput.value = name;
+            projectModalTitle.textContent = id ? 'Projekt bearbeiten' : 'Projekt erstellen';
+            projectModal.style.display = 'block';
+            document.body.classList.add('modal-active');
+        };
+
+        window.closeProjectModal = function() {
+            projectModal.style.display = 'none';
+            document.body.classList.remove('modal-active');
+        };
+
+        window.saveProject = async function() {
+            const id = projectIdInput.value;
+            const name = projectNameInput.value.trim();
+            if (!name) {
+                alert("Projektname ist erforderlich.");
+                return;
+            }
+            if (id) {
+                await callTool('bearbeite_projekt', { id: parseInt(id), name: name });
+            } else {
+                await callTool('erstelle_projekt', { name: name });
+            }
+            closeProjectModal();
+        };
+
+        window.deleteProject = async function(id) {
+            if (confirm("Möchtest du dieses Projekt wirklich löschen? Alle zugeordneten Aufgaben und Notizen werden ebenfalls gelöscht.")) {
+                await callTool('loesche_projekt', { id: parseInt(id) });
+            }
+        };
+
+        window.toggleProjectCollapse = function(id) {
+            const body = document.getElementById('project-body-' + id);
+            const arrow = document.getElementById('project-arrow-' + id);
+            if (!body || !arrow) return;
+            const isHidden = body.style.display === 'none';
+            body.style.display = isHidden ? 'flex' : 'none';
+            arrow.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
+            
+            // Save state to localStorage
+            let states = JSON.parse(localStorage.getItem('project_collapsed_states') || '{}');
+            states[id] = isHidden ? false : true; // false = expanded, true = collapsed
+            localStorage.setItem('project_collapsed_states', JSON.stringify(states));
         };
 
         async function completeTask(checkbox) {
@@ -4339,41 +4627,51 @@
             const tasklistId = checkbox.getAttribute('data-tasklist-id');
             if (!taskId || !tasklistId) return;
 
+            const isCompleted = checkbox.checked;
             checkbox.disabled = true;
             const textSpan = checkbox.nextElementSibling;
             if (textSpan) {
-                textSpan.style.textDecoration = 'line-through';
-                textSpan.style.opacity = '0.5';
+                if (isCompleted) {
+                    textSpan.style.textDecoration = 'line-through';
+                    textSpan.style.opacity = '0.5';
+                } else {
+                    textSpan.style.textDecoration = 'none';
+                    textSpan.style.opacity = '1';
+                }
             }
 
             try {
                 const res = await fetch(getApiUrl('/tasks/complete'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tasklistId, taskId })
+                    body: JSON.stringify({ tasklistId, taskId, completed: isCompleted })
                 });
                 
                 if (res.ok) {
-                    console.log("Aufgabe erfolgreich erledigt!");
-                    // Kurze Verzögerung für die visuelle Rückmeldung
+                    console.log("Aufgabe erfolgreich aktualisiert!");
                     setTimeout(() => {
                         loadTopWidgets();
                         if (isElectron && ipcRenderer) {
                             ipcRenderer.send('widgets-updated');
                         }
-                    }, 600);
+                    }, 400);
                 } else {
-                    throw new Error("Fehler beim Erledigen");
+                    throw new Error("Fehler beim Aktualisieren");
                 }
             } catch (e) {
                 console.error(e);
                 checkbox.disabled = false;
+                checkbox.checked = !isCompleted;
                 if (textSpan) {
-                    textSpan.style.textDecoration = 'none';
-                    textSpan.style.opacity = '1';
+                    if (!isCompleted) {
+                        textSpan.style.textDecoration = 'line-through';
+                        textSpan.style.opacity = '0.5';
+                    } else {
+                        textSpan.style.textDecoration = 'none';
+                        textSpan.style.opacity = '1';
+                    }
                 }
-                checkbox.checked = false;
-                alert("Aufgabe konnte nicht erledigt werden.");
+                alert("Aufgabe konnte nicht aktualisiert werden.");
             }
         }
 
