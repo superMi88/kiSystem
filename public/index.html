@@ -2185,10 +2185,10 @@
             const border = isOverdue ? '1px solid rgba(243, 139, 168, 0.25)' : '1px solid rgba(255,255,255,0.06)';
 
             return `
-                 <div class="task-item ${isOverdue ? 'overdue' : ''}" style="font-size: 0.8rem; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; background: ${bg}; border: ${border}; transition: all 0.2s; margin-bottom: 4px; width: 100%;">
-                     <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
-                         <input type="checkbox" class="task-checkbox" data-task-id="${t.id}" data-tasklist-id="${t.tasklistId || t.listTitle || 'Standard'}" onchange="completeTask(this)">
-                         <span style="line-height: 1.4; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 4px;">
+                 <div class="task-item ${isOverdue ? 'overdue' : ''}" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; background: ${bg}; border: ${border}; transition: all 0.2s; margin-bottom: 4px; width: 100%;">
+                     <div style="display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 0;">
+                         <input type="checkbox" class="task-checkbox" data-task-id="${t.id}" data-tasklist-id="${t.tasklistId || t.listTitle || 'Standard'}" onchange="completeTask(this)" style="margin-top: 3px;">
+                         <span style="line-height: 1.4; color: var(--text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word; flex: 1;">
                             ${escapeHtml(t.title)}
                             ${repeatBadge}
                             ${dueBadge}
@@ -3778,10 +3778,10 @@
                         const textStyle = ev.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
 
                         html += `
-                            <div class="task-item" style="font-size: 0.8rem; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); transition: all 0.2s; margin-bottom: 4px; width: 100%;">
-                                <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
-                                    <input type="checkbox" class="task-checkbox" data-task-id="${rawTaskId}" data-tasklist-id="${ev.listTitle || 'Standard'}" onchange="completeTask(this)" ${checkedAttr}>
-                                    <span style="line-height: 1.4; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; ${textStyle}">
+                            <div class="task-item" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); transition: all 0.2s; margin-bottom: 4px; width: 100%;">
+                                <div style="display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 0;">
+                                    <input type="checkbox" class="task-checkbox" data-task-id="${rawTaskId}" data-tasklist-id="${ev.listTitle || 'Standard'}" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 3px;">
+                                    <span style="line-height: 1.4; color: var(--text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word; flex: 1; ${textStyle}">
                                         <strong>[Aufgabe]</strong> ${escapeHtml(ev.title)}
                                         ${repeatBadge}
                                         ${personsHtml}
@@ -4062,10 +4062,10 @@
                                             const checkedAttr = t.completed ? 'checked' : '';
                                             const textStyle = t.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
                                             html += `
-                                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); font-size: 0.75rem;">
-                                                    <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
-                                                        <input type="checkbox" class="task-checkbox" data-task-id="${t.id}" data-tasklist-id="Standard" onchange="completeTask(this)" ${checkedAttr}>
-                                                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; ${textStyle}">${escapeHtml(t.title)}</span>
+                                                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); font-size: 0.75rem;">
+                                                    <div style="display: flex; align-items: flex-start; gap: 6px; min-width: 0; flex: 1;">
+                                                        <input type="checkbox" class="task-checkbox" data-task-id="${t.id}" data-tasklist-id="Standard" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 2px;">
+                                                        <span style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; word-break: break-word; line-height: 1.4; flex: 1; ${textStyle}">${escapeHtml(t.title)}</span>
                                                     </div>
                                                     <div style="display: flex; align-items: center; gap: 2px;">
                                                         <button onclick="insertEntityLinkIntoChat('${escT}', 'task', ${t.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.7rem;" title="In Chat verlinken">🔗</button>
@@ -4134,10 +4134,10 @@
                                         const checkedAttr = t.completed ? 'checked' : '';
                                         const textStyle = t.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
                                         html += `
-                                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); font-size: 0.75rem;">
-                                                <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
-                                                    <input type="checkbox" class="task-checkbox" data-task-id="${t.id}" data-tasklist-id="Standard" onchange="completeTask(this)" ${checkedAttr}>
-                                                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; ${textStyle}">${escapeHtml(t.title)}</span>
+                                            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); font-size: 0.75rem;">
+                                                <div style="display: flex; align-items: flex-start; gap: 6px; min-width: 0; flex: 1;">
+                                                    <input type="checkbox" class="task-checkbox" data-task-id="${t.id}" data-tasklist-id="Standard" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 2px;">
+                                                    <span style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; word-break: break-word; line-height: 1.4; flex: 1; ${textStyle}">${escapeHtml(t.title)}</span>
                                                 </div>
                                                 <div style="display: flex; align-items: center; gap: 2px;">
                                                     <button onclick="insertEntityLinkIntoChat('${escT}', 'task', ${t.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.7rem;" title="In Chat verlinken">🔗</button>
