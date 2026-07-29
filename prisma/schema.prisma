@@ -44,6 +44,7 @@ model Person {
   name      String?          // Veraltet: Name (wird für automatische Migration beibehalten)
   notes     String?          // Veraltet: Notizen (wird für automatische Migration beibehalten)
   biography String?          // Biografie oder Notizen zur Person (früher 'notes')
+  birthday  DateTime?        // Geburtstag der Person
   createdAt DateTime         @default(now()) // Erstellungszeitpunkt des Personenprofils
   aliases   PersonAlias[]    // Alternative Namen/Aliase für die Person
   facts     Fact[]           // Gespeicherte Fakten über diese Person

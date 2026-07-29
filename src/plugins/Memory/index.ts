@@ -193,9 +193,87 @@ export const memoryPlugin: Plugin = {
           name: primaryName,
           aliases: allAliases,
           biografie: person.biography || "",
+          geburtstag: person.birthday ? person.birthday.toISOString().split('T')[0] : null,
           facts: person.facts.map((f: any) => ({ id: f.id, content: f.content, category: f.category })),
           langzeit_erinnerungen: memories.map(m => ({ text: m.content, datum: m.createdAt }))
         };
+      }
+    },
+    {
+      definition: {
+        name: "setze_person_geburtstag",
+        description: "Setzt oder aktualisiert den Geburtstag einer Person.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            personId: { type: SchemaType.INTEGER, description: "Die ID der Person (bevorzugt verwenden)" },
+            name: { type: SchemaType.STRING, description: "Alternativ: Name der Person, falls ID unbekannt" },
+            geburtstag: { type: SchemaType.STRING, description: "Das Geburtsdatum im Format YYYY-MM-DD oder MM-DD. Leer lassen zum Löschen." }
+          },
+          required: ["geburtstag"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const { personId: inputPersonId, name, geburtstag } = args;
+        
+        let personId = inputPersonId ? Number(inputPersonId) : undefined;
+        if (!personId && name) {
+          const alias = await prisma.personAlias.findUnique({
+            where: { name }
+          });
+          if (alias) personId = alias.personId;
+        }
+
+        let birthDate: Date | null = null;
+        if (geburtstag && geburtstag.trim() !== "") {
+          const matchFull = geburtstag.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+          const matchShort = geburtstag.trim().match(/^(\d{2})-(\d{2})$/);
+          if (matchFull) {
+            birthDate = new Date(`${geburtstag.trim()}T12:00:00.000Z`);
+          } else if (matchShort) {
+            birthDate = new Date(`1900-${geburtstag.trim()}T12:00:00.000Z`);
+          } else {
+            const parsed = new Date(geburtstag.trim());
+            if (!isNaN(parsed.getTime())) {
+              birthDate = parsed;
+              birthDate.setUTCHours(12, 0, 0, 0);
+            }
+          }
+
+          if (!birthDate || isNaN(birthDate.getTime())) {
+            throw new Error("Ungültiges Datumsformat für den Geburtstag. Verwende YYYY-MM-DD oder MM-DD.");
+          }
+        }
+
+        if (personId) {
+          await prisma.person.update({
+            where: { id: personId },
+            data: { birthday: birthDate }
+          });
+          return { 
+            status: "success", 
+            personId, 
+            message: birthDate 
+              ? `Geburtstag für Person ID ${personId} wurde auf ${birthDate.toISOString().split('T')[0]} gesetzt.`
+              : `Geburtstag für Person ID ${personId} wurde gelöscht.`
+          };
+        } else if (name) {
+          if (!birthDate) {
+            throw new Error("Ein Geburtstag muss angegeben werden, um ein neues Profil zu erstellen.");
+          }
+          const person = await prisma.person.create({
+            data: {
+              biography: "",
+              birthday: birthDate,
+              aliases: {
+                create: { name, isPrimary: true }
+              }
+            }
+          });
+          return { status: "success", personId: person.id, message: `Neue Person '${name}' erstellt und Geburtstag auf ${birthDate.toISOString().split('T')[0]} gesetzt.` };
+        } else {
+          throw new Error("Entweder 'personId' oder 'name' muss angegeben werden.");
+        }
       }
     },
     {

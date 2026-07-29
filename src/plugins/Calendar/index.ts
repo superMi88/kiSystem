@@ -38,43 +38,6 @@ function getFuzzyTimeRange(date: Date, fuzzy: string): { start: Date; end: Date 
   return { start, end };
 }
 
-async function matchPersonsForEvents(events: any[], prisma: any): Promise<any[]> {
-  try {
-    const persons = await prisma.person.findMany({
-      where: { isDeleted: false },
-      include: { aliases: true }
-    });
-
-    return events.map(event => {
-      const titleAndDesc = `${event.title} ${event.description || ""}`;
-      const matched: { id: number; name: string }[] = [];
-
-      for (const p of persons) {
-        const hasMatch = p.aliases.some((alias: any) => {
-          const escaped = alias.name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-          const regex = new RegExp(`\\b${escaped}\\b`, 'i');
-          return regex.test(titleAndDesc);
-        });
-
-        if (hasMatch) {
-          const primaryAlias = p.aliases.find((a: any) => a.isPrimary) || p.aliases[0];
-          matched.push({
-            id: p.id,
-            name: primaryAlias ? primaryAlias.name : "Unbekannt"
-          });
-        }
-      }
-
-      return {
-        ...event,
-        persons: matched
-      };
-    });
-  } catch (err) {
-    console.error("Error matching persons for events:", err);
-    return events.map(e => ({ ...e, persons: [] }));
-  }
-}
 
 function getOccurrences(pattern: any, startRange: Date, endRange: Date, overrides: any[]): any[] {
   const occurrences: any[] = [];
@@ -130,6 +93,119 @@ function getOccurrences(pattern: any, startRange: Date, endRange: Date, override
   return occurrences;
 }
 
+async function matchPersonsForEvents(events: any[], prisma: any): Promise<any[]> {
+  try {
+    const persons = await prisma.person.findMany({
+      where: { isDeleted: false },
+      include: { aliases: true }
+    });
+
+    return events.map(event => {
+      if (event.persons && event.persons.length > 0) {
+        return event;
+      }
+      const titleAndDesc = `${event.title} ${event.description || ""}`;
+      const matched: { id: number; name: string }[] = [];
+
+      for (const p of persons) {
+        const hasMatch = p.aliases.some((alias: any) => {
+          const escaped = alias.name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+          const regex = new RegExp(`\\b${escaped}\\b`, 'i');
+          return regex.test(titleAndDesc);
+        });
+
+        if (hasMatch) {
+          const primaryAlias = p.aliases.find((a: any) => a.isPrimary) || p.aliases[0];
+          matched.push({
+            id: p.id,
+            name: primaryAlias ? primaryAlias.name : "Unbekannt"
+          });
+        }
+      }
+
+      return {
+        ...event,
+        persons: matched
+      };
+    });
+  } catch (err) {
+    console.error("Error matching persons for events:", err);
+    return events.map(e => ({ ...e, persons: [] }));
+  }
+}
+
+async function getBirthdaysForRange(start: Date, end: Date, prisma: any): Promise<any[]> {
+  try {
+    const peopleWithBirthdays = await prisma.person.findMany({
+      where: {
+        isDeleted: false,
+        birthday: { not: null }
+      },
+      select: {
+        id: true,
+        birthday: true,
+        aliases: {
+          select: {
+            name: true,
+            isPrimary: true
+          }
+        }
+      }
+    });
+
+    const startYear = start.getFullYear();
+    const endYear = end.getFullYear();
+    const birthdayEvents: any[] = [];
+
+    for (const p of peopleWithBirthdays) {
+      if (!p.birthday) continue;
+      const bday = new Date(p.birthday);
+      const bdayMonth = bday.getUTCMonth();
+      const bdayDate = bday.getUTCDate();
+
+      const primaryAlias = p.aliases.find((a: any) => a.isPrimary) || p.aliases[0];
+      const personName = primaryAlias ? primaryAlias.name : "Unbekannt";
+
+      for (let y = startYear; y <= endYear; y++) {
+        const occurrence = new Date(Date.UTC(y, bdayMonth, bdayDate, 12, 0, 0, 0));
+        
+        if (occurrence >= start && occurrence <= end) {
+          const birthYear = bday.getUTCFullYear();
+          let ageText = "";
+          if (birthYear > 1900) {
+            const age = y - birthYear;
+            ageText = ` (${age}.)`;
+          }
+
+          birthdayEvents.push({
+            id: `birthday-${p.id}-${y}`,
+            title: `🎂 Geburtstag von ${personName}${ageText}`,
+            description: `Geburtstag von ${personName}`,
+            start: occurrence,
+            end: occurrence,
+            time: occurrence.toISOString(),
+            endTime: occurrence.toISOString(),
+            isAllDay: true,
+            isBirthday: true,
+            recurring: true,
+            occurrenceDate: occurrence.toISOString().split('T')[0],
+            isCancelled: false,
+            cancellationReason: null,
+            originalStart: null,
+            originalEnd: null,
+            fuzzyTime: null,
+            persons: [{ id: p.id, name: personName }]
+          });
+        }
+      }
+    }
+    return birthdayEvents;
+  } catch (err) {
+    console.error("Error fetching birthdays for range:", err);
+    return [];
+  }
+}
+
 export async function getEventsForRange(start: Date, end: Date, prisma: any): Promise<any[]> {
   let occurrences: any[] = [];
   let dbEvents: any[] = [];
@@ -177,6 +253,8 @@ export async function getEventsForRange(start: Date, end: Date, prisma: any): Pr
     console.warn("Fehler beim Abrufen der lokalen Kalender- und Aufgabendaten:", e);
   }
 
+  const birthdayEvents = await getBirthdaysForRange(start, end, prisma);
+
   const allEvents = [
     ...dbEvents.map((e: any) => ({
       id: String(e.id),
@@ -220,7 +298,8 @@ export async function getEventsForRange(start: Date, end: Date, prisma: any): Pr
       recurring: t.recurrence !== null && t.recurrence !== "none",
       recurrence: t.recurrence,
       listTitle: t.listTitle
-    }))
+    })),
+    ...birthdayEvents
   ];
 
   allEvents.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
@@ -251,99 +330,14 @@ export const calendarPlugin: Plugin = {
         const endOfDay = new Date(args.datum);
         endOfDay.setHours(23, 59, 59, 999);
 
-        // 1. Fetch normal events and override events that overlap the day and are not completely hidden/deleted
-        const dbEvents = await prisma.event.findMany({
-          where: {
-            isDeleted: false,
-            start: { lte: endOfDay },
-            end: { gte: startOfDay }
-          }
-        });
-
-        // 2. Fetch all recurrence patterns that could occur on this day
-        const dbPatterns = await prisma.recurrencePattern.findMany({
-          where: {
-            isDeleted: false,
-            originalStart: { lte: endOfDay },
-            OR: [
-              { recurrenceEnd: null },
-              { recurrenceEnd: { gte: startOfDay } }
-            ]
-          }
-        });
-
-        // 3. Fetch overrides for check
-        const patternIds = dbPatterns.map(p => p.id);
-        const overrides = patternIds.length > 0 ? await prisma.event.findMany({
-          where: { recurrenceId: { in: patternIds } }
-        }) : [];
-
-        // 4. Expand recurring events
-        const occurrences: any[] = [];
-        for (const pattern of dbPatterns) {
-          occurrences.push(...getOccurrences(pattern, startOfDay, endOfDay, overrides));
-        }
-
-        // 5. Combine and project properties
-        const allEvents = [
-          ...dbEvents.map(e => ({
-            id: String(e.id),
-            title: e.title,
-            description: e.description || "",
-            start: e.start,
-            end: e.end,
-            isAllDay: e.isAllDay,
-            isRecurring: e.recurrenceId !== null,
-            recurrenceId: e.recurrenceId,
-            originalOccurrenceDate: e.originalOccurrenceDate,
-            isCancelled: e.isCancelled,
-            cancellationReason: e.cancellationReason || null,
-            originalStart: e.originalStart,
-            originalEnd: e.originalEnd,
-            fuzzyTime: e.fuzzyTime
-          })),
-          ...occurrences.map(o => ({
-            id: o.id,
-            title: o.title,
-            description: o.description || "",
-            start: o.start,
-            end: o.end,
-            isAllDay: o.isAllDay,
-            isRecurring: true,
-            recurrenceId: o.recurrenceId,
-            originalOccurrenceDate: o.originalOccurrenceDate,
-            isCancelled: false,
-            cancellationReason: null,
-            originalStart: null,
-            originalEnd: null,
-            fuzzyTime: o.fuzzyTime
-          }))
-        ];
-
-        allEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
-
-        const matchedEvents = await matchPersonsForEvents(allEvents, prisma);
+        const events = await getEventsForRange(startOfDay, endOfDay, prisma);
 
         return {
           type: "calendar_widget",
           date: args.datum,
-          events: matchedEvents.map(e => ({
-            id: e.id,
-            title: e.title,
-            time: e.start.toISOString(),
-            endTime: e.end.toISOString(),
-            type: "local",
-            description: e.description,
-            isAllDay: e.isAllDay,
-            isRecurring: e.isRecurring,
-            recurrenceId: e.recurrenceId,
-            originalOccurrenceDate: e.originalOccurrenceDate ? e.originalOccurrenceDate.toISOString() : null,
-            isCancelled: e.isCancelled,
-            cancellationReason: e.cancellationReason,
-            originalStart: e.originalStart ? e.originalStart.toISOString() : null,
-            originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null,
-            fuzzyTime: e.fuzzyTime,
-            persons: e.persons
+          events: events.map(e => ({
+            ...e,
+            type: e.isBirthday ? "birthday" : "local"
           }))
         };
       }
@@ -416,96 +410,15 @@ export const calendarPlugin: Plugin = {
           const endOfDay = new Date(start);
           endOfDay.setHours(23, 59, 59, 999);
 
-          // Return updated widget list
-          const dbEvents = await prisma.event.findMany({
-            where: {
-              isDeleted: false,
-              start: { lte: endOfDay },
-              end: { gte: startOfDay }
-            }
-          });
-
-          const dbPatterns = await prisma.recurrencePattern.findMany({
-            where: {
-              isDeleted: false,
-              originalStart: { lte: endOfDay },
-              OR: [
-                { recurrenceEnd: null },
-                { recurrenceEnd: { gte: startOfDay } }
-              ]
-            }
-          });
-
-          const patternIds = dbPatterns.map(p => p.id);
-          const overrides = patternIds.length > 0 ? await prisma.event.findMany({
-            where: { recurrenceId: { in: patternIds } }
-          }) : [];
-
-          const occurrences: any[] = [];
-          for (const pattern of dbPatterns) {
-            occurrences.push(...getOccurrences(pattern, startOfDay, endOfDay, overrides));
-          }
-
-          const allEvents = [
-            ...dbEvents.map(e => ({
-              id: String(e.id),
-              title: e.title,
-              description: e.description || "",
-              start: e.start,
-              end: e.end,
-              isAllDay: e.isAllDay,
-              isRecurring: e.recurrenceId !== null,
-              recurrenceId: e.recurrenceId,
-              originalOccurrenceDate: e.originalOccurrenceDate,
-              isCancelled: e.isCancelled,
-              cancellationReason: e.cancellationReason || null,
-              originalStart: e.originalStart,
-              originalEnd: e.originalEnd,
-              fuzzyTime: e.fuzzyTime
-            })),
-            ...occurrences.map(o => ({
-              id: o.id,
-              title: o.title,
-              description: o.description || "",
-              start: o.start,
-              end: o.end,
-              isAllDay: o.isAllDay,
-              isRecurring: true,
-              recurrenceId: o.recurrenceId,
-              originalOccurrenceDate: o.originalOccurrenceDate,
-              isCancelled: false,
-              cancellationReason: null,
-              originalStart: null,
-              originalEnd: null,
-              fuzzyTime: o.fuzzyTime
-            }))
-          ];
-
-          allEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
-
-          const matchedEvents = await matchPersonsForEvents(allEvents, prisma);
+          const events = await getEventsForRange(startOfDay, endOfDay, prisma);
 
           return { 
             type: "calendar_widget",
             date: args.datum.split('T')[0],
             message: `Termin '${args.titel}' wurde erstellt.`,
-            events: matchedEvents.map(e => ({ 
-              id: e.id, 
-              title: e.title, 
-              time: e.start.toISOString(), 
-              endTime: e.end.toISOString(),
-              type: "local",
-              description: e.description,
-              isAllDay: e.isAllDay,
-              isRecurring: e.isRecurring,
-              recurrenceId: e.recurrenceId,
-              originalOccurrenceDate: e.originalOccurrenceDate ? e.originalOccurrenceDate.toISOString() : null,
-              isCancelled: e.isCancelled,
-              cancellationReason: e.cancellationReason,
-              originalStart: e.originalStart ? e.originalStart.toISOString() : null,
-              originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null,
-              fuzzyTime: e.fuzzyTime,
-              persons: e.persons
+            events: events.map(e => ({
+              ...e,
+              type: e.isBirthday ? "birthday" : "local"
             }))
           };
         } catch (e: any) {
@@ -601,95 +514,15 @@ export const calendarPlugin: Plugin = {
           const endOfDay = new Date(args.datum);
           endOfDay.setHours(23, 59, 59, 999);
 
-          const dbEvents = await prisma.event.findMany({
-            where: {
-              isDeleted: false,
-              start: { lte: endOfDay },
-              end: { gte: startOfDay }
-            }
-          });
-
-          const dbPatterns = await prisma.recurrencePattern.findMany({
-            where: {
-              isDeleted: false,
-              originalStart: { lte: endOfDay },
-              OR: [
-                { recurrenceEnd: null },
-                { recurrenceEnd: { gte: startOfDay } }
-              ]
-            }
-          });
-
-          const patternIds = dbPatterns.map(p => p.id);
-          const overrides = patternIds.length > 0 ? await prisma.event.findMany({
-            where: { recurrenceId: { in: patternIds } }
-          }) : [];
-
-          const occurrences: any[] = [];
-          for (const pattern of dbPatterns) {
-            occurrences.push(...getOccurrences(pattern, startOfDay, endOfDay, overrides));
-          }
-
-          const allEvents = [
-            ...dbEvents.map(e => ({
-              id: String(e.id),
-              title: e.title,
-              description: e.description || "",
-              start: e.start,
-              end: e.end,
-              isAllDay: e.isAllDay,
-              isRecurring: e.recurrenceId !== null,
-              recurrenceId: e.recurrenceId,
-              originalOccurrenceDate: e.originalOccurrenceDate,
-              isCancelled: e.isCancelled,
-              cancellationReason: e.cancellationReason || null,
-              originalStart: e.originalStart,
-              originalEnd: e.originalEnd,
-              fuzzyTime: e.fuzzyTime
-            })),
-            ...occurrences.map(o => ({
-              id: o.id,
-              title: o.title,
-              description: o.description || "",
-              start: o.start,
-              end: o.end,
-              isAllDay: o.isAllDay,
-              isRecurring: true,
-              recurrenceId: o.recurrenceId,
-              originalOccurrenceDate: o.originalOccurrenceDate,
-              isCancelled: false,
-              cancellationReason: null,
-              originalStart: null,
-              originalEnd: null,
-              fuzzyTime: o.fuzzyTime
-            }))
-          ];
-
-          allEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
-
-          const matchedEvents = await matchPersonsForEvents(allEvents, prisma);
+          const events = await getEventsForRange(startOfDay, endOfDay, prisma);
 
           return { 
             type: "calendar_widget",
             date: args.datum,
             message: `Termin wurde gelöscht.`,
-            events: matchedEvents.map(e => ({ 
-              id: e.id, 
-              title: e.title, 
-              time: e.start.toISOString(), 
-              endTime: e.end.toISOString(),
-              type: "local",
-              description: e.description,
-              isAllDay: e.isAllDay,
-              isRecurring: e.isRecurring,
-              recurrenceId: e.recurrenceId,
-              originalOccurrenceDate: e.originalOccurrenceDate ? e.originalOccurrenceDate.toISOString() : null,
-              isCancelled: e.isCancelled,
-              cancellationReason: e.cancellationReason,
-              originalStart: e.originalStart ? e.originalStart.toISOString() : null,
-              originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null,
-              fuzzyTime: e.fuzzyTime,
-              persons: e.persons
+            events: events.map(e => ({
+              ...e,
+              type: e.isBirthday ? "birthday" : "local"
             }))
           };
         } catch (e: any) {
@@ -979,95 +812,15 @@ export const calendarPlugin: Plugin = {
           const endOfDay = new Date(targetDate);
           endOfDay.setHours(23, 59, 59, 999);
 
-          const dbEvents = await prisma.event.findMany({
-            where: {
-              isDeleted: false,
-              start: { lte: endOfDay },
-              end: { gte: startOfDay }
-            }
-          });
-
-          const dbPatterns = await prisma.recurrencePattern.findMany({
-            where: {
-              isDeleted: false,
-              originalStart: { lte: endOfDay },
-              OR: [
-                { recurrenceEnd: null },
-                { recurrenceEnd: { gte: startOfDay } }
-              ]
-            }
-          });
-
-          const patternIds = dbPatterns.map(p => p.id);
-          const overrides = patternIds.length > 0 ? await prisma.event.findMany({
-            where: { recurrenceId: { in: patternIds } }
-          }) : [];
-
-          const occurrences: any[] = [];
-          for (const pattern of dbPatterns) {
-            occurrences.push(...getOccurrences(pattern, startOfDay, endOfDay, overrides));
-          }
-
-          const allEvents = [
-            ...dbEvents.map(e => ({
-              id: String(e.id),
-              title: e.title,
-              description: e.description || "",
-              start: e.start,
-              end: e.end,
-              isAllDay: e.isAllDay,
-              isRecurring: e.recurrenceId !== null,
-              recurrenceId: e.recurrenceId,
-              originalOccurrenceDate: e.originalOccurrenceDate,
-              isCancelled: e.isCancelled,
-              cancellationReason: e.cancellationReason || null,
-              originalStart: e.originalStart,
-              originalEnd: e.originalEnd,
-              fuzzyTime: e.fuzzyTime
-            })),
-            ...occurrences.map(o => ({
-              id: o.id,
-              title: o.title,
-              description: o.description || "",
-              start: o.start,
-              end: o.end,
-              isAllDay: o.isAllDay,
-              isRecurring: true,
-              recurrenceId: o.recurrenceId,
-              originalOccurrenceDate: o.originalOccurrenceDate,
-              isCancelled: false,
-              cancellationReason: null,
-              originalStart: null,
-              originalEnd: null,
-              fuzzyTime: o.fuzzyTime
-            }))
-          ];
-
-          allEvents.sort((a, b) => a.start.getTime() - b.start.getTime());
-
-          const matchedEvents = await matchPersonsForEvents(allEvents, prisma);
+          const events = await getEventsForRange(startOfDay, endOfDay, prisma);
 
           return { 
             type: "calendar_widget",
             date: targetDate.split('T')[0],
             message: `Termin wurde aktualisiert.`,
-            events: matchedEvents.map(e => ({ 
-              id: e.id, 
-              title: e.title, 
-              time: e.start.toISOString(), 
-              endTime: e.end.toISOString(),
-              type: "local",
-              description: e.description,
-              isAllDay: e.isAllDay,
-              isRecurring: e.isRecurring,
-              recurrenceId: e.recurrenceId,
-              originalOccurrenceDate: e.originalOccurrenceDate ? e.originalOccurrenceDate.toISOString() : null,
-              isCancelled: e.isCancelled,
-              cancellationReason: e.cancellationReason,
-              originalStart: e.originalStart ? e.originalStart.toISOString() : null,
-              originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null,
-              fuzzyTime: e.fuzzyTime,
-              persons: e.persons
+            events: events.map(e => ({
+              ...e,
+              type: e.isBirthday ? "birthday" : "local"
             }))
           };
         } catch (e: any) {
