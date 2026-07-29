@@ -16,6 +16,11 @@
       "key": "PORT",
       "type": "credential",
       "description": "Port the node server listens on"
+    },
+    {
+      "key": "GEMINI_MODEL",
+      "type": "credential",
+      "description": "Gemini Model name to use (e.g. gemini-3.5-flash)"
     }
   ]
 }

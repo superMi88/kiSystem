@@ -55,7 +55,6 @@ jobs:
             export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.npm-global/bin:$PATH"
 
             cd /home/kisystem
-            echo "${{ secrets.ENV_FILE_CONTENT }}" > .env
             npm install --omit=dev
             npx prisma migrate deploy
             pm2 startOrReload ecosystem.config.cjs --update-env
