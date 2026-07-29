@@ -4390,7 +4390,7 @@
 
         async function callTool(name, args) {
             try {
-                await fetch(getApiUrl('/api/tools/call'), {
+                const res = await fetch(getApiUrl('/api/tools/call'), {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ name, arguments: args })
@@ -4399,9 +4399,13 @@
                 if (isElectron && ipcRenderer) {
                     ipcRenderer.send('widgets-updated');
                 }
+                if (res.ok) {
+                    return await res.json();
+                }
             } catch(e) {
                 console.error("Tool Call Error:", e);
             }
+            return null;
         }
 
         window.callTool = callTool;
