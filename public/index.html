@@ -1744,6 +1744,15 @@
                     </div>
                 </div>
 
+                <!-- Geburtstag -->
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">🎂 Geburtstag</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="person-birthday-input" placeholder="z.B. YYYY-MM-DD oder MM-DD" style="flex: 1; padding: 8px; font-size: 0.8rem; height: 32px; border-radius: 6px; background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.1); outline: none;">
+                        <button onclick="savePersonBirthday()" class="nav-btn" style="flex: 0; padding: 0 12px; height: 32px; border-radius: 6px; background: var(--accent); color: #11111b; font-weight: bold; border: none; cursor: pointer;">Speichern</button>
+                    </div>
+                </div>
+
                 <!-- Biografie -->
                 <div>
                     <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Biografie / Notizen</label>
@@ -2388,6 +2397,12 @@
                 
                 // Biografie
                 personProfileBio.value = person.biography || '';
+
+                // Geburtstag
+                const bdayInput = document.getElementById('person-birthday-input');
+                if (bdayInput) {
+                    bdayInput.value = person.birthday ? person.birthday.split('T')[0] : '';
+                }
                 
                 // Aliase / Namen
                 personProfileNames.innerHTML = '';
@@ -2489,6 +2504,26 @@
             await callTool('aktualisiere_person_biografie', { personId: parseInt(id), biografie: bio });
             alert("Biografie wurde aktualisiert.");
             loadTopWidgets();
+        };
+
+        window.savePersonBirthday = async function() {
+            const id = personProfileId.value;
+            const bdayInput = document.getElementById('person-birthday-input');
+            const bday = bdayInput ? bdayInput.value.trim() : '';
+            if (!id) return;
+            
+            try {
+                const res = await callTool('setze_person_geburtstag', { personId: parseInt(id), geburtstag: bday });
+                if (res && res.status === 'success') {
+                    alert("Geburtstag wurde gespeichert.");
+                    openPersonProfileModal(id);
+                    loadTopWidgets();
+                } else {
+                    alert("Fehler: " + (res?.message || "Konnte Geburtstag nicht speichern."));
+                }
+            } catch (err) {
+                alert("Fehler: " + err.message);
+            }
         };
 
         window.addPersonAlias = async function() {
@@ -3461,8 +3496,13 @@
                             });
                         }
 
+                        let birthdayStyle = "border-bottom: 1px solid rgba(255,255,255,0.02); padding: 4px 0;";
+                        if (ev.isBirthday) {
+                            birthdayStyle = "background: rgba(245, 194, 231, 0.08); border: 1px solid rgba(245, 194, 231, 0.2); border-left: 3px solid #f5c2e7; padding: 6px 8px; border-radius: 6px; margin: 2px 0;";
+                        }
+
                         html += `
-                            <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.02); ${cancelStyle}">
+                            <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; ${birthdayStyle} ${cancelStyle}">
                                 <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
                                     <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                                         <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
@@ -3476,7 +3516,11 @@
                                     </div>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 2px; align-self: center; margin-left: 8px;">
-                                    <button onclick="insertEntityLinkIntoChat('${escTitle}', 'event', ${ev.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.8rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
+                                    ${ev.isBirthday ? `
+                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'person', ${ev.persons[0].id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.8rem; padding: 2px 4px;" title="Person in Chat verlinken">🔗</button>
+                                    ` : `
+                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'event', ${ev.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.8rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
+                                    `}
                                 </div>
                             </div>
                         `;
@@ -3783,8 +3827,13 @@
                             });
                         }
 
+                        let birthdayStyle = "border-bottom: 1px solid rgba(255,255,255,0.02); padding: 4px 0;";
+                        if (ev.isBirthday) {
+                            birthdayStyle = "background: rgba(245, 194, 231, 0.08); border: 1px solid rgba(245, 194, 231, 0.2); border-left: 3px solid #f5c2e7; padding: 6px 8px; border-radius: 6px; margin: 2px 0;";
+                        }
+
                         html += `
-                            <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.02); ${rescheduleBorder} ${cancelStyle}">
+                            <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; ${birthdayStyle} ${rescheduleBorder} ${cancelStyle}">
                                 <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
                                     <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                                         <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
@@ -3798,8 +3847,12 @@
                                     </div>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 4px; align-self: center; margin-left: 8px;">
-                                    <button onclick="insertEntityLinkIntoChat('${escTitle}', 'event', ${ev.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
-                                    <button onclick="deleteCalendarEvent('${ev.id}', '${targetDate}', ${isRec})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Termin löschen">✖</button>
+                                    ${ev.isBirthday ? `
+                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'person', ${ev.persons[0].id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="Person in Chat verlinken">🔗</button>
+                                    ` : `
+                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'event', ${ev.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
+                                        <button onclick="deleteCalendarEvent('${ev.id}', '${targetDate}', ${isRec})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Termin löschen">✖</button>
+                                    `}
                                 </div>
                             </div>
                         `;
