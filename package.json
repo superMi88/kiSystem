@@ -7,7 +7,8 @@
     "start": "node build/index.js",
     "electron": "electron .",
     "dev": "npx prisma db push --accept-data-loss && npm run build && concurrently \"npm start\" \"electron .\"",
-    "cap:sync": "npx cap sync",
+    "generate-env": "node scripts/generate-env.js",
+    "cap:sync": "npm run generate-env && npx cap sync",
     "cap:open": "npx cap open android"
   },
   "main": "main.cjs",

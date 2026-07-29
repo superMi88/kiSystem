@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#89b4fa">
     <title>Gemini Mobile Light</title>
     <link rel="manifest" href="/manifest.json">
+    <script src="env-config.js" defer></script>
     <style>
         :root {
             --bg: transparent;
@@ -1933,14 +1934,6 @@
                         </div>
                     </div>
 
-                    <!-- Server-Adresse -->
-                    <div class="settings-group">
-                        <label>Server-Adresse (für Mobile/Web)</label>
-                        <div class="hotkey-container">
-                            <input type="text" id="api-base-url-input" placeholder="Z.B. http://192.168.178.50:3001" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.9rem;">
-                            <span class="hotkey-tip">Wird für den Zugriff von Mobilgeräten oder Webbrowsern benötigt. Standardmäßig leer (Verbindung zum lokalen Server).</span>
-                        </div>
-                    </div>
 
                     <!-- Server-Zugangsdaten (Basic Auth) -->
                     <div class="settings-group">
@@ -1986,17 +1979,6 @@
     <!-- Old Floating Mobile Plugins Bar has been merged inside input-area -->
 
     <script>
-        // Auto-fix api_base_url if page is loaded on localhost but api_base_url points to a different origin
-        (function() {
-            const currentOrigin = window.location.origin;
-            const savedUrl = localStorage.getItem('api_base_url');
-            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                if (savedUrl && !savedUrl.startsWith(currentOrigin)) {
-                    console.log(`Auto-fixing api_base_url from ${savedUrl} to ${currentOrigin}`);
-                    localStorage.setItem('api_base_url', currentOrigin);
-                }
-            }
-        })();
 
         let entityConfigs = {};
         let lastActiveView = 'chat';
@@ -2204,10 +2186,10 @@
 
         // Helper to resolve API URLs (either absolute or relative depending on configuration)
         function getApiUrl(path) {
-            const savedUrl = localStorage.getItem('api_base_url');
-            if (savedUrl) {
-                const cleanedUrl = savedUrl.replace(/\/$/, '');
-                return cleanedUrl + (path.startsWith('/') ? path : '/' + path);
+            // Für die mobile App (Capacitor) verwenden wir die feste Serveradresse
+            if (window.Capacitor) {
+                const baseUrl = (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de';
+                return baseUrl + (path.startsWith('/') ? path : '/' + path);
             }
             return path;
         }
@@ -2705,11 +2687,6 @@
                     autostartCheckbox.checked = settings.autostart === true;
                 }
                 
-                // Initialize the Server Address input field from localStorage
-                const apiBaseUrlInput = document.getElementById('api-base-url-input');
-                if (apiBaseUrlInput) {
-                    apiBaseUrlInput.value = localStorage.getItem('api_base_url') || '';
-                }
 
                 // Initialize the Server Credentials input fields from localStorage
                 const apiUsernameInput = document.getElementById('api-username-input');
@@ -2775,20 +2752,6 @@
             recordingHotkey = false;
             hotkeyBtn.classList.remove('recording');
             
-            // Save the server URL first
-            const apiBaseUrlInput = document.getElementById('api-base-url-input');
-            if (apiBaseUrlInput) {
-                const enteredUrl = apiBaseUrlInput.value.trim();
-                if (enteredUrl) {
-                    let formattedUrl = enteredUrl;
-                    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-                        formattedUrl = 'http://' + formattedUrl;
-                    }
-                    localStorage.setItem('api_base_url', formattedUrl);
-                } else {
-                    localStorage.removeItem('api_base_url');
-                }
-            }
 
             // Save the server credentials
             const apiUsernameInput = document.getElementById('api-username-input');
