@@ -34,6 +34,24 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Kalender Widget Provider -->
+        <receiver
+            android:name=".CalendarWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.kisystem.app.ACTION_REFRESH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/calendar_widget_info" />
+        </receiver>
+
+        <!-- Kalender Widget Service für ListView -->
+        <service
+            android:name=".CalendarWidgetService"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
     </application>
 
     <uses-permission android:name="android.permission.INTERNET" />

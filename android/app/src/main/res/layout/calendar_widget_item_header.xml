@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:paddingTop="8dp"
+    android:paddingBottom="4dp"
+    android:gravity="center_vertical">
+
+    <!-- Green indicator bar on left, just like in-app calendar -->
+    <View
+        android:layout_width="3dp"
+        android:layout_height="14dp"
+        android:background="#2ecc71"
+        android:layout_marginEnd="6dp" />
+
+    <TextView
+        android:id="@+id/header_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#89b4fa"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:text="Mittwoch, 12.08." />
+</LinearLayout>

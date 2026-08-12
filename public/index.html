@@ -2745,6 +2745,24 @@
             } catch (e) {
                 console.error("Fehler beim Laden der Einstellungen:", e);
             }
+            syncWidgetSettings();
+        }
+
+        function syncWidgetSettings() {
+            if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.WidgetSettings) {
+                try {
+                    const username = localStorage.getItem('api_username') || '';
+                    const password = localStorage.getItem('api_password') || '';
+                    const serverUrl = (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de';
+                    Capacitor.Plugins.WidgetSettings.saveSettings({
+                        username: username,
+                        password: password,
+                        serverUrl: serverUrl
+                    });
+                } catch (e) {
+                    console.error("Widget-Settings Sync Fehler:", e);
+                }
+            }
         }
 
         function renderPluginsSettings(plugins) {
@@ -2807,6 +2825,8 @@
                     localStorage.removeItem('api_password');
                 }
             }
+
+            syncWidgetSettings();
 
             const disabledPlugins = [];
             document.querySelectorAll('.plugin-checkbox').forEach(cb => {
@@ -3470,57 +3490,106 @@
                 html += `<div style="font-size: 0.85rem; font-weight: bold; color: var(--accent); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">📅 Termine für ${dateStr}</div>`;
                 
                 if (data.events.length === 0) {
-                    html += `<p style="font-size:0.8rem; opacity:0.6; margin: 5px 0;">Keine Termine für diesen Tag.</p>`;
-                } else {
-                    html += `<div style="display: flex; flex-direction: column; gap: 8px;">`;
-                    data.events.forEach(ev => {
-                        const isRec = ev.recurring || ev.isRecurring;
-                        const repeatBadge = isRec ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
-                        const rescheduleBadge = ev.originalStart ? ` <span style="background: rgba(249, 226, 175, 0.15); color: #f9e2af; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase;" title="Dieser Termin wurde verschoben">verschoben</span>` : '';
-                        
-                        const cancelStyle = ev.isCancelled ? 'color: var(--off); text-decoration: line-through;' : '';
-                        const titleCancelStyle = ev.isCancelled ? 'color: var(--off); font-weight: 500;' : 'font-weight: 500;';
-                        const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.75rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.75rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
-                        const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
+                    html += `<p style="font-size:0.8rem; opacity:0.6; margin: 5px 0;">Keine Termine für diesen                    data.events.forEach(ev => {
+                        if (ev.isTask) {
+                            const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
+                            const escNotes = escapeHtml(ev.description || '').replace(/'/g, "\\'");
+                            const escListTitle = escapeHtml(ev.listTitle || '').replace(/'/g, "\\'");
+                            const recurrenceVal = ev.recurrence || 'none';
+                            const isRecurring = ev.recurring || false;
+                            const repeatBadge = isRecurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrend: ${ev.recurrence}">🔄</span>` : '';
+                            
+                            let personsHtml = "";
+                            if (ev.persons && ev.persons.length > 0) {
+                                ev.persons.forEach(p => {
+                                    personsHtml += `
+                                        <span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.color='var(--accent)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.color='rgba(255,255,255,0.7)'">
+                                          👤 ${escapeHtml(p.name)}
+                                        </span>
+                                    `;
+                                });
+                            }
 
-                        const timeBadgeHtml = getEventTimeBadge(ev);
+                            const rawTaskId = ev.id.replace('task-', '');
+                            const checkedAttr = ev.completed ? 'checked' : '';
+                            const textStyle = ev.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
 
-                        let personsHtml = "";
-                        if (ev.persons && ev.persons.length > 0) {
-                            ev.persons.forEach(p => {
-                                personsHtml += `
-                                    <span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.color='var(--accent)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.color='rgba(255,255,255,0.7)'">
-                                      👤 ${escapeHtml(p.name)}
-                                    </span>
-                                `;
-                            });
-                        }
-
-                        let birthdayStyle = "border-bottom: 1px solid rgba(255,255,255,0.02); padding: 4px 0;";
-                        if (ev.isBirthday) {
-                            birthdayStyle = "background: rgba(245, 194, 231, 0.08); border: 1px solid rgba(245, 194, 231, 0.2); border-left: 3px solid #f5c2e7; padding: 6px 8px; border-radius: 6px; margin: 2px 0;";
-                        }
-
-                        html += `
-                            <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; ${birthdayStyle} ${cancelStyle}">
-                                <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
-                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                        <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
-                                        ${repeatBadge}
-                                        ${rescheduleBadge}
-                                        ${reasonHtml}
+                            html += `
+                                <div class="task-item" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); transition: all 0.2s; margin-bottom: 4px; width: 100%;">
+                                    <div style="display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 0;">
+                                        <input type="checkbox" class="task-checkbox" data-task-id="${rawTaskId}" data-tasklist-id="${ev.listTitle || 'Standard'}" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 3px;">
+                                        <span style="line-height: 1.4; color: var(--text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word; flex: 1; ${textStyle}">
+                                            <strong>[Aufgabe]</strong> ${escapeHtml(ev.title)}
+                                            ${repeatBadge}
+                                            ${personsHtml}
+                                            ${ev.description ? `<div style="font-size: 0.75rem; opacity: 0.6; margin-top: 4px; white-space: pre-wrap; word-break: break-word; display: block; text-decoration: none !important; line-height: 1.2;">${escapeHtml(ev.description)}</div>` : ''}
+                                        </span>
                                     </div>
-                                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px;">
-                                        ${timeBadgeHtml}
-                                        ${personsHtml}
+                                    <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'task', ${rawTaskId})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="In Chat verlinken">🔗</button>
+                                        <button onclick="editTask(${rawTaskId}, '${escTitle}', '${escNotes}', '${ev.time || ''}', '${escListTitle}', '${recurrenceVal}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Bearbeiten">✏️</button>
+                                        <button onclick="deleteTask(${rawTaskId})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Löschen">✖</button>
                                     </div>
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 2px; align-self: center; margin-left: 8px;">
-                                    ${ev.isBirthday ? `
-                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'person', ${ev.persons[0].id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.8rem; padding: 2px 4px;" title="Person in Chat verlinken">🔗</button>
-                                    ` : `
-                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'event', ${ev.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.8rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
-                                    `}
+                            `;
+                        } else {
+                            const isRec = ev.recurring || ev.isRecurring;
+                            const repeatBadge = isRec ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
+                            const rescheduleBadge = ev.originalStart ? ` <span style="background: rgba(249, 226, 175, 0.15); color: #f9e2af; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase;" title="Dieser Termin wurde verschoben">verschoben</span>` : '';
+                            const originalTimeText = ev.originalStart ? ` <span style="font-size: 0.7rem; opacity: 0.65; color: #f9e2af;">(ursprünglich: ${new Date(ev.originalStart).toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit'})} ${new Date(ev.originalStart).toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'})})</span>` : '';
+                            const targetDate = ev.occurrenceDate || ev.time.split('T')[0];
+                            
+                            const cancelStyle = ev.isCancelled ? 'color: var(--off); text-decoration: line-through;' : '';
+                            const titleCancelStyle = ev.isCancelled ? 'color: var(--off); font-weight: 500;' : 'font-weight: 500;';
+                            const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.75rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.75rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
+                            const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
+
+                            const timeBadgeHtml = getEventTimeBadge(ev);
+
+                            let personsHtml = "";
+                            if (ev.persons && ev.persons.length > 0) {
+                                ev.persons.forEach(p => {
+                                    personsHtml += `
+                                        <span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.color='var(--accent)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.color='rgba(255,255,255,0.7)'">
+                                          👤 ${escapeHtml(p.name)}
+                                        </span>
+                                    `;
+                                });
+                            }
+
+                            let birthdayStyle = "border-bottom: 1px solid rgba(255,255,255,0.02); padding: 4px 0;";
+                            if (ev.isBirthday) {
+                                birthdayStyle = "background: rgba(245, 194, 231, 0.08); border: 1px solid rgba(245, 194, 231, 0.2); border-left: 3px solid #f5c2e7; padding: 6px 8px; border-radius: 6px; margin: 2px 0;";
+                            }
+
+                            html += `
+                                <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; ${birthdayStyle} ${cancelStyle}">
+                                    <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
+                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                            <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
+                                            ${repeatBadge}
+                                            ${rescheduleBadge}
+                                            ${originalTimeText}
+                                            ${reasonHtml}
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px;">
+                                            ${timeBadgeHtml}
+                                            ${personsHtml}
+                                        </div>
+                                        ${ev.description ? `<div style="font-size: 0.75rem; opacity: 0.6; margin-top: 4px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(ev.description)}</div>` : ''}
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 4px; align-self: center; margin-left: 8px;">
+                                        ${ev.isBirthday ? `
+                                            <button onclick="insertEntityLinkIntoChat('${escTitle}', 'person', ${ev.persons[0].id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="Person in Chat verlinken">🔗</button>
+                                        ` : `
+                                            <button onclick="insertEntityLinkIntoChat('${escTitle}', 'event', ${ev.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
+                                            <button onclick="deleteCalendarEvent('${ev.id}', '${targetDate}', ${isRec})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Termin löschen">✖</button>
+                                        `}
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    });               `}
                                 </div>
                             </div>
                         `;
@@ -3792,6 +3861,7 @@
                                         <strong>[Aufgabe]</strong> ${escapeHtml(ev.title)}
                                         ${repeatBadge}
                                         ${personsHtml}
+                                        ${ev.description ? `<div style="font-size: 0.75rem; opacity: 0.6; margin-top: 4px; white-space: pre-wrap; word-break: break-word; display: block; text-decoration: none !important; line-height: 1.2;">${escapeHtml(ev.description)}</div>` : ''}
                                     </span>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
@@ -3832,6 +3902,8 @@
                             birthdayStyle = "background: rgba(245, 194, 231, 0.08); border: 1px solid rgba(245, 194, 231, 0.2); border-left: 3px solid #f5c2e7; padding: 6px 8px; border-radius: 6px; margin: 2px 0;";
                         }
 
+                        const originalTimeText = ev.originalStart ? ` <span style="font-size: 0.7rem; opacity: 0.65; color: #f9e2af;">(ursprünglich: ${new Date(ev.originalStart).toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit'})} ${new Date(ev.originalStart).toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'})})</span>` : '';
+
                         html += `
                             <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; ${birthdayStyle} ${rescheduleBorder} ${cancelStyle}">
                                 <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
@@ -3839,12 +3911,14 @@
                                         <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
                                         ${repeatBadge}
                                         ${rescheduleBadge}
+                                        ${originalTimeText}
                                         ${reasonHtml}
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px;">
                                         ${timeBadgeHtml}
                                         ${personsHtml}
                                     </div>
+                                    ${ev.description ? `<div style="font-size: 0.75rem; opacity: 0.6; margin-top: 4px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(ev.description)}</div>` : ''}
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 4px; align-self: center; margin-left: 8px;">
                                     ${ev.isBirthday ? `
@@ -4835,6 +4909,7 @@
             }
             try {
                 await loadTopWidgets();
+                syncWidgetSettings();
             } catch (err) {
                 console.error("Konnte keine Verbindung zum Server herstellen:", err);
                 if (!isElectron) {

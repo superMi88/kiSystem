@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="#242437"
+    android:padding="8dp"
+    android:layout_marginTop="2dp"
+    android:layout_marginBottom="2dp"
+    android:layout_marginStart="4dp"
+    android:layout_marginEnd="4dp">
+
+    <!-- Title and repeat badge -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/event_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="#cdd6f4"
+            android:textSize="13sp"
+            android:textStyle="normal"
+            android:text="Meeting" />
+
+        <TextView
+            android:id="@+id/event_repeat_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🔄"
+            android:textSize="10sp"
+            android:layout_marginStart="4dp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- Time and Persons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="2dp"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/event_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#89b4fa"
+            android:textSize="11sp"
+            android:text="09:00 - 10:00" />
+
+        <TextView
+            android:id="@+id/event_persons"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#cba6f7"
+            android:textSize="11sp"
+            android:layout_marginStart="8dp"
+            android:text="👤 Max"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- Description -->
+    <TextView
+        android:id="@+id/event_description"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#a6adc8"
+        android:textSize="11sp"
+        android:layout_marginTop="4dp"
+        android:text="Description notes here..."
+        android:visibility="gone" />
+</LinearLayout>
