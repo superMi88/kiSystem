@@ -201,12 +201,12 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public void scheduleTimerAlarm(int timerId, String title, double triggerAtMillis) {
-            scheduleTimerAlarm(mContext, timerId, title, (long) triggerAtMillis);
+            MainActivity.scheduleTimerAlarm(mContext, timerId, title, (long) triggerAtMillis);
         }
 
         @JavascriptInterface
         public void cancelScheduledTimerAlarm(int timerId) {
-            cancelScheduledTimerAlarm(mContext, timerId);
+            MainActivity.cancelScheduledTimerAlarm(mContext, timerId);
         }
 
         @JavascriptInterface
