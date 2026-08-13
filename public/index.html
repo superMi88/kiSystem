@@ -2415,7 +2415,11 @@
             personNewFactCat = document.getElementById('person-new-fact-cat');
             personMergeTargetSelect = document.getElementById('person-merge-target-select');
             personProfileMemories = document.getElementById('person-profile-memories');
-            syncWidgetSettings();
+            if (typeof loadSettings === 'function') {
+                loadSettings();
+            } else {
+                syncWidgetSettings();
+            }
         });
 
         window.openPersonProfileModal = async function(id) {
@@ -2830,6 +2834,11 @@
             let username = (settingsUsernameInput && settingsUsernameInput.value.trim() !== "") ? settingsUsernameInput.value.trim() : ((loginUsernameInput && loginUsernameInput.value.trim() !== "") ? loginUsernameInput.value.trim() : (localStorage.getItem('api_username') || ''));
             let password = (settingsPasswordInput && settingsPasswordInput.value.trim() !== "") ? settingsPasswordInput.value.trim() : ((loginPasswordInput && loginPasswordInput.value.trim() !== "") ? loginPasswordInput.value.trim() : (localStorage.getItem('api_password') || ''));
 
+            if (!username) {
+                console.warn("syncWidgetSettings: Kein Benutzername vorhanden, abgebrochen um Ausloeschen der native SharedPreferences zu verhindern.");
+                return;
+            }
+
             if (serverUrl) localStorage.setItem('api_server_url', serverUrl);
             if (username) localStorage.setItem('api_username', username);
             if (password) localStorage.setItem('api_password', password);
@@ -2840,7 +2849,10 @@
                     plugin.saveSettings({
                         username: username,
                         password: password,
-                        serverUrl: serverUrl
+                        serverUrl: serverUrl,
+                        api_username: username,
+                        api_password: password,
+                        server_url: serverUrl
                     });
                 } catch (e) {
                     console.error("Widget-Settings Sync Fehler:", e);

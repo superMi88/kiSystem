@@ -16,9 +16,31 @@ public class WidgetSettingsPlugin extends Plugin {
 
     @PluginMethod
     public void saveSettings(PluginCall call) {
+        JSObject data = call.getData();
+
         String username = call.getString("username");
+        if (username == null || username.trim().isEmpty()) {
+            username = call.getString("api_username");
+        }
+        if (username == null || username.trim().isEmpty()) {
+            username = data != null ? data.optString("api_username", "") : "";
+        }
+
         String password = call.getString("password");
+        if (password == null || password.trim().isEmpty()) {
+            password = call.getString("api_password");
+        }
+        if (password == null || password.trim().isEmpty()) {
+            password = data != null ? data.optString("api_password", "") : "";
+        }
+
         String serverUrl = call.getString("serverUrl");
+        if (serverUrl == null || serverUrl.trim().isEmpty()) {
+            serverUrl = call.getString("server_url");
+        }
+        if (serverUrl == null || serverUrl.trim().isEmpty()) {
+            serverUrl = data != null ? data.optString("server_url", "") : "";
+        }
 
         SharedPreferences prefs = getContext().getSharedPreferences("WidgetStorage", Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = prefs.edit();

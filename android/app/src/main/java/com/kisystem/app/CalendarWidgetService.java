@@ -57,9 +57,23 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
         mItems.clear();
 
         SharedPreferences prefs = mContext.getSharedPreferences("WidgetStorage", Context.MODE_PRIVATE);
-        String serverUrl = prefs.getString("server_url", "https://ki.kleiner-wald-server.de");
+        String serverUrl = prefs.getString("server_url", "");
+        if (serverUrl.isEmpty()) serverUrl = prefs.getString("serverUrl", "");
+        if (serverUrl.isEmpty()) serverUrl = "https://ki.kleiner-wald-server.de";
+
         String username = prefs.getString("api_username", "");
+        if (username.isEmpty()) username = prefs.getString("username", "");
+
         String password = prefs.getString("api_password", "");
+        if (password.isEmpty()) password = prefs.getString("password", "");
+
+        if (username.isEmpty()) {
+            SharedPreferences defaultPrefs = mContext.getSharedPreferences("com.kisystem.app_preferences", Context.MODE_PRIVATE);
+            if (username.isEmpty()) username = defaultPrefs.getString("api_username", "");
+            if (username.isEmpty()) username = defaultPrefs.getString("username", "");
+            if (password.isEmpty()) password = defaultPrefs.getString("api_password", "");
+            if (password.isEmpty()) password = defaultPrefs.getString("password", "");
+        }
 
         Log.d("CalendarWidget", "onDataSetChanged: server_url=" + serverUrl + ", username=" + username + ", hasPassword=" + (!password.isEmpty()));
 
