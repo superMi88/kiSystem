@@ -61,6 +61,8 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
         String username = prefs.getString("api_username", "");
         String password = prefs.getString("api_password", "");
 
+        Log.d("CalendarWidget", "onDataSetChanged: server_url=" + serverUrl + ", username=" + username + ", hasPassword=" + (!password.isEmpty()));
+
         if (serverUrl == null || serverUrl.isEmpty()) {
             Log.w("CalendarWidget", "No server URL configured for widget");
             return;

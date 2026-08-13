@@ -1920,6 +1920,34 @@
                 </div>
             </div>
 
+            <!-- Login-Kachel (Standardmäßig versteckt) -->
+            <div id="login-section" class="bottom-section" style="display: none; flex-direction: column; overflow: hidden; align-items: center; justify-content: center; height: 100%; background: #11111b;">
+                <!-- Login Box -->
+                <div style="width: 90%; max-width: 400px; padding: 30px; background: #1e1e2e; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); display: flex; flex-direction: column; gap: 20px;">
+                    <div style="text-align: center;">
+                        <h2 style="margin: 0; font-size: 1.5rem; color: var(--accent); font-weight: bold;">Server-Anmeldung</h2>
+                        <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: #a6adc8;">Bitte gib deine Zugangsdaten ein, um dich zu verbinden.</p>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div>
+                            <label style="font-size: 0.8rem; color: var(--accent); font-weight: bold; display: block; margin-bottom: 4px;">Server-Adresse</label>
+                            <input type="text" id="login-url-input" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.9rem;" value="https://ki.kleiner-wald-server.de">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; color: var(--accent); font-weight: bold; display: block; margin-bottom: 4px;">Benutzername</label>
+                            <input type="text" id="login-username-input" placeholder="Benutzername" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.9rem;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; color: var(--accent); font-weight: bold; display: block; margin-bottom: 4px;">Passwort</label>
+                            <input type="password" id="login-password-input" placeholder="Passwort" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.9rem;">
+                        </div>
+                    </div>
+
+                    <button id="login-submit-btn" style="width: 100%; padding: 12px; border-radius: 8px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold; font-size: 0.95rem; transition: transform 0.2s;">Anmelden</button>
+                </div>
+            </div>
+
             <!-- Einstellungen-Kachel (Standardmäßig versteckt) -->
             <div id="settings-section" class="bottom-section" style="display: none; flex-direction: column; overflow: hidden;">
                 <!-- Header mit Back-Pfeil oben links -->
@@ -1944,14 +1972,10 @@
                     </div>
 
 
-                    <!-- Server-Zugangsdaten (Basic Auth) -->
+                    <!-- Server-Login (Logout) -->
                     <div class="settings-group">
-                        <label>Server-Login (Username / Passwort)</label>
-                        <div class="hotkey-container" style="display: flex; gap: 10px;">
-                            <input type="text" id="api-username-input" placeholder="Username" style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.9rem;">
-                            <input type="password" id="api-password-input" placeholder="Passwort" style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.9rem;">
-                        </div>
-                        <span class="hotkey-tip" style="margin-top: 4px; display: block;">Nur notwendig, wenn dein Server mit Basic Authentication geschützt ist (z. B. dein Online-Server).</span>
+                        <label>Server-Verbindung</label>
+                        <button id="logout-btn" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--off); cursor: pointer; background: rgba(243, 139, 168, 0.1); color: var(--off); font-weight: bold; transition: all 0.2s;" onmouseover="this.style.background='rgba(243, 139, 168, 0.2)'" onmouseout="this.style.background='rgba(243, 139, 168, 0.1)'">Verbindung trennen (Abmelden)</button>
                     </div>
 
                     <!-- Autostart toggle setting -->
@@ -2809,26 +2833,6 @@
             hotkeyBtn.classList.remove('recording');
             
 
-            // Save the server credentials
-            const apiUsernameInput = document.getElementById('api-username-input');
-            const apiPasswordInput = document.getElementById('api-password-input');
-            if (apiUsernameInput) {
-                const username = apiUsernameInput.value.trim();
-                if (username) {
-                    localStorage.setItem('api_username', username);
-                } else {
-                    localStorage.removeItem('api_username');
-                }
-            }
-            if (apiPasswordInput) {
-                const password = apiPasswordInput.value.trim();
-                if (password) {
-                    localStorage.setItem('api_password', password);
-                } else {
-                    localStorage.removeItem('api_password');
-                }
-            }
-
             syncWidgetSettings();
 
             const disabledPlugins = [];
@@ -2870,6 +2874,92 @@
                 loadTopWidgets();
             }
         };
+
+        // Login Handler
+        const loginSubmitBtn = document.getElementById('login-submit-btn');
+        if (loginSubmitBtn) {
+            loginSubmitBtn.onclick = async () => {
+                const urlInput = document.getElementById('login-url-input');
+                const usernameInput = document.getElementById('login-username-input');
+                const passwordInput = document.getElementById('login-password-input');
+                
+                const serverUrl = (urlInput ? urlInput.value.trim() : '') || 'https://ki.kleiner-wald-server.de';
+                const username = usernameInput ? usernameInput.value.trim() : '';
+                const password = passwordInput ? passwordInput.value.trim() : '';
+
+                if (!username || !password) {
+                    alert("Bitte gib einen Benutzernamen und ein Passwort ein.");
+                    return;
+                }
+
+                // Temporary save to localStorage to test connection via authFetch/fetch
+                localStorage.setItem('api_username', username);
+                localStorage.setItem('api_password', password);
+                
+                if (window.ENV_CONFIG) {
+                    window.ENV_CONFIG.MOBILE_SERVER_URL = serverUrl;
+                }
+
+                try {
+                    loginSubmitBtn.textContent = "Verbinde...";
+                    loginSubmitBtn.disabled = true;
+
+                    // Test connection to the plugins api
+                    const res = await window.fetch(getApiUrl('/api/plugins/entities'), {
+                        headers: { 'Authorization': 'Basic ' + btoa(username + ':' + password) }
+                    });
+
+                    if (res.ok) {
+                        loginSubmitBtn.textContent = "Anmelden";
+                        loginSubmitBtn.disabled = false;
+                        
+                        // complete app initialization
+                        await loadEntityConfigs();
+                        await loadTopWidgets();
+                        
+                        // Sync credentials to Android widget
+                        syncWidgetSettings();
+                        
+                        // Show chat view
+                        showSection('chat');
+                    } else {
+                        throw new Error("HTTP Fehler " + res.status);
+                    }
+                } catch (err) {
+                    console.error("Login-Verbindungsfehler:", err);
+                    alert("Verbindung fehlgeschlagen! Bitte überprüfe deine Server-Adresse, Benutzername und Passwort.");
+                    
+                    // Clear failed credentials
+                    localStorage.removeItem('api_username');
+                    localStorage.removeItem('api_password');
+                    
+                    loginSubmitBtn.textContent = "Anmelden";
+                    loginSubmitBtn.disabled = false;
+                }
+            };
+        }
+
+        // Logout Handler
+        const logoutBtn = document.getElementById('logout-btn');
+        if (logoutBtn) {
+            logoutBtn.onclick = () => {
+                if (confirm("Möchtest du dich wirklich abmelden und die Serververbindung trennen?")) {
+                    localStorage.removeItem('api_username');
+                    localStorage.removeItem('api_password');
+                    
+                    const userIn = document.getElementById('login-username-input');
+                    if (userIn) userIn.value = '';
+                    const passIn = document.getElementById('login-password-input');
+                    if (passIn) passIn.value = '';
+
+                    // Sync cleared settings to widget
+                    syncWidgetSettings();
+                    
+                    // Show login screen
+                    showSection('login');
+                }
+            };
+        }
 
         hotkeyBtn.onclick = () => {
             recordingHotkey = true;
@@ -3153,48 +3243,81 @@
         };
 
         function showSection(name) {
-            if (name === 'chat') {
-                chatSection.style.display = 'flex';
-                historySection.style.display = 'none';
-                settingsSection.style.display = 'none';
-                rightHeader.style.display = 'flex';
-                navNew.classList.add('active');
-                navHistory.classList.remove('active');
-                
-                const mobNew = document.getElementById('mobile-nav-new');
-                const mobHist = document.getElementById('mobile-nav-history');
-                if (mobNew) mobNew.classList.add('active');
-                if (mobHist) mobHist.classList.remove('active');
-                
-                if (document.body.classList.contains('mobile-mode')) {
-                    switchMobileView('chat');
-                }
-            } else if (name === 'history') {
-                chatSection.style.display = 'none';
-                historySection.style.display = 'flex';
-                settingsSection.style.display = 'none';
-                rightHeader.style.display = 'flex';
-                navNew.classList.remove('active');
-                navHistory.classList.add('active');
-                
-                const mobNew = document.getElementById('mobile-nav-new');
-                const mobHist = document.getElementById('mobile-nav-history');
-                if (mobNew) mobNew.classList.remove('active');
-                if (mobHist) mobHist.classList.add('active');
-                
-                if (document.body.classList.contains('mobile-mode')) {
-                    switchMobileView('history');
-                }
-            } else if (name === 'settings') {
+            const loginSec = document.getElementById('login-section');
+            if (name === 'login') {
                 chatSection.style.display = 'none';
                 historySection.style.display = 'none';
-                settingsSection.style.display = 'flex';
+                settingsSection.style.display = 'none';
                 rightHeader.style.display = 'none';
-                navNew.classList.remove('active');
-                navHistory.classList.remove('active');
+                if (loginSec) loginSec.style.display = 'flex';
                 
+                // Hide sidebar/bottom nav bar on login screen
+                const sidebar = document.querySelector('.sidebar-nav');
+                if (sidebar) sidebar.style.display = 'none';
+                const bottomNav = document.querySelector('.bottom-nav');
+                if (bottomNav) bottomNav.style.display = 'none';
+                const rightSide = document.querySelector('.right-side');
+                if (rightSide) rightSide.style.display = 'none';
+
                 if (document.body.classList.contains('mobile-mode')) {
-                    switchMobileView('settings');
+                    // Remove all view classes from body
+                    document.body.classList.remove('view-chat', 'view-calendar', 'view-timer', 'view-tasks', 'view-projects', 'view-plugins', 'view-settings', 'view-history', 'view-memory');
+                    document.body.classList.add('view-login');
+                }
+            } else {
+                if (loginSec) loginSec.style.display = 'none';
+                
+                // Show sidebar/bottom nav bar
+                const sidebar = document.querySelector('.sidebar-nav');
+                if (sidebar) sidebar.style.display = 'flex';
+                const bottomNav = document.querySelector('.bottom-nav');
+                if (bottomNav) bottomNav.style.display = 'flex';
+                const rightSide = document.querySelector('.right-side');
+                if (rightSide) rightSide.style.display = 'flex';
+
+                if (name === 'chat') {
+                    chatSection.style.display = 'flex';
+                    historySection.style.display = 'none';
+                    settingsSection.style.display = 'none';
+                    rightHeader.style.display = 'flex';
+                    navNew.classList.add('active');
+                    navHistory.classList.remove('active');
+                    
+                    const mobNew = document.getElementById('mobile-nav-new');
+                    const mobHist = document.getElementById('mobile-nav-history');
+                    if (mobNew) mobNew.classList.add('active');
+                    if (mobHist) mobHist.classList.remove('active');
+                    
+                    if (document.body.classList.contains('mobile-mode')) {
+                        switchMobileView('chat');
+                    }
+                } else if (name === 'history') {
+                    chatSection.style.display = 'none';
+                    historySection.style.display = 'flex';
+                    settingsSection.style.display = 'none';
+                    rightHeader.style.display = 'flex';
+                    navNew.classList.remove('active');
+                    navHistory.classList.add('active');
+                    
+                    const mobNew = document.getElementById('mobile-nav-new');
+                    const mobHist = document.getElementById('mobile-nav-history');
+                    if (mobNew) mobNew.classList.remove('active');
+                    if (mobHist) mobHist.classList.add('active');
+                    
+                    if (document.body.classList.contains('mobile-mode')) {
+                        switchMobileView('history');
+                    }
+                } else if (name === 'settings') {
+                    chatSection.style.display = 'none';
+                    historySection.style.display = 'none';
+                    settingsSection.style.display = 'flex';
+                    rightHeader.style.display = 'none';
+                    navNew.classList.remove('active');
+                    navHistory.classList.remove('active');
+                    
+                    if (document.body.classList.contains('mobile-mode')) {
+                        switchMobileView('settings');
+                    }
                 }
             }
         }
@@ -4904,6 +5027,14 @@
         }
 
         async function initializeApp() {
+            const username = localStorage.getItem('api_username');
+            const password = localStorage.getItem('api_password');
+            
+            if (!username || !password) {
+                showSection('login');
+                return;
+            }
+
             try {
                 await loadEntityConfigs();
             } catch (err) {
