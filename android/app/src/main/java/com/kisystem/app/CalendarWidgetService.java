@@ -209,7 +209,6 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
                     boolean isRec = ev.optBoolean("recurring", false);
 
                     if (isTask) {
-                        boolean completed = ev.optBoolean("completed", false);
                         String rawId = id.replace("task-", "");
                         DisplayItem item = new DisplayItem(TYPE_TASK, title, rawId);
                         item.description = description;
