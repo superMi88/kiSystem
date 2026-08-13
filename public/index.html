@@ -2694,7 +2694,7 @@
                                             <span style="font-size: 0.85rem; font-weight: bold; color: var(--text);">${escapeHtml(t.title)}</span>
                                             <div style="display: flex; align-items: center; gap: 4px;">
                                                 <button onclick="insertEntityLinkIntoChat('${escTitle}', 'timer', ${t.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
-                                                <button onclick="callTool('loesche_timer', {id: ${t.id}})" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Timer löschen">✖</button>
+                                                <button onclick="stopAlarmSound(); cancelScheduledTimerAlarm(${t.id}); callTool('loesche_timer', {id: ${t.id}})" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Timer löschen">✖</button>
                                             </div>
                                         </div>
                                         <div class="timer-countdown" style="font-family: monospace; font-size: 1.1rem; font-weight: bold; color: var(--accent); margin-bottom: 6px;">--:--:--</div>
@@ -3564,9 +3564,64 @@
                     }
                 });
             }
+            requestNotificationPermissions();
         }
         initializeApp();
         setInterval(loadAlerts, 3000); // Alle 3 Sekunden prüfen
+
+        function requestNotificationPermissions() {
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission().catch(e => console.error("Notification permission error:", e));
+            }
+            if (window.AndroidWidgetInterface && typeof window.AndroidWidgetInterface.requestNotificationPermission === 'function') {
+                window.AndroidWidgetInterface.requestNotificationPermission();
+            } else if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetSettings && typeof window.Capacitor.Plugins.WidgetSettings.requestNotificationPermission === 'function') {
+                window.Capacitor.Plugins.WidgetSettings.requestNotificationPermission();
+            }
+        }
+
+        function playAlarmSound() {
+            if (window.AndroidWidgetInterface && typeof window.AndroidWidgetInterface.playAlarmSound === 'function') {
+                window.AndroidWidgetInterface.playAlarmSound();
+            } else if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetSettings && typeof window.Capacitor.Plugins.WidgetSettings.playAlarmSound === 'function') {
+                window.Capacitor.Plugins.WidgetSettings.playAlarmSound();
+            } else {
+                playAlarmBeep();
+            }
+        }
+
+        function stopAlarmSound() {
+            if (window.AndroidWidgetInterface && typeof window.AndroidWidgetInterface.stopAlarmSound === 'function') {
+                window.AndroidWidgetInterface.stopAlarmSound();
+            } else if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetSettings && typeof window.Capacitor.Plugins.WidgetSettings.stopAlarmSound === 'function') {
+                window.Capacitor.Plugins.WidgetSettings.stopAlarmSound();
+            }
+        }
+
+        function showTimerNotification(title, message, timerId) {
+            if (window.AndroidWidgetInterface && typeof window.AndroidWidgetInterface.showTimerNotification === 'function') {
+                window.AndroidWidgetInterface.showTimerNotification(title, message, timerId);
+            } else if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetSettings && typeof window.Capacitor.Plugins.WidgetSettings.showTimerNotification === 'function') {
+                window.Capacitor.Plugins.WidgetSettings.showTimerNotification({ title, message, timerId });
+            } else if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                    new Notification(title, {
+                        body: message,
+                        icon: '/favicon.ico'
+                    });
+                } catch (e) {
+                    console.error("Browser notification error:", e);
+                }
+            }
+        }
+
+        function cancelScheduledTimerAlarm(timerId) {
+            if (window.AndroidWidgetInterface && typeof window.AndroidWidgetInterface.cancelScheduledTimerAlarm === 'function') {
+                window.AndroidWidgetInterface.cancelScheduledTimerAlarm(timerId);
+            } else if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetSettings && typeof window.Capacitor.Plugins.WidgetSettings.cancelScheduledTimerAlarm === 'function') {
+                window.Capacitor.Plugins.WidgetSettings.cancelScheduledTimerAlarm({ timerId });
+            }
+        }
 
         function playAlarmBeep() {
             try {
@@ -3578,14 +3633,16 @@
                         osc.connect(gain);
                         gain.connect(audioCtx.destination);
                         osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-                        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                        gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
                         gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
                         osc.start();
                         osc.stop(audioCtx.currentTime + duration);
                     }, delay);
                 }
-                beep(880, 0.15, 0);
-                beep(880, 0.15, 200);
+                beep(880, 0.18, 0);
+                beep(1100, 0.18, 200);
+                beep(880, 0.18, 400);
+                beep(1100, 0.18, 600);
             } catch (e) {
                 console.error("Audio beep error:", e);
             }
@@ -3601,6 +3658,9 @@
 
                 const countdownEl = card.querySelector('.timer-countdown');
                 const progressBar = card.querySelector('.timer-progress-bar');
+                const timerId = parseInt(card.id.split('-').pop());
+                const titleEl = card.querySelector('span');
+                const timerTitle = titleEl ? titleEl.textContent : "Timer";
 
                 if (remaining <= 0) {
                     countdownEl.textContent = "ABGELAUFEN!";
@@ -3618,19 +3678,33 @@
                         dismissBtn.style.cssText = "margin-top: 8px; width: 100%; padding: 6px 8px; background: var(--off); color: #11111b; border: none; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: bold; transition: all 0.2s;";
                         dismissBtn.onmouseover = () => { dismissBtn.style.filter = 'brightness(1.1)'; };
                         dismissBtn.onmouseout = () => { dismissBtn.style.filter = 'none'; };
-                        dismissBtn.onclick = () => callTool('quittiere_timer', { id: parseInt(card.id.split('-').pop()) });
+                        dismissBtn.onclick = () => {
+                            stopAlarmSound();
+                            cancelScheduledTimerAlarm(timerId);
+                            callTool('quittiere_timer', { id: timerId });
+                        };
                         card.appendChild(dismissBtn);
                         
-                        playAlarmBeep();
+                        showTimerNotification("Timer abgelaufen! ⏰", `Timer "${timerTitle}" ist abgelaufen.`, timerId);
+                        playAlarmSound();
                         const alarmInterval = setInterval(() => {
                             if (document.getElementById(card.id) && card.querySelector('.dismiss-btn')) {
-                                playAlarmBeep();
+                                playAlarmSound();
                             } else {
                                 clearInterval(alarmInterval);
                             }
                         }, 3000);
                     }
                 } else {
+                    if (!card.dataset.scheduled) {
+                        card.dataset.scheduled = "true";
+                        if (window.AndroidWidgetInterface && typeof window.AndroidWidgetInterface.scheduleTimerAlarm === 'function') {
+                            window.AndroidWidgetInterface.scheduleTimerAlarm(timerId, timerTitle, expiresTime);
+                        } else if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetSettings && typeof window.Capacitor.Plugins.WidgetSettings.scheduleTimerAlarm === 'function') {
+                            window.Capacitor.Plugins.WidgetSettings.scheduleTimerAlarm({ timerId, title: timerTitle, triggerAtMillis: expiresTime });
+                        }
+                    }
+
                     const secs = Math.floor((remaining / 1000) % 60);
                     const mins = Math.floor((remaining / 1000 / 60) % 60);
                     const hours = Math.floor((remaining / 1000 / 60 / 60) % 24);

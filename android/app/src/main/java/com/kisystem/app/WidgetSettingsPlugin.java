@@ -73,4 +73,51 @@ public class WidgetSettingsPlugin extends Plugin {
 
         call.resolve();
     }
+
+    @PluginMethod
+    public void playAlarmSound(PluginCall call) {
+        TimerAlarmHelper.playAlarmSound(getContext());
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void stopAlarmSound(PluginCall call) {
+        TimerAlarmHelper.stopAlarmSound();
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void showTimerNotification(PluginCall call) {
+        String title = call.getString("title", "Timer abgelaufen! ⏰");
+        String message = call.getString("message", "Ein Timer ist abgelaufen.");
+        int timerId = call.getInt("timerId", 0);
+        TimerAlarmHelper.showNotification(getContext(), title, message, timerId);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void scheduleTimerAlarm(PluginCall call) {
+        int timerId = call.getInt("timerId", 0);
+        String title = call.getString("title", "Timer");
+        Double triggerAt = call.getDouble("triggerAtMillis");
+        if (triggerAt != null) {
+            MainActivity.scheduleTimerAlarm(getContext(), timerId, title, triggerAt.longValue());
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void cancelScheduledTimerAlarm(PluginCall call) {
+        int timerId = call.getInt("timerId", 0);
+        MainActivity.cancelScheduledTimerAlarm(getContext(), timerId);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void requestNotificationPermission(PluginCall call) {
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).requestNotificationPermission();
+        }
+        call.resolve();
+    }
 }
