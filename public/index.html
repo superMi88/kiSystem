@@ -2843,6 +2843,15 @@
             if (username) localStorage.setItem('api_username', username);
             if (password) localStorage.setItem('api_password', password);
 
+            if (window.AndroidWidgetInterface && typeof window.AndroidWidgetInterface.saveWidgetSettings === 'function') {
+                try {
+                    window.AndroidWidgetInterface.saveWidgetSettings(username, password, serverUrl);
+                    console.log("Direct AndroidWidgetInterface sync success:", username);
+                } catch (e) {
+                    console.error("AndroidWidgetInterface error:", e);
+                }
+            }
+
             const plugin = getWidgetSettingsPlugin();
             if (plugin) {
                 try {
