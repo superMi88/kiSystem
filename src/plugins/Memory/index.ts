@@ -707,18 +707,19 @@ export const memoryPlugin: Plugin = {
         }
       });
       const formattedPeople = people.map(p => {
-        const primaryAlias = p.aliases.find(a => a.isPrimary) || p.aliases[0];
+        const primaryAlias = p.aliases ? (p.aliases.find(a => a.isPrimary) || p.aliases[0]) : null;
+        const nameStr = primaryAlias && primaryAlias.name ? primaryAlias.name : (p.isOwner ? "Ich" : `Person #${p.id}`);
         return {
           id: p.id,
-          isOwner: p.isOwner,
-          name: primaryAlias ? primaryAlias.name : (p.isOwner ? "Ich" : "Unbekannt"),
+          isOwner: !!p.isOwner,
+          name: nameStr,
           notes: p.biography || "Keine Biografie vorhanden."
         };
       });
       formattedPeople.sort((a, b) => {
         if (a.isOwner) return -1;
         if (b.isOwner) return 1;
-        return a.name.localeCompare(b.name);
+        return (a.name || "").localeCompare(b.name || "");
       });
       return [
         {
