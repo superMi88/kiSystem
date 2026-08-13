@@ -2822,10 +2822,13 @@
             const settingsUrlInput = document.getElementById('settings-url-input');
             const settingsUsernameInput = document.getElementById('settings-username-input');
             const settingsPasswordInput = document.getElementById('settings-password-input');
+            const loginUsernameInput = document.getElementById('login-username-input');
+            const loginPasswordInput = document.getElementById('login-password-input');
+            const loginUrlInput = document.getElementById('login-url-input');
 
-            let serverUrl = settingsUrlInput && settingsUrlInput.value.trim() ? settingsUrlInput.value.trim() : (localStorage.getItem('api_server_url') || (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de');
-            let username = settingsUsernameInput && settingsUsernameInput.value.trim() ? settingsUsernameInput.value.trim() : (localStorage.getItem('api_username') || '');
-            let password = settingsPasswordInput && settingsPasswordInput.value.trim() ? settingsPasswordInput.value.trim() : (localStorage.getItem('api_password') || '');
+            let serverUrl = (settingsUrlInput && settingsUrlInput.value.trim()) || (loginUrlInput && loginUrlInput.value.trim()) || localStorage.getItem('api_server_url') || (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de';
+            let username = (settingsUsernameInput && settingsUsernameInput.value.trim()) || (loginUsernameInput && loginUsernameInput.value.trim()) || localStorage.getItem('api_username') || '';
+            let password = (settingsPasswordInput && settingsPasswordInput.value.trim()) || (loginPasswordInput && loginPasswordInput.value.trim()) || localStorage.getItem('api_password') || '';
 
             if (serverUrl) localStorage.setItem('api_server_url', serverUrl);
             if (username) localStorage.setItem('api_username', username);
@@ -2962,7 +2965,7 @@
 
                     // Test connection to the plugins api
                     const res = await window.fetch(getApiUrl('/api/plugins/entities'), {
-                        headers: { 'Authorization': 'Basic ' + btoa(username + ':' + password) }
+                        headers: { 'Authorization': 'Basic ' + safeBtoa(username + ':' + password) }
                     });
 
                     if (res.ok) {
@@ -2999,8 +3002,14 @@
         const syncWidgetBtn = document.getElementById('sync-widget-btn');
         if (syncWidgetBtn) {
             syncWidgetBtn.onclick = () => {
+                const uInput = document.getElementById('settings-username-input');
+                const userVal = (uInput && uInput.value.trim()) || (document.getElementById('login-username-input') ? document.getElementById('login-username-input').value.trim() : '') || localStorage.getItem('api_username') || '';
+                if (!userVal) {
+                    alert("Bitte trage oben in den Einstellungen deinen Benutzernamen und dein Passwort ein und klicke dann erneut auf Synchronisieren.");
+                    return;
+                }
                 syncWidgetSettings();
-                alert("Widget-Einstellungen (Benutzername & Server-URL) wurden erfolgreich an das Android-Widget gesendet! Du kannst das Widget jetzt auf deinem Startbildschirm aktualisieren.");
+                alert("Widget-Einstellungen für Benutzer '" + userVal + "' wurden erfolgreich an das Android-Widget gesendet! Du kannst das Widget jetzt auf deinem Startbildschirm aktualisieren.");
             };
         }
 
