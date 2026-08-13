@@ -3,6 +3,7 @@ const ASSETS = [
   '/',
   '/#chat',
   '/index.html',
+  '/style.css',
   '/icon.png'
 ];
 
