@@ -2749,12 +2749,12 @@
         }
 
         function syncWidgetSettings() {
-            if (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.WidgetSettings) {
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetSettings) {
                 try {
                     const username = localStorage.getItem('api_username') || '';
                     const password = localStorage.getItem('api_password') || '';
                     const serverUrl = (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de';
-                    Capacitor.Plugins.WidgetSettings.saveSettings({
+                    window.Capacitor.Plugins.WidgetSettings.saveSettings({
                         username: username,
                         password: password,
                         serverUrl: serverUrl
@@ -3592,10 +3592,6 @@
                                 </div>
                             `;
                         }
-                    });               `}
-                                </div>
-                            </div>
-                        `;
                     });
                     html += `</div>`;
                 }
