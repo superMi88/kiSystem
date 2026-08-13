@@ -97,9 +97,8 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
             return;
         }
 
-        // Prepare time range (from 7 days in past to 60 days in future)
+        // Prepare time range (from today 00:00:00 to 60 days in future)
         Calendar cal = Calendar.getInstance();
-        cal.add(Calendar.DAY_OF_YEAR, -7);
         cal.set(Calendar.HOUR_OF_DAY, 0);
         cal.set(Calendar.MINUTE, 0);
         cal.set(Calendar.SECOND, 0);
@@ -163,6 +162,14 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
                     if (timeStr.isEmpty()) continue;
 
                     Date eventDate = parseIsoDate(timeStr);
+                    boolean isTask = ev.optBoolean("isTask", false);
+                    boolean completed = ev.optBoolean("completed", false);
+
+                    // Skip past calendar events and completed past tasks before today 00:00:00
+                    if (eventDate.before(startDate) && (!isTask || completed)) {
+                        continue;
+                    }
+
                     String dateKey = localDateKeyFormat.format(eventDate);
 
                     // Inject Date Header if date changes
@@ -208,6 +215,9 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
                         item.isRecurring = isRec;
                         mItems.add(item);
                     }
+                }
+                if (mItems.isEmpty()) {
+                    mItems.add(new DisplayItem(TYPE_HEADER, "📅 Keine anstehenden Termine"));
                 }
             } else {
                 mItems.add(new DisplayItem(TYPE_HEADER, "📅 Keine Termine in den nächsten 60 Tagen"));
