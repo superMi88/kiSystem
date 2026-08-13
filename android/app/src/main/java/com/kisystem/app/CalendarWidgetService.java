@@ -77,6 +77,12 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
         username = username != null ? username.trim() : "";
         password = password != null ? password.trim() : "";
 
+        if (username.isEmpty()) {
+            Log.w("CalendarWidget", "No username configured in WidgetStorage");
+            mItems.add(new DisplayItem(TYPE_HEADER, "⚠️ Nicht angemeldet (Kein Benutzername)"));
+            return;
+        }
+
         // Prepare time range (today 00:00:00 to 14 days later 23:59:59)
         Calendar cal = Calendar.getInstance();
         cal.set(Calendar.HOUR_OF_DAY, 0);
@@ -191,8 +197,8 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
                 }
             }
         } else if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
-            Log.e("CalendarWidget", "HTTP 401 Unauthorized");
-            mItems.add(new DisplayItem(TYPE_HEADER, "⚠️ Bitte in der App anmelden"));
+            Log.e("CalendarWidget", "HTTP 401 Unauthorized for username: " + username);
+            mItems.add(new DisplayItem(TYPE_HEADER, "⚠️ HTTP 401: Zugangsdaten ungültig (" + username + ")"));
         } else {
             Log.e("CalendarWidget", "HTTP error code: " + responseCode);
             mItems.add(new DisplayItem(TYPE_HEADER, "⚠️ Serverfehler (HTTP " + responseCode + ")"));

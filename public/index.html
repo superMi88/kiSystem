@@ -1975,6 +1975,20 @@
                     <!-- Server-Login (Logout) & Widget Sync -->
                     <div class="settings-group">
                         <label>Server & Widget-Verbindung</label>
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
+                            <div>
+                                <label style="font-size: 0.75rem; color: var(--subtext); display: block; margin-bottom: 4px;">Server-URL</label>
+                                <input type="text" id="settings-url-input" placeholder="https://ki.kleiner-wald-server.de" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.85rem;">
+                            </div>
+                            <div>
+                                <label style="font-size: 0.75rem; color: var(--subtext); display: block; margin-bottom: 4px;">Benutzername</label>
+                                <input type="text" id="settings-username-input" placeholder="Benutzername" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.85rem;">
+                            </div>
+                            <div>
+                                <label style="font-size: 0.75rem; color: var(--subtext); display: block; margin-bottom: 4px;">Passwort</label>
+                                <input type="password" id="settings-password-input" placeholder="Passwort" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.85rem;">
+                            </div>
+                        </div>
                         <button id="sync-widget-btn" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--accent); cursor: pointer; background: rgba(137, 180, 250, 0.1); color: var(--accent); font-weight: bold; margin-bottom: 8px; transition: all 0.2s;">🔄 Widget-Einstellungen jetzt synchronisieren</button>
                         <button id="logout-btn" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--off); cursor: pointer; background: rgba(243, 139, 168, 0.1); color: var(--off); font-weight: bold; transition: all 0.2s;" onmouseover="this.style.background='rgba(243, 139, 168, 0.2)'" onmouseout="this.style.background='rgba(243, 139, 168, 0.1)'">Verbindung trennen (Abmelden)</button>
                     </div>
@@ -2758,13 +2772,17 @@
                 
 
                 // Initialize the Server Credentials input fields from localStorage
-                const apiUsernameInput = document.getElementById('api-username-input');
-                const apiPasswordInput = document.getElementById('api-password-input');
-                if (apiUsernameInput) {
-                    apiUsernameInput.value = localStorage.getItem('api_username') || '';
+                const settingsUrlInput = document.getElementById('settings-url-input');
+                const settingsUsernameInput = document.getElementById('settings-username-input');
+                const settingsPasswordInput = document.getElementById('settings-password-input');
+                if (settingsUrlInput) {
+                    settingsUrlInput.value = localStorage.getItem('api_server_url') || (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de';
                 }
-                if (apiPasswordInput) {
-                    apiPasswordInput.value = localStorage.getItem('api_password') || '';
+                if (settingsUsernameInput) {
+                    settingsUsernameInput.value = localStorage.getItem('api_username') || '';
+                }
+                if (settingsPasswordInput) {
+                    settingsPasswordInput.value = localStorage.getItem('api_password') || '';
                 }
                 
                 try {
@@ -2801,12 +2819,21 @@
         }
 
         function syncWidgetSettings() {
+            const settingsUrlInput = document.getElementById('settings-url-input');
+            const settingsUsernameInput = document.getElementById('settings-username-input');
+            const settingsPasswordInput = document.getElementById('settings-password-input');
+
+            let serverUrl = settingsUrlInput && settingsUrlInput.value.trim() ? settingsUrlInput.value.trim() : (localStorage.getItem('api_server_url') || (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de');
+            let username = settingsUsernameInput && settingsUsernameInput.value.trim() ? settingsUsernameInput.value.trim() : (localStorage.getItem('api_username') || '');
+            let password = settingsPasswordInput && settingsPasswordInput.value.trim() ? settingsPasswordInput.value.trim() : (localStorage.getItem('api_password') || '');
+
+            if (serverUrl) localStorage.setItem('api_server_url', serverUrl);
+            if (username) localStorage.setItem('api_username', username);
+            if (password) localStorage.setItem('api_password', password);
+
             const plugin = getWidgetSettingsPlugin();
             if (plugin) {
                 try {
-                    const username = localStorage.getItem('api_username') || '';
-                    const password = localStorage.getItem('api_password') || '';
-                    const serverUrl = localStorage.getItem('api_server_url') || (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de';
                     plugin.saveSettings({
                         username: username,
                         password: password,

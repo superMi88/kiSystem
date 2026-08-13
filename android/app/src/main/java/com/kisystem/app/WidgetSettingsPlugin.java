@@ -22,10 +22,10 @@ public class WidgetSettingsPlugin extends Plugin {
 
         SharedPreferences prefs = getContext().getSharedPreferences("WidgetStorage", Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = prefs.edit();
-        editor.putString("api_username", username != null ? username : "");
-        editor.putString("api_password", password != null ? password : "");
-        editor.putString("server_url", serverUrl != null ? serverUrl : "");
-        editor.apply();
+        editor.putString("api_username", username != null ? username.trim() : "");
+        editor.putString("api_password", password != null ? password.trim() : "");
+        editor.putString("server_url", serverUrl != null ? serverUrl.trim() : "");
+        editor.commit();
 
         // Trigger widget update
         try {
