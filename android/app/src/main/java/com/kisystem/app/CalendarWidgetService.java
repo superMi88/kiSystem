@@ -105,6 +105,13 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
         cal.set(Calendar.MILLISECOND, 0);
         Date startDate = cal.getTime();
 
+        Calendar calToday = Calendar.getInstance();
+        calToday.set(Calendar.HOUR_OF_DAY, 0);
+        calToday.set(Calendar.MINUTE, 0);
+        calToday.set(Calendar.SECOND, 0);
+        calToday.set(Calendar.MILLISECOND, 0);
+        Date todayDate = calToday.getTime();
+
         Calendar calEnd = Calendar.getInstance();
         calEnd.add(Calendar.DAY_OF_YEAR, 60);
         calEnd.set(Calendar.HOUR_OF_DAY, 23);
@@ -153,6 +160,8 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
                 SimpleDateFormat humanDayFormat = new SimpleDateFormat("EEEE, dd.MM.");
                 humanDayFormat.setTimeZone(TimeZone.getDefault());
 
+                int todayPosition = -1;
+
                 for (int i = 0; i < eventsArray.length(); i++) {
                     JSONObject ev = eventsArray.getJSONObject(i);
                     String timeStr = ev.optString("time", "");
@@ -169,18 +178,19 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
                     if (eventDate.before(startDate) && (!isTask || completed)) {
                         continue;
                     }
-
                     String dateKey = localDateKeyFormat.format(eventDate);
 
                     // Inject Date Header if date changes
                     if (!dateKey.equals(lastDateKey)) {
                         lastDateKey = dateKey;
                         String headerTitle = formatFriendlyDate(eventDate, humanDayFormat);
+                        if (todayPosition == -1 && !eventDate.before(todayDate)) {
+                            todayPosition = mItems.size();
+                        }
                         mItems.add(new DisplayItem(TYPE_HEADER, headerTitle));
                     }
 
                     // Determine if it is a task or a regular calendar event
-                    boolean isTask = ev.optBoolean("isTask", false);
                     String id = ev.optString("id", "");
                     String title = ev.optString("title", "");
                     String description = ev.optString("description", "");
@@ -216,6 +226,13 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
                         mItems.add(item);
                     }
                 }
+
+                if (todayPosition >= 0) {
+                    SharedPreferences.Editor editor = prefs.edit();
+                    editor.putInt("today_position", todayPosition);
+                    editor.commit();
+                }
+
                 if (mItems.isEmpty()) {
                     mItems.add(new DisplayItem(TYPE_HEADER, "📅 Keine anstehenden Termine"));
                 }

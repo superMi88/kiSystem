@@ -64,6 +64,13 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
         PendingIntent clickPendingIntent = PendingIntent.getBroadcast(context, 0, clickIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE);
         views.setPendingIntentTemplate(R.id.calendar_list, clickPendingIntent);
 
+        // Scroll position to today's header
+        SharedPreferences prefs = context.getSharedPreferences("WidgetStorage", Context.MODE_PRIVATE);
+        int todayPosition = prefs.getInt("today_position", 0);
+        if (todayPosition > 0) {
+            views.setScrollPosition(R.id.calendar_list, todayPosition);
+        }
+
         appWidgetManager.updateAppWidget(appWidgetId, views);
     }
 
