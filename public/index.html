@@ -1920,20 +1920,16 @@
                 </div>
             </div>
 
-            <!-- Login-Kachel (Standardmäßig versteckt) -->
-            <div id="login-section" class="bottom-section" style="display: none; flex-direction: column; overflow: hidden; align-items: center; justify-content: center; height: 100%; background: #11111b;">
+            <!-- Login-Kachel (Standardmäßig versteckt, nimmt volles Bild ein) -->
+            <div id="login-section" class="bottom-section" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 999999; flex-direction: column; overflow: hidden; align-items: center; justify-content: center; background: #11111b;">
                 <!-- Login Box -->
                 <div style="width: 90%; max-width: 400px; padding: 30px; background: #1e1e2e; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); display: flex; flex-direction: column; gap: 20px;">
                     <div style="text-align: center;">
-                        <h2 style="margin: 0; font-size: 1.5rem; color: var(--accent); font-weight: bold;">Server-Anmeldung</h2>
+                        <h2 style="margin: 0; font-size: 1.5rem; color: var(--accent); font-weight: bold;">Anmeldung</h2>
                         <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: #a6adc8;">Bitte gib deine Zugangsdaten ein, um dich zu verbinden.</p>
                     </div>
                     
                     <div style="display: flex; flex-direction: column; gap: 12px;">
-                        <div>
-                            <label style="font-size: 0.8rem; color: var(--accent); font-weight: bold; display: block; margin-bottom: 4px;">Server-Adresse</label>
-                            <input type="text" id="login-url-input" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.9rem;" value="https://ki.kleiner-wald-server.de">
-                        </div>
                         <div>
                             <label style="font-size: 0.8rem; color: var(--accent); font-weight: bold; display: block; margin-bottom: 4px;">Benutzername</label>
                             <input type="text" id="login-username-input" placeholder="Benutzername" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.9rem;">
@@ -1972,25 +1968,10 @@
                     </div>
 
 
-                    <!-- Server-Login (Logout) & Widget Sync -->
+                    <!-- Server & Konto -->
                     <div class="settings-group">
-                        <label>Server & Widget-Verbindung</label>
-                        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
-                            <div>
-                                <label style="font-size: 0.75rem; color: var(--subtext); display: block; margin-bottom: 4px;">Server-URL</label>
-                                <input type="text" id="settings-url-input" placeholder="https://ki.kleiner-wald-server.de" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.85rem;">
-                            </div>
-                            <div>
-                                <label style="font-size: 0.75rem; color: var(--subtext); display: block; margin-bottom: 4px;">Benutzername</label>
-                                <input type="text" id="settings-username-input" placeholder="Benutzername" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.85rem;">
-                            </div>
-                            <div>
-                                <label style="font-size: 0.75rem; color: var(--subtext); display: block; margin-bottom: 4px;">Passwort</label>
-                                <input type="password" id="settings-password-input" placeholder="Passwort" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.85rem;">
-                            </div>
-                        </div>
-                        <button id="sync-widget-btn" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--accent); cursor: pointer; background: rgba(137, 180, 250, 0.1); color: var(--accent); font-weight: bold; margin-bottom: 8px; transition: all 0.2s;">🔄 Widget-Einstellungen jetzt synchronisieren</button>
-                        <button id="logout-btn" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--off); cursor: pointer; background: rgba(243, 139, 168, 0.1); color: var(--off); font-weight: bold; transition: all 0.2s;" onmouseover="this.style.background='rgba(243, 139, 168, 0.2)'" onmouseout="this.style.background='rgba(243, 139, 168, 0.1)'">Verbindung trennen (Abmelden)</button>
+                        <label>Konto</label>
+                        <button id="logout-btn" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--off); cursor: pointer; background: rgba(243, 139, 168, 0.1); color: var(--off); font-weight: bold; transition: all 0.2s;" onmouseover="this.style.background='rgba(243, 139, 168, 0.2)'" onmouseout="this.style.background='rgba(243, 139, 168, 0.1)'">Abmelden</button>
                     </div>
 
                     <!-- Autostart toggle setting -->
@@ -2232,11 +2213,15 @@
                  </div>`;
         }
 
+        function getServerUrl() {
+            return (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de';
+        }
+
         // Helper to resolve API URLs (either absolute or relative depending on configuration)
         function getApiUrl(path) {
             // Für die mobile App (Capacitor) verwenden wir die konfigurierte Serveradresse
             if (window.Capacitor) {
-                const baseUrl = localStorage.getItem('api_server_url') || (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de';
+                const baseUrl = getServerUrl();
                 return baseUrl + (path.startsWith('/') ? path : '/' + path);
             }
             return path;
@@ -2775,20 +2760,6 @@
                 }
                 
 
-                // Initialize the Server Credentials input fields from localStorage
-                const settingsUrlInput = document.getElementById('settings-url-input');
-                const settingsUsernameInput = document.getElementById('settings-username-input');
-                const settingsPasswordInput = document.getElementById('settings-password-input');
-                if (settingsUrlInput) {
-                    settingsUrlInput.value = localStorage.getItem('api_server_url') || (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de';
-                }
-                if (settingsUsernameInput) {
-                    settingsUsernameInput.value = localStorage.getItem('api_username') || '';
-                }
-                if (settingsPasswordInput) {
-                    settingsPasswordInput.value = localStorage.getItem('api_password') || '';
-                }
-                
                 try {
                     const pRes = await fetch(getApiUrl('/settings/plugins'));
                     if (pRes.ok) {
@@ -2823,25 +2794,18 @@
         }
 
         function syncWidgetSettings() {
-            const settingsUrlInput = document.getElementById('settings-url-input');
-            const settingsUsernameInput = document.getElementById('settings-username-input');
-            const settingsPasswordInput = document.getElementById('settings-password-input');
-            const loginUsernameInput = document.getElementById('login-username-input');
-            const loginPasswordInput = document.getElementById('login-password-input');
-            const loginUrlInput = document.getElementById('login-url-input');
-
-            let serverUrl = (settingsUrlInput && settingsUrlInput.value.trim() !== "") ? settingsUrlInput.value.trim() : ((loginUrlInput && loginUrlInput.value.trim() !== "") ? loginUrlInput.value.trim() : (localStorage.getItem('api_server_url') || (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de'));
-            let username = (settingsUsernameInput && settingsUsernameInput.value.trim() !== "") ? settingsUsernameInput.value.trim() : ((loginUsernameInput && loginUsernameInput.value.trim() !== "") ? loginUsernameInput.value.trim() : (localStorage.getItem('api_username') || ''));
-            let password = (settingsPasswordInput && settingsPasswordInput.value.trim() !== "") ? settingsPasswordInput.value.trim() : ((loginPasswordInput && loginPasswordInput.value.trim() !== "") ? loginPasswordInput.value.trim() : (localStorage.getItem('api_password') || ''));
+            const serverUrl = getServerUrl();
+            const username = localStorage.getItem('api_username') || '';
+            const password = localStorage.getItem('api_password') || '';
 
             if (!username) {
                 console.warn("syncWidgetSettings: Kein Benutzername vorhanden, abgebrochen um Ausloeschen der native SharedPreferences zu verhindern.");
                 return;
             }
 
-            if (serverUrl) localStorage.setItem('api_server_url', serverUrl);
-            if (username) localStorage.setItem('api_username', username);
-            if (password) localStorage.setItem('api_password', password);
+            localStorage.setItem('api_server_url', serverUrl);
+            localStorage.setItem('api_username', username);
+            localStorage.setItem('api_password', password);
 
             if (window.AndroidWidgetInterface && typeof window.AndroidWidgetInterface.saveWidgetSettings === 'function') {
                 try {
@@ -2948,7 +2912,7 @@
                 }
             } catch (err) {
                 console.error("Speichern-Fehler:", err);
-                alert("Einstellungen lokal gespeichert, aber der Server ist nicht erreichbar. Bitte überprüfe die Server-Adresse.");
+                alert("Einstellungen lokal gespeichert, aber der Server ist derzeit nicht erreichbar.");
                 showSection('chat');
                 loadTopWidgets();
             }
@@ -2958,11 +2922,10 @@
         const loginSubmitBtn = document.getElementById('login-submit-btn');
         if (loginSubmitBtn) {
             loginSubmitBtn.onclick = async () => {
-                const urlInput = document.getElementById('login-url-input');
                 const usernameInput = document.getElementById('login-username-input');
                 const passwordInput = document.getElementById('login-password-input');
                 
-                const serverUrl = (urlInput ? urlInput.value.trim() : '') || 'https://ki.kleiner-wald-server.de';
+                const serverUrl = getServerUrl();
                 const username = usernameInput ? usernameInput.value.trim() : '';
                 const password = passwordInput ? passwordInput.value.trim() : '';
 
@@ -2975,10 +2938,6 @@
                 localStorage.setItem('api_username', username);
                 localStorage.setItem('api_password', password);
                 localStorage.setItem('api_server_url', serverUrl);
-                
-                if (window.ENV_CONFIG) {
-                    window.ENV_CONFIG.MOBILE_SERVER_URL = serverUrl;
-                }
 
                 try {
                     loginSubmitBtn.textContent = "Verbinde...";
@@ -3007,7 +2966,7 @@
                     }
                 } catch (err) {
                     console.error("Login-Verbindungsfehler:", err);
-                    alert("Verbindung fehlgeschlagen! Bitte überprüfe deine Server-Adresse, Benutzername und Passwort.");
+                    alert("Verbindung fehlgeschlagen! Bitte überprüfe deinen Benutzernamen und dein Passwort.");
                     
                     // Clear failed credentials
                     localStorage.removeItem('api_username');
@@ -3019,44 +2978,11 @@
             };
         }
 
-        // Sync Widget Button Handler
-        const syncWidgetBtn = document.getElementById('sync-widget-btn');
-        if (syncWidgetBtn) {
-            syncWidgetBtn.onclick = () => {
-                const uInput = document.getElementById('settings-username-input');
-                const pInput = document.getElementById('settings-password-input');
-                const urlInput = document.getElementById('settings-url-input');
-
-                let userVal = (uInput && uInput.value.trim() !== "") ? uInput.value.trim() : (localStorage.getItem('api_username') || '');
-                let passVal = (pInput && pInput.value.trim() !== "") ? pInput.value.trim() : (localStorage.getItem('api_password') || '');
-                let urlVal = (urlInput && urlInput.value.trim() !== "") ? urlInput.value.trim() : (localStorage.getItem('api_server_url') || 'https://ki.kleiner-wald-server.de');
-
-                if (!userVal) {
-                    alert("Bitte trage oben in den Einstellungen deinen Benutzernamen und dein Passwort ein und klicke dann erneut auf Synchronisieren.");
-                    return;
-                }
-
-                localStorage.setItem('api_username', userVal);
-                localStorage.setItem('api_password', passVal);
-                localStorage.setItem('api_server_url', urlVal);
-
-                const plugin = getWidgetSettingsPlugin();
-                if (plugin) {
-                    plugin.saveSettings({
-                        username: userVal,
-                        password: passVal,
-                        serverUrl: urlVal
-                    });
-                }
-                alert("Widget-Einstellungen für Benutzer '" + userVal + "' wurden erfolgreich an das Android-Widget gesendet! Du kannst das Widget jetzt auf deinem Startbildschirm aktualisieren.");
-            };
-        }
-
         // Logout Handler
         const logoutBtn = document.getElementById('logout-btn');
         if (logoutBtn) {
             logoutBtn.onclick = () => {
-                if (confirm("Möchtest du dich wirklich abmelden und die Serververbindung trennen?")) {
+                if (confirm("Möchtest du dich wirklich abmelden?")) {
                     localStorage.removeItem('api_username');
                     localStorage.removeItem('api_password');
                     
@@ -3068,7 +2994,7 @@
                     // Sync cleared settings to widget
                     syncWidgetSettings();
                     
-                    // Show login screen
+                    // Show full screen login screen
                     showSection('login');
                 }
             };
@@ -5158,12 +5084,6 @@
                 syncWidgetSettings();
             } catch (err) {
                 console.error("Konnte keine Verbindung zum Server herstellen:", err);
-                if (!isElectron) {
-                    setTimeout(() => {
-                        showSection('settings');
-                        alert("Konnte keine Verbindung zum Server herstellen. Bitte trage die IP-Adresse des Servers in den Einstellungen ein.");
-                    }, 1000);
-                }
             }
 
             // Scroll-Listener für Infinite Scroll im Terminkalender
