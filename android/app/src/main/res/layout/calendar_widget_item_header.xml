@@ -8,7 +8,7 @@
     android:gravity="center_vertical">
 
     <!-- Green indicator bar on left, just like in-app calendar -->
-    <View
+    <FrameLayout
         android:layout_width="3dp"
         android:layout_height="14dp"
         android:background="#2ecc71"

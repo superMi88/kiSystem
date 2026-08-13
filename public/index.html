@@ -2762,6 +2762,9 @@
                 } catch (e) {
                     console.error("Widget-Settings Sync Fehler:", e);
                 }
+            } else if (window.Capacitor) {
+                // Falls Capacitor da ist, aber Plugins noch laden, in 1s wiederholen
+                setTimeout(syncWidgetSettings, 1000);
             }
         }
 
