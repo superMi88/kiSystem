@@ -1109,6 +1109,14 @@
             z-index: 1001;
             box-shadow: 0 2px 10px rgba(0,0,0,0.3);
         }
+
+        body.view-login #mobile-top-bar,
+        body.view-login #mobile-drawer,
+        body.view-login #drawer-overlay,
+        body.view-login .bottom-nav,
+        body.view-login .sidebar-nav {
+            display: none !important;
+        }
         
         /* Burger menu button */
         .burger-btn {
@@ -2219,12 +2227,15 @@
 
         // Helper to resolve API URLs (either absolute or relative depending on configuration)
         function getApiUrl(path) {
-            // Für die mobile App (Capacitor) verwenden wir die konfigurierte Serveradresse
-            if (window.Capacitor) {
-                const baseUrl = getServerUrl();
-                return baseUrl + (path.startsWith('/') ? path : '/' + path);
+            if (path.startsWith('http://') || path.startsWith('https://')) {
+                return path;
             }
-            return path;
+            const cleanPath = path.startsWith('/') ? path : '/' + path;
+            if (window.Capacitor || window.location.protocol === 'file:' || window.location.origin === 'null' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                const baseUrl = getServerUrl().replace(/\/+$/, '');
+                return baseUrl + cleanPath;
+            }
+            return cleanPath;
         }
 
         function safeBtoa(str) {
@@ -3283,12 +3294,14 @@
 
         function showSection(name) {
             const loginSec = document.getElementById('login-section');
+            const mobileTopBar = document.getElementById('mobile-top-bar');
             if (name === 'login') {
                 chatSection.style.display = 'none';
                 historySection.style.display = 'none';
                 settingsSection.style.display = 'none';
                 rightHeader.style.display = 'none';
                 if (loginSec) loginSec.style.display = 'flex';
+                if (mobileTopBar) mobileTopBar.style.display = 'none';
                 
                 // Hide sidebar/bottom nav bar on login screen
                 const sidebar = document.querySelector('.sidebar-nav');
@@ -3298,13 +3311,15 @@
                 const rightSide = document.querySelector('.right-side');
                 if (rightSide) rightSide.style.display = 'none';
 
-                if (document.body.classList.contains('mobile-mode')) {
-                    // Remove all view classes from body
-                    document.body.classList.remove('view-chat', 'view-calendar', 'view-timer', 'view-tasks', 'view-projects', 'view-plugins', 'view-settings', 'view-history', 'view-memory');
-                    document.body.classList.add('view-login');
-                }
+                // Remove all view classes from body
+                document.body.classList.remove('view-chat', 'view-calendar', 'view-timer', 'view-tasks', 'view-projects', 'view-plugins', 'view-settings', 'view-history', 'view-memory');
+                document.body.classList.add('view-login');
             } else {
                 if (loginSec) loginSec.style.display = 'none';
+                document.body.classList.remove('view-login');
+                if (mobileTopBar && document.body.classList.contains('mobile-mode')) {
+                    mobileTopBar.style.display = 'flex';
+                }
                 
                 // Show sidebar/bottom nav bar
                 const sidebar = document.querySelector('.sidebar-nav');
