@@ -63,14 +63,19 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
 
         Log.d("CalendarWidget", "onDataSetChanged: server_url=" + serverUrl + ", username=" + username + ", hasPassword=" + (!password.isEmpty()));
 
-        if (serverUrl == null || serverUrl.isEmpty()) {
+        String baseUrl = serverUrl != null ? serverUrl.trim() : "";
+        while (baseUrl.endsWith("/")) {
+            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+        }
+
+        if (baseUrl.isEmpty()) {
             Log.w("CalendarWidget", "No server URL configured for widget");
+            mItems.add(new DisplayItem(TYPE_HEADER, "⚠️ Keine Server-URL konfiguriert"));
             return;
         }
 
-        if (!serverUrl.endsWith("/")) {
-            serverUrl += "/";
-        }
+        username = username != null ? username.trim() : "";
+        password = password != null ? password.trim() : "";
 
         // Prepare time range (today 00:00:00 to 14 days later 23:59:59)
         Calendar cal = Calendar.getInstance();
@@ -96,102 +101,110 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
 
         HttpURLConnection conn = null;
         try {
-            URL url = new URL(serverUrl + "api/calendar/events?start=" + startIso + "&end=" + endIso);
+            URL url = new URL(baseUrl + "/api/calendar/events?start=" + startIso + "&end=" + endIso);
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
             conn.setConnectTimeout(8000);
             conn.setReadTimeout(8000);
 
-            if (!username.isEmpty() && !password.isEmpty()) {
-                String auth = username + ":" + password;
-                String encodedAuth = Base64.encodeToString(auth.getBytes(), Base64.NO_WRAP);
-                conn.setRequestProperty("Authorization", "Basic " + encodedAuth);
+        if (!username.isEmpty()) {
+            String auth = username + ":" + password;
+            String encodedAuth = Base64.encodeToString(auth.getBytes("UTF-8"), Base64.NO_WRAP);
+            conn.setRequestProperty("Authorization", "Basic " + encodedAuth);
+        }
+
+        int responseCode = conn.getResponseCode();
+        if (responseCode == HttpURLConnection.HTTP_OK) {
+            BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
+            StringBuilder response = new StringBuilder();
+            String inputLine;
+            while ((inputLine = in.readLine()) != null) {
+                response.append(inputLine);
             }
+            in.close();
 
-            int responseCode = conn.getResponseCode();
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
-                StringBuilder response = new StringBuilder();
-                String inputLine;
-                while ((inputLine = in.readLine()) != null) {
-                    response.append(inputLine);
-                }
-                in.close();
-
-                JSONObject json = new JSONObject(response.toString());
-                JSONArray eventsArray = json.optJSONArray("events");
+            JSONObject json = new JSONObject(response.toString());
+            JSONArray eventsArray = json.optJSONArray("events");
+            
+            if (eventsArray != null && eventsArray.length() > 0) {
+                String lastDateKey = "";
+                SimpleDateFormat localDateKeyFormat = new SimpleDateFormat("yyyy-MM-dd");
+                localDateKeyFormat.setTimeZone(TimeZone.getDefault());
                 
-                if (eventsArray != null && eventsArray.length() > 0) {
-                    String lastDateKey = "";
-                    SimpleDateFormat localDateKeyFormat = new SimpleDateFormat("yyyy-MM-dd");
-                    localDateKeyFormat.setTimeZone(TimeZone.getDefault());
-                    
-                    SimpleDateFormat humanDayFormat = new SimpleDateFormat("EEEE, dd.MM.");
-                    humanDayFormat.setTimeZone(TimeZone.getDefault());
+                SimpleDateFormat humanDayFormat = new SimpleDateFormat("EEEE, dd.MM.");
+                humanDayFormat.setTimeZone(TimeZone.getDefault());
 
-                    for (int i = 0; i < eventsArray.length(); i++) {
-                        JSONObject ev = eventsArray.getJSONObject(i);
-                        String timeStr = ev.optString("time", "");
-                        if (timeStr.isEmpty()) continue;
+                for (int i = 0; i < eventsArray.length(); i++) {
+                    JSONObject ev = eventsArray.getJSONObject(i);
+                    String timeStr = ev.optString("time", "");
+                    if (timeStr.isEmpty()) timeStr = ev.optString("start", "");
+                    if (timeStr.isEmpty()) timeStr = ev.optString("due", "");
+                    if (timeStr.isEmpty()) timeStr = ev.optString("originalStart", "");
+                    if (timeStr.isEmpty()) continue;
 
-                        Date eventDate = parseIsoDate(timeStr);
-                        String dateKey = localDateKeyFormat.format(eventDate);
+                    Date eventDate = parseIsoDate(timeStr);
+                    String dateKey = localDateKeyFormat.format(eventDate);
 
-                        // Inject Date Header if date changes
-                        if (!dateKey.equals(lastDateKey)) {
-                            lastDateKey = dateKey;
-                            String headerTitle = formatFriendlyDate(eventDate, humanDayFormat);
-                            mItems.add(new DisplayItem(TYPE_HEADER, headerTitle));
-                        }
+                    // Inject Date Header if date changes
+                    if (!dateKey.equals(lastDateKey)) {
+                        lastDateKey = dateKey;
+                        String headerTitle = formatFriendlyDate(eventDate, humanDayFormat);
+                        mItems.add(new DisplayItem(TYPE_HEADER, headerTitle));
+                    }
 
-                        // Determine if it is a task or a regular calendar event
-                        boolean isTask = ev.optBoolean("isTask", false);
-                        String id = ev.optString("id", "");
-                        String title = ev.optString("title", "");
-                        String description = ev.optString("description", "");
+                    // Determine if it is a task or a regular calendar event
+                    boolean isTask = ev.optBoolean("isTask", false);
+                    String id = ev.optString("id", "");
+                    String title = ev.optString("title", "");
+                    String description = ev.optString("description", "");
 
-                        // Resolve persons
-                        StringBuilder personsBuilder = new StringBuilder();
-                        JSONArray personsArray = ev.optJSONArray("persons");
-                        if (personsArray != null && personsArray.length() > 0) {
-                            for (int p = 0; p < personsArray.length(); p++) {
-                                JSONObject person = personsArray.getJSONObject(p);
-                                if (personsBuilder.length() > 0) personsBuilder.append(", ");
-                                personsBuilder.append(person.optString("name", ""));
-                            }
-                        }
-
-                        boolean isRec = ev.optBoolean("recurring", false);
-
-                        if (isTask) {
-                            boolean completed = ev.optBoolean("completed", false);
-                            String rawId = id.replace("task-", "");
-                            DisplayItem item = new DisplayItem(TYPE_TASK, title, rawId);
-                            item.description = description;
-                            item.isCompleted = completed;
-                            item.isRecurring = isRec;
-                            mItems.add(item);
-                        } else {
-                            String timeText = getEventTimeText(ev);
-                            DisplayItem item = new DisplayItem(TYPE_EVENT, title, id);
-                            item.timeText = timeText;
-                            item.description = description;
-                            item.persons = personsBuilder.toString();
-                            item.isRecurring = isRec;
-                            mItems.add(item);
+                    // Resolve persons
+                    StringBuilder personsBuilder = new StringBuilder();
+                    JSONArray personsArray = ev.optJSONArray("persons");
+                    if (personsArray != null && personsArray.length() > 0) {
+                        for (int p = 0; p < personsArray.length(); p++) {
+                            JSONObject person = personsArray.getJSONObject(p);
+                            if (personsBuilder.length() > 0) personsBuilder.append(", ");
+                            personsBuilder.append(person.optString("name", ""));
                         }
                     }
+
+                    boolean isRec = ev.optBoolean("recurring", false);
+
+                    if (isTask) {
+                        boolean completed = ev.optBoolean("completed", false);
+                        String rawId = id.replace("task-", "");
+                        DisplayItem item = new DisplayItem(TYPE_TASK, title, rawId);
+                        item.description = description;
+                        item.isCompleted = completed;
+                        item.isRecurring = isRec;
+                        mItems.add(item);
+                    } else {
+                        String timeText = getEventTimeText(ev);
+                        DisplayItem item = new DisplayItem(TYPE_EVENT, title, id);
+                        item.timeText = timeText;
+                        item.description = description;
+                        item.persons = personsBuilder.toString();
+                        item.isRecurring = isRec;
+                        mItems.add(item);
+                    }
                 }
-            } else {
-                Log.e("CalendarWidget", "HTTP error code: " + responseCode);
             }
-        } catch (Exception e) {
-            Log.e("CalendarWidget", "Error fetching calendar data", e);
-        } finally {
-            if (conn != null) {
-                conn.disconnect();
-            }
+        } else if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            Log.e("CalendarWidget", "HTTP 401 Unauthorized");
+            mItems.add(new DisplayItem(TYPE_HEADER, "⚠️ Bitte in der App anmelden"));
+        } else {
+            Log.e("CalendarWidget", "HTTP error code: " + responseCode);
+            mItems.add(new DisplayItem(TYPE_HEADER, "⚠️ Serverfehler (HTTP " + responseCode + ")"));
         }
+    } catch (Exception e) {
+        Log.e("CalendarWidget", "Error fetching calendar data", e);
+        mItems.add(new DisplayItem(TYPE_HEADER, "⚠️ Verbindung fehlgeschlagen"));
+    } finally {
+        if (conn != null) {
+            conn.disconnect();
+        }
+    }
     }
 
     private String formatFriendlyDate(Date date, SimpleDateFormat humanDayFormat) {

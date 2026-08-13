@@ -1972,9 +1972,10 @@
                     </div>
 
 
-                    <!-- Server-Login (Logout) -->
+                    <!-- Server-Login (Logout) & Widget Sync -->
                     <div class="settings-group">
-                        <label>Server-Verbindung</label>
+                        <label>Server & Widget-Verbindung</label>
+                        <button id="sync-widget-btn" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--accent); cursor: pointer; background: rgba(137, 180, 250, 0.1); color: var(--accent); font-weight: bold; margin-bottom: 8px; transition: all 0.2s;">🔄 Widget-Einstellungen jetzt synchronisieren</button>
                         <button id="logout-btn" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--off); cursor: pointer; background: rgba(243, 139, 168, 0.1); color: var(--off); font-weight: bold; transition: all 0.2s;" onmouseover="this.style.background='rgba(243, 139, 168, 0.2)'" onmouseout="this.style.background='rgba(243, 139, 168, 0.1)'">Verbindung trennen (Abmelden)</button>
                     </div>
 
@@ -2227,13 +2228,21 @@
             return path;
         }
 
+        function safeBtoa(str) {
+            try {
+                return btoa(unescape(encodeURIComponent(str)));
+            } catch (e) {
+                return btoa(str);
+            }
+        }
+
         // Custom wrapper around fetch to automatically attach Basic Authentication headers if configured
         async function authFetch(url, options = {}) {
             options.headers = options.headers || {};
             const username = localStorage.getItem('api_username');
             const password = localStorage.getItem('api_password');
             if (username && password) {
-                options.headers['Authorization'] = 'Basic ' + btoa(username + ':' + password);
+                options.headers['Authorization'] = 'Basic ' + safeBtoa(username + ':' + password);
             }
             return window.fetch(url, options);
         }
@@ -2956,6 +2965,15 @@
                     loginSubmitBtn.textContent = "Anmelden";
                     loginSubmitBtn.disabled = false;
                 }
+            };
+        }
+
+        // Sync Widget Button Handler
+        const syncWidgetBtn = document.getElementById('sync-widget-btn');
+        if (syncWidgetBtn) {
+            syncWidgetBtn.onclick = () => {
+                syncWidgetSettings();
+                alert("Widget-Einstellungen (Benutzername & Server-URL) wurden erfolgreich an das Android-Widget gesendet! Du kannst das Widget jetzt auf deinem Startbildschirm aktualisieren.");
             };
         }
 

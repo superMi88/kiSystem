@@ -101,17 +101,21 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
         String username = prefs.getString("api_username", "");
         String password = prefs.getString("api_password", "");
 
-        if (serverUrl == null || serverUrl.isEmpty()) {
+        String baseUrl = serverUrl != null ? serverUrl.trim() : "";
+        while (baseUrl.endsWith("/")) {
+            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+        }
+
+        if (baseUrl.isEmpty()) {
             return;
         }
 
-        if (!serverUrl.endsWith("/")) {
-            serverUrl += "/";
-        }
+        username = username != null ? username.trim() : "";
+        password = password != null ? password.trim() : "";
         
         HttpURLConnection conn = null;
         try {
-            URL url = new URL(serverUrl + "tasks/complete");
+            URL url = new URL(baseUrl + "/tasks/complete");
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
