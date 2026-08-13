@@ -3490,7 +3490,10 @@
                 html += `<div style="font-size: 0.85rem; font-weight: bold; color: var(--accent); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">📅 Termine für ${dateStr}</div>`;
                 
                 if (data.events.length === 0) {
-                    html += `<p style="font-size:0.8rem; opacity:0.6; margin: 5px 0;">Keine Termine für diesen                    data.events.forEach(ev => {
+                    html += `<p style="font-size:0.8rem; opacity:0.6; margin: 5px 0;">Keine Termine für diesen Tag.</p>`;
+                } else {
+                    html += `<div style="display: flex; flex-direction: column; gap: 8px;">`;
+                    data.events.forEach(ev => {
                         if (ev.isTask) {
                             const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
                             const escNotes = escapeHtml(ev.description || '').replace(/'/g, "\\'");
