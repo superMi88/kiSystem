@@ -2826,9 +2826,9 @@
             const loginPasswordInput = document.getElementById('login-password-input');
             const loginUrlInput = document.getElementById('login-url-input');
 
-            let serverUrl = (settingsUrlInput && settingsUrlInput.value.trim()) || (loginUrlInput && loginUrlInput.value.trim()) || localStorage.getItem('api_server_url') || (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de';
-            let username = (settingsUsernameInput && settingsUsernameInput.value.trim()) || (loginUsernameInput && loginUsernameInput.value.trim()) || localStorage.getItem('api_username') || '';
-            let password = (settingsPasswordInput && settingsPasswordInput.value.trim()) || (loginPasswordInput && loginPasswordInput.value.trim()) || localStorage.getItem('api_password') || '';
+            let serverUrl = (settingsUrlInput && settingsUrlInput.value.trim() !== "") ? settingsUrlInput.value.trim() : ((loginUrlInput && loginUrlInput.value.trim() !== "") ? loginUrlInput.value.trim() : (localStorage.getItem('api_server_url') || (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de'));
+            let username = (settingsUsernameInput && settingsUsernameInput.value.trim() !== "") ? settingsUsernameInput.value.trim() : ((loginUsernameInput && loginUsernameInput.value.trim() !== "") ? loginUsernameInput.value.trim() : (localStorage.getItem('api_username') || ''));
+            let password = (settingsPasswordInput && settingsPasswordInput.value.trim() !== "") ? settingsPasswordInput.value.trim() : ((loginPasswordInput && loginPasswordInput.value.trim() !== "") ? loginPasswordInput.value.trim() : (localStorage.getItem('api_password') || ''));
 
             if (serverUrl) localStorage.setItem('api_server_url', serverUrl);
             if (username) localStorage.setItem('api_username', username);
@@ -3003,12 +3003,30 @@
         if (syncWidgetBtn) {
             syncWidgetBtn.onclick = () => {
                 const uInput = document.getElementById('settings-username-input');
-                const userVal = (uInput && uInput.value.trim()) || (document.getElementById('login-username-input') ? document.getElementById('login-username-input').value.trim() : '') || localStorage.getItem('api_username') || '';
+                const pInput = document.getElementById('settings-password-input');
+                const urlInput = document.getElementById('settings-url-input');
+
+                let userVal = (uInput && uInput.value.trim() !== "") ? uInput.value.trim() : (localStorage.getItem('api_username') || '');
+                let passVal = (pInput && pInput.value.trim() !== "") ? pInput.value.trim() : (localStorage.getItem('api_password') || '');
+                let urlVal = (urlInput && urlInput.value.trim() !== "") ? urlInput.value.trim() : (localStorage.getItem('api_server_url') || 'https://ki.kleiner-wald-server.de');
+
                 if (!userVal) {
                     alert("Bitte trage oben in den Einstellungen deinen Benutzernamen und dein Passwort ein und klicke dann erneut auf Synchronisieren.");
                     return;
                 }
-                syncWidgetSettings();
+
+                localStorage.setItem('api_username', userVal);
+                localStorage.setItem('api_password', passVal);
+                localStorage.setItem('api_server_url', urlVal);
+
+                const plugin = getWidgetSettingsPlugin();
+                if (plugin) {
+                    plugin.saveSettings({
+                        username: userVal,
+                        password: passVal,
+                        serverUrl: urlVal
+                    });
+                }
                 alert("Widget-Einstellungen für Benutzer '" + userVal + "' wurden erfolgreich an das Android-Widget gesendet! Du kannst das Widget jetzt auf deinem Startbildschirm aktualisieren.");
             };
         }

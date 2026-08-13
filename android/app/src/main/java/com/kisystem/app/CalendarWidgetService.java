@@ -83,8 +83,9 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
             return;
         }
 
-        // Prepare time range (today 00:00:00 to 14 days later 23:59:59)
+        // Prepare time range (from 7 days in past to 60 days in future)
         Calendar cal = Calendar.getInstance();
+        cal.add(Calendar.DAY_OF_YEAR, -7);
         cal.set(Calendar.HOUR_OF_DAY, 0);
         cal.set(Calendar.MINUTE, 0);
         cal.set(Calendar.SECOND, 0);
@@ -92,8 +93,7 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
         Date startDate = cal.getTime();
 
         Calendar calEnd = Calendar.getInstance();
-        calEnd.setTime(startDate);
-        calEnd.add(Calendar.DAY_OF_YEAR, 14);
+        calEnd.add(Calendar.DAY_OF_YEAR, 60);
         calEnd.set(Calendar.HOUR_OF_DAY, 23);
         calEnd.set(Calendar.MINUTE, 59);
         calEnd.set(Calendar.SECOND, 59);
@@ -195,6 +195,8 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
                         mItems.add(item);
                     }
                 }
+            } else {
+                mItems.add(new DisplayItem(TYPE_HEADER, "📅 Keine Termine in den nächsten 60 Tagen"));
             }
         } else if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
             Log.e("CalendarWidget", "HTTP 401 Unauthorized for username: " + username);

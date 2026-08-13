@@ -22,10 +22,19 @@ public class WidgetSettingsPlugin extends Plugin {
 
         SharedPreferences prefs = getContext().getSharedPreferences("WidgetStorage", Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = prefs.edit();
-        editor.putString("api_username", username != null ? username.trim() : "");
-        editor.putString("api_password", password != null ? password.trim() : "");
-        editor.putString("server_url", serverUrl != null ? serverUrl.trim() : "");
+
+        if (username != null && !username.trim().isEmpty()) {
+            editor.putString("api_username", username.trim());
+        }
+        if (password != null && !password.trim().isEmpty()) {
+            editor.putString("api_password", password.trim());
+        }
+        if (serverUrl != null && !serverUrl.trim().isEmpty()) {
+            editor.putString("server_url", serverUrl.trim());
+        }
         editor.commit();
+
+        android.util.Log.d("CalendarWidget", "WidgetSettingsPlugin saved: username=" + prefs.getString("api_username", "") + ", serverUrl=" + prefs.getString("server_url", ""));
 
         // Trigger widget update
         try {
