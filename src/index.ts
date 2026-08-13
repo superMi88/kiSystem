@@ -17,6 +17,7 @@ import { getSettings, saveSettings } from "./settings.js";
 import { runAutomaticMigration } from "./migrate.js";
 import { getEventsForRange } from "./plugins/Calendar/index.js";
 import { calculateNextDueDate } from "./plugins/Tasks/index.js";
+import { getDaySummaryData, parseLocalDate } from "./plugins/Journal/index.js";
 
 dotenv.config();
 
@@ -169,28 +170,144 @@ app.post("/tasks/complete", async (req, res) => {
     return res.status(400).json({ error: "taskId ist erforderlich." });
   }
   const targetCompleted = completed !== undefined ? !!completed : true;
+  const now = new Date();
 
   try {
     const task = await prisma.task.findUnique({ where: { id: Number(taskId) } });
     if (task && task.recurrence && task.due && targetCompleted) {
       const nextDue = calculateNextDueDate(task.due, task.recurrence);
+      await prisma.task.create({
+        data: {
+          title: task.title,
+          notes: task.notes,
+          due: task.due,
+          completed: true,
+          completedAt: now,
+          listTitle: task.listTitle,
+          recurrence: null,
+          projectId: task.projectId
+        }
+      });
       await prisma.task.update({
         where: { id: Number(taskId) },
         data: {
           due: nextDue,
-          completed: false // Keep it open for the next occurrence
+          completed: false
         }
       });
-      res.json({ success: true, message: "Wiederkehrende Aufgabe auf das nächste Datum verschoben.", nextDue: nextDue.toISOString() });
+      res.json({ success: true, message: "Wiederkehrende Aufgabe erledigt und auf das nächste Datum verschoben.", nextDue: nextDue.toISOString() });
     } else {
       await prisma.task.update({
         where: { id: Number(taskId) },
-        data: { completed: targetCompleted }
+        data: {
+          completed: targetCompleted,
+          completedAt: targetCompleted ? now : null
+        }
       });
       res.json({ success: true, message: `Aufgabe erfolgreich ${targetCompleted ? 'erledigt' : 'wieder geöffnet'}.` });
     }
   } catch (e: any) {
     console.error("Fehler beim Erledigen/Reaktivieren der Aufgabe:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * Journal / Tagebuch API
+ */
+app.get("/api/journal/day-summary", async (req, res) => {
+  try {
+    const dateStr = req.query.date as string;
+    const targetDate = parseLocalDate(dateStr);
+    const summary = await getDaySummaryData(targetDate, prisma);
+    res.json(summary);
+  } catch (e: any) {
+    console.error("Fehler beim Abrufen der Tagebuch-Tagesübersicht:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/journal/entries", async (req, res) => {
+  try {
+    const { content, title, date } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: "content ist erforderlich." });
+    }
+    const targetDate = parseLocalDate(date);
+
+    const embeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" }, { apiVersion: "v1beta" });
+    let embedding: number[] | null = null;
+    try {
+      const result = await embeddingModel.embedContent(content);
+      embedding = result.embedding.values;
+    } catch (err) {
+      console.error("Fehler beim Erstellen des Embeddings für Tagebucheintrag:", err);
+    }
+
+    let entry: any;
+    if (embedding && embedding.length > 0) {
+      const inserted: any[] = await prisma.$queryRawUnsafe(
+        `INSERT INTO "DiaryEntry" (date, title, content, embedding, "createdAt", "updatedAt", "isDeleted")
+         VALUES ($1, $2, $3, $4::vector, NOW(), NOW(), false)
+         RETURNING id, date, title, content, "createdAt"`,
+        targetDate,
+        title || null,
+        content,
+        `[${embedding.join(",")}]`
+      );
+      entry = inserted[0];
+    } else {
+      entry = await prisma.diaryEntry.create({
+        data: {
+          date: targetDate,
+          title: title || null,
+          content
+        }
+      });
+    }
+
+    res.json({ success: true, entry });
+  } catch (e: any) {
+    console.error("Fehler beim Erstellen des Tagebucheintrags:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/journal/entries/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    await prisma.diaryEntry.update({
+      where: { id },
+      data: { isDeleted: true }
+    });
+    res.json({ success: true, message: "Tagebucheintrag gelöscht." });
+  } catch (e: any) {
+    console.error("Fehler beim Löschen des Tagebucheintrags:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/journal/search", async (req, res) => {
+  try {
+    const queryStr = req.query.q as string;
+    if (!queryStr) {
+      return res.status(400).json({ error: "q (Suchbegriff) ist erforderlich." });
+    }
+    const embeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" }, { apiVersion: "v1beta" });
+    const result = await embeddingModel.embedContent(queryStr);
+    const embedding = result.embedding.values;
+
+    const matches: any[] = await prisma.$queryRawUnsafe(
+      `SELECT id, date, title, content, "createdAt"
+       FROM "DiaryEntry"
+       WHERE "isDeleted" = false AND embedding IS NOT NULL
+       ORDER BY embedding <=> $1::vector LIMIT 10`,
+      `[${embedding.join(",")}]`
+    );
+
+    res.json(matches);
+  } catch (e: any) {
+    console.error("Fehler bei der Vektorsuche im Tagebuch:", e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -372,14 +489,23 @@ Nutze dieses Datum als Basis für relative Zeitangaben.
 Wenn du relative Timer erstellst (z.B. "in 15 Minuten" oder "für 10 Sekunden"), benutze im Tool 'erstelle_timer' bevorzugt den Parameter 'sekunden'.
 Für feste Uhrzeiten (z. B. "morgen um 17 Uhr") berechne die Ablaufzeit im lokalen Format unter Berücksichtigung des Offsets '+02:00' (z. B. YYYY-MM-DDTHH:mm:ss+02:00) und gib diesen String an 'erstelle_timer' oder 'fuege_termin_hinzu'.
 
-Du hast Zugriff auf ein dreistufiges Gedächtnissystem für Personen:
+Du hast Zugriff auf ein persönliches Profil des Benutzers ("Ich / Über mich"):
+- Wenn der Benutzer persönliche Informationen über sich selbst erzählt ("Ich mag...", "Mein Ziel ist...", "Ich habe mir vorgenommen...", "Merke dir über mich..."), verwende 'merke_ueber_mich'.
+- Wenn du nach persönlichen Informationen, Vorlieben, Zielen oder Gewohnheiten des Benutzers gefragt wirst, verwende 'hole_mein_profil'.
+
+Du hast Zugriff auf ein dreistufiges Gedächtnissystem für Kontakte und Personen:
 1. Biografie (notes): Kompakte Zusammenfassung über die Person. Lesen per 'hole_person_info', Schreiben/Aktualisieren per 'aktualisiere_person_biografie'.
-2. Strukturierte Fakten (Fact-Tabelle): Einzelne atomare Details (z.B. Lieblingsfarbe, Hobbys). Lesen per 'hole_person_info', Hinzufügen per 'fuege_person_fakt_hinzu', Löschen per 'loesche_person_fakt' (benötigt die faktId). Geburtstage werden separat über das Tool 'setze_person_geburtstag' verwaltet (NICHT als Fakt!).
+2. Strukturierte Fakten (Fact-Tabelle): Einzelne atomare Details (z.B. Lieblingsfarbe, Hobbys). Lesen per 'hole_person_info', Hinzufügen per 'fuege_person_fakt_hinzu', Löschen per 'loesche_person_fakt'. Geburtstage per 'setze_person_geburtstag'.
 3. Semantisches Langzeitgedächtnis (SemanticMemory-Tabelle): Unstrukturierte Erlebnisse, Treffen und Chats mit Vektorsuche. Speichern per 'erinnere_dich', Suchen per 'suche_im_gedaechtnis'.
 
+Du hast Zugriff auf ein Tagebuch (Journal) mit täglichen Einträgen, Kalenderterminen und erledigten Aufgaben:
+- Einen Tagebucheintrag verfassen oder ergänzen per 'eintrag_ins_tagebuch'.
+- Den Tagesablauf, Erlebnisse und erledigte Aufgaben eines Tages lesen per 'lies_tagebuch'.
+- Vergangene Tagebucheinträge semantisch per Vektorsuche durchsuchen per 'suche_im_tagebuch'.
+
 WICHTIGE VERHALTENSREGELN:
-- Die Biografie und die Fakten enthalten NICHT alle Informationen! Gehe nie davon aus, dass das Profil vollständig ist.
-- Wenn der Benutzer nach einer Person fragt (z.B. 'weißt du was über curly oder laphi?'), musst du IMMER sowohl 'suche_im_gedaechtnis' (semantische Suche mit dem Namen) als auch 'hole_person_info' (Biografie & Fakten) aufrufen, um alle relevanten Informationen aus beiden Speicherstufen zu vereinen.
+- Die Biografie und die Fakten enthalten NICHT alle Informationen! Gehe nie davon aus, dass ein Profil vollständig ist.
+- Wenn der Benutzer nach einer Person fragt, rufe sowohl 'suche_im_gedaechtnis' als auch 'hole_person_info' auf.
 - Sei bei Antworten präzise, hilfsbereit und antworte auf Deutsch.` }]
       }
     });

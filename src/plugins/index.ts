@@ -7,6 +7,7 @@ import { imageGeneratorPlugin } from "./ImageGenerator/index.js";
 import { timerPlugin } from "./Timer/index.js";
 import { projectsPlugin } from "./Projects/index.js";
 import { tasksPlugin } from "./Tasks/index.js";
+import { journalPlugin } from "./Journal/index.js";
 import { getSettings } from "../settings.js";
 
 export class PluginManager {
@@ -22,6 +23,7 @@ export class PluginManager {
     this.registerPlugin(timerPlugin);
     this.registerPlugin(projectsPlugin);
     this.registerPlugin(tasksPlugin);
+    this.registerPlugin(journalPlugin);
   }
 
   registerPlugin(plugin: Plugin) {

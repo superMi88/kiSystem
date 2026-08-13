@@ -50,6 +50,7 @@ model Person {
   facts     Fact[]           // Gespeicherte Fakten über diese Person
   memories  SemanticMemory[] // Semantische Erinnerungen/Verweise auf diese Person
   isDeleted Boolean          @default(false) // Soft-Delete-Flag (gelöscht ja/nein)
+  isOwner   Boolean          @default(false) // Flag, ob dieses Profil das eigene Profil des Benutzers ist ("Ich / Über mich")
 }
 
 /// [Memory Plugin] Verwaltet alternative Namen oder Schreibweisen (Aliase) für eine Person zur besseren Erkennung im Chat.
@@ -150,18 +151,19 @@ model RecurrencePattern {
 
 /// [Tasks Plugin] Repräsentiert Aufgaben (To-Dos) mit optionaler Zuordnung zu einem Projekt, Fälligkeitsdatum und Wiederholungsregeln. Integriert in Tasks-, Calendar- und Projects-Plugin.
 model Task {
-  id          Int      @id @default(autoincrement()) // Eindeutige ID der Aufgabe
-  title       String   // Titel der Aufgabe
-  notes       String?  // Optionale Notizen/Details zur Aufgabe
+  id          Int       @id @default(autoincrement()) // Eindeutige ID der Aufgabe
+  title       String    // Titel der Aufgabe
+  notes       String?   // Optionale Notizen/Details zur Aufgabe
   due         DateTime? // Optionales Fälligkeitsdatum (erzeugt Anzeige im Kalender)
-  completed   Boolean  @default(false) // Status, ob die Aufgabe erledigt ist
-  listTitle   String   @default("Standard") // Name der Aufgabenliste (z. B. "Standard", "Einkäufe")
-  recurrence  String?  // Optionales Wiederholungsmuster als Freitext/Regel
-  createdAt   DateTime @default(now()) // Erstellungszeitpunkt
-  updatedAt   DateTime @updatedAt // Zeitpunkt der letzten Aktualisierung
-  isDeleted   Boolean  @default(false) // Soft-Delete-Flag
-  projectId   Int?     // Optionale ID eines zugeordneten Projekts
-  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade) // Relation zum Projekt
+  completed   Boolean   @default(false) // Status, ob die Aufgabe erledigt ist
+  completedAt DateTime? // Zeitpunkt, an dem die Aufgabe tatsächlich erledigt wurde
+  listTitle   String    @default("Standard") // Name der Aufgabenliste (z. B. "Standard", "Einkäufe")
+  recurrence  String?   // Optionales Wiederholungsmuster als Freitext/Regel
+  createdAt   DateTime  @default(now()) // Erstellungszeitpunkt
+  updatedAt   DateTime  @updatedAt // Zeitpunkt der letzten Aktualisierung
+  isDeleted   Boolean   @default(false) // Soft-Delete-Flag
+  projectId   Int?      // Optionale ID eines zugeordneten Projekts
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade) // Relation zum Projekt
 }
 
 /// [Projects Plugin] Verwaltet Projekte, die als Container für zusammengehörende Aufgaben und Notizen dienen.
@@ -174,6 +176,19 @@ model Project {
   tasks     Task[]   // Alle dem Projekt zugeordneten Aufgaben
   notes     Note[]   // Alle dem Projekt zugeordneten Notizen
 }
+
+/// [Journal Plugin] Repräsentiert Notizen/Tagebucheinträge für spezifische Tage im Tagebuch mit Vektoreinbettung.
+model DiaryEntry {
+  id        Int                     @id @default(autoincrement()) // Eindeutige ID des Tagebucheintrags
+  date      DateTime                // Bezugsdatum des Eintrags
+  title     String?                 // Optionaler Titel
+  content   String                  // Inhalt des Tagebucheintrags
+  embedding Unsupported("vector(3072)")? // Vektoreinbettung des Inhalts für semantische Suche
+  createdAt DateTime                @default(now()) // Erstellungszeitpunkt
+  updatedAt DateTime                @updatedAt // Letzte Änderung
+  isDeleted Boolean                 @default(false) // Soft-Delete-Flag
+}
+
 
 
 

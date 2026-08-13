@@ -7,10 +7,145 @@ dotenv.config();
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
 const embeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" }, { apiVersion: "v1beta" });
 
+export async function getOrCreateOwnerPerson(prisma: any) {
+  let owner = await prisma.person.findFirst({
+    where: { isOwner: true, isDeleted: false },
+    include: {
+      aliases: true,
+      facts: { where: { isDeleted: false } }
+    }
+  });
+
+  if (!owner) {
+    const aliasIch = await prisma.personAlias.findFirst({
+      where: { name: { in: ["Ich", "Benutzer", "Me"] } },
+      include: { person: { include: { aliases: true, facts: { where: { isDeleted: false } } } } }
+    });
+
+    if (aliasIch && aliasIch.person && !aliasIch.person.isDeleted) {
+      owner = await prisma.person.update({
+        where: { id: aliasIch.person.id },
+        data: { isOwner: true },
+        include: { aliases: true, facts: { where: { isDeleted: false } } }
+      });
+    } else {
+      owner = await prisma.person.create({
+        data: {
+          isOwner: true,
+          biography: "Persönliches Profil des Benutzers (Ich). Hier stehen deine Vorlieben, Ziele und persönliche Notizen.",
+          aliases: {
+            create: { name: "Ich", isPrimary: true }
+          }
+        },
+        include: { aliases: true, facts: { where: { isDeleted: false } } }
+      });
+    }
+  }
+
+  return owner;
+}
+
 export const memoryPlugin: Plugin = {
   name: "Memory",
   description: "Speichert Informationen über Personen und Fakten mittels Vektordatenbank für semantische Suche.",
   tools: [
+    {
+      definition: {
+        name: "merke_ueber_mich",
+        description: "Speichert persönliche Fakten, Vorlieben, Ziele, Vorhaben oder Notizen SPEZIELL über den Benutzer selbst ('Ich'). Verwende dieses Tool, wenn der Benutzer etwas über sich erzählt (z.B. 'Ich mag...', 'Mein Ziel ist...', 'Merke dir über mich...').",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            inhalt: { type: SchemaType.STRING, description: "Der Fakt, das Ziel oder die Notiz über den Benutzer (z.B. 'Trinkt am liebsten Cappuccino mit Hafermilch' oder 'Möchte dieses Jahr Spanisch lernen')." },
+            kategorie: { type: SchemaType.STRING, description: "Optional: Kategorie (z.B. 'vorliebe', 'ziel', 'persoenlich', 'gewohnheit', 'hobby')." },
+            biografieUpdate: { type: SchemaType.STRING, description: "Optional: Eine aktualisierte Gesamtzusammenfassung der Biografie des Benutzers." }
+          },
+          required: ["inhalt"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const { inhalt, kategorie, biografieUpdate } = args;
+        const owner = await getOrCreateOwnerPerson(prisma);
+
+        const fact = await prisma.fact.create({
+          data: {
+            content: inhalt,
+            category: kategorie || "persoenlich",
+            personId: owner.id
+          }
+        });
+
+        let embedding: number[] | null = null;
+        try {
+          const result = await embeddingModel.embedContent(`Über mich: ${inhalt}`);
+          embedding = result.embedding.values;
+          await prisma.$executeRawUnsafe(
+            `INSERT INTO "SemanticMemory" (content, embedding, metadata, "personId", "createdAt")
+             VALUES ($1, $2::vector, $3::jsonb, $4, NOW())`,
+            `Über mich: ${inhalt}`,
+            `[${embedding.join(",")}]`,
+            JSON.stringify({ category: kategorie || "persoenlich", source: "merke_ueber_mich" }),
+            owner.id
+          );
+        } catch (e) {
+          console.error("Fehler bei Vektoreinbettung für merke_ueber_mich:", e);
+        }
+
+        if (biografieUpdate && biografieUpdate.trim()) {
+          await prisma.person.update({
+            where: { id: owner.id },
+            data: { biography: biografieUpdate.trim() }
+          });
+        }
+
+        return {
+          status: "success",
+          ownerId: owner.id,
+          faktId: fact.id,
+          message: `Persönliche Information über dich ('Ich') wurde in deinem Profil gespeichert: "${inhalt}"`
+        };
+      }
+    },
+    {
+      definition: {
+        name: "hole_mein_profil",
+        description: "Ruft das persönliche Profil und alle gespeicherten Notizen, Vorlieben und Ziele über den Benutzer ('Ich') ab.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {},
+          required: []
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const owner = await getOrCreateOwnerPerson(prisma);
+
+        const memories = await prisma.semanticMemory.findMany({
+          where: { personId: owner.id },
+          orderBy: { createdAt: 'desc' },
+          take: 15
+        });
+
+        const primaryAlias = owner.aliases.find((a: any) => a.isPrimary) || owner.aliases[0];
+
+        return {
+          id: owner.id,
+          isOwner: true,
+          name: primaryAlias ? primaryAlias.name : "Ich",
+          aliases: owner.aliases.map((a: any) => a.name),
+          biografie: owner.biography || "Keine Biografie vorhanden.",
+          geburtstag: owner.birthday ? owner.birthday.toISOString().split('T')[0] : null,
+          fakten: owner.facts.map((f: any) => ({
+            id: f.id,
+            inhalt: f.content,
+            kategorie: f.category || "persoenlich"
+          })),
+          langzeit_erinnerungen: memories.map((m: any) => ({
+            text: m.content,
+            datum: m.createdAt
+          }))
+        };
+      }
+    },
     {
       definition: {
         name: "erinnere_dich",
@@ -556,10 +691,12 @@ export const memoryPlugin: Plugin = {
   ],
   getTopWidgets: async ({ prisma }) => {
     try {
+      await getOrCreateOwnerPerson(prisma);
       const people = await prisma.person.findMany({
         where: { isDeleted: false },
         select: {
           id: true,
+          isOwner: true,
           biography: true,
           aliases: {
             select: {
@@ -573,11 +710,16 @@ export const memoryPlugin: Plugin = {
         const primaryAlias = p.aliases.find(a => a.isPrimary) || p.aliases[0];
         return {
           id: p.id,
-          name: primaryAlias ? primaryAlias.name : "Unbekannt",
+          isOwner: p.isOwner,
+          name: primaryAlias ? primaryAlias.name : (p.isOwner ? "Ich" : "Unbekannt"),
           notes: p.biography || "Keine Biografie vorhanden."
         };
       });
-      formattedPeople.sort((a, b) => a.name.localeCompare(b.name));
+      formattedPeople.sort((a, b) => {
+        if (a.isOwner) return -1;
+        if (b.isOwner) return 1;
+        return a.name.localeCompare(b.name);
+      });
       return [
         {
           pluginName: "Memory",

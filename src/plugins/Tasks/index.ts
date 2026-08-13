@@ -136,8 +136,23 @@ export const tasksPlugin: Plugin = {
       handler: async (args, { prisma }) => {
         try {
           const task = await prisma.task.findUnique({ where: { id: Number(args.taskId) } });
+          const now = new Date();
           if (task && task.recurrence && task.due) {
             const nextDue = calculateNextDueDate(task.due, task.recurrence);
+            // Erstelle einen erledigten Eintrag für das Tagebuch dieses Tages
+            await prisma.task.create({
+              data: {
+                title: task.title,
+                notes: task.notes,
+                due: task.due,
+                completed: true,
+                completedAt: now,
+                listTitle: task.listTitle,
+                recurrence: null,
+                projectId: task.projectId
+              }
+            });
+            // Verschiebe die wiederkehrende Hauptaufgabe auf das nächste Fälligkeitsdatum
             await prisma.task.update({
               where: { id: Number(args.taskId) },
               data: {
@@ -147,13 +162,13 @@ export const tasksPlugin: Plugin = {
             });
             return {
               status: "success",
-              message: `Wiederkehrende Aufgabe auf das nächste Datum (${nextDue.toISOString().split('T')[0]}) verschoben.`,
+              message: `Wiederkehrende Aufgabe erledigt und auf das nächste Datum (${nextDue.toISOString().split('T')[0]}) verschoben. Erledigung im Tagebuch verzeichnet.`,
               nextDue: nextDue.toISOString()
             };
           } else {
             await prisma.task.update({
               where: { id: Number(args.taskId) },
-              data: { completed: true }
+              data: { completed: true, completedAt: now }
             });
             return {
               status: "success",

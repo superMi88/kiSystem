@@ -42,6 +42,13 @@
                 </svg>
                 Gedächtnis
             </button>
+            <button class="drawer-item" onclick="handleDrawerJournal()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                </svg>
+                Tagebuch
+            </button>
             
             <div class="drawer-divider"></div>
             
@@ -344,6 +351,14 @@
                             <span class="badge" id="badge-memory" style="display: none;">0</span>
                         </button>
 
+                        <button class="plugin-nav-btn" id="btn-nav-journal" onclick="focusWidget('journal')" title="Tagebuch">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                            </svg>
+                            <span class="badge" id="badge-journal" style="display: none;">0</span>
+                        </button>
+
                         <button class="plugin-nav-btn chat-toggle-btn" id="btn-nav-chat" onclick="switchMobileView('chat')" title="Zurück zum Chat">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
@@ -477,7 +492,7 @@
             }
 
             // Remove all view classes from body
-            document.body.classList.remove('view-chat', 'view-calendar', 'view-timer', 'view-tasks', 'view-projects', 'view-plugins', 'view-settings', 'view-history', 'view-memory');
+            document.body.classList.remove('view-chat', 'view-calendar', 'view-timer', 'view-tasks', 'view-projects', 'view-plugins', 'view-settings', 'view-history', 'view-memory', 'view-journal');
             
             // Add the new active view class
             document.body.classList.add('view-' + viewName);
@@ -495,7 +510,8 @@
                     'calendar': 'Kalender',
                     'timer': 'Timer & Wecker',
                     'projects': 'Projekte',
-                    'memory': 'Personen & Gedächtnis'
+                    'memory': 'Personen & Gedächtnis',
+                    'journal': 'Tagebuch'
                 };
                 titleEl.textContent = titles[viewName] || 'Plugins & Dashboard';
             }
@@ -508,6 +524,7 @@
                     'timer': 'Timer',
                     'projects': 'Projekte',
                     'memory': 'Gedächtnis',
+                    'journal': 'Tagebuch',
                     'chat': 'Chat',
                     'history': 'Verlauf',
                     'settings': 'Einstellungen'
@@ -573,6 +590,12 @@
             showSection('settings');
         }
         window.openMobileSettings = openMobileSettings;
+
+        function handleDrawerJournal() {
+            closeMobileDrawer();
+            switchMobileView('journal');
+        }
+        window.handleDrawerJournal = handleDrawerJournal;
 
         function toggleKeyboard() {
             document.body.classList.toggle('keyboard-active');
@@ -2915,19 +2938,37 @@
                             } else {
                                 widget.data.people.forEach(p => {
                                     const escName = escapeHtml(p.name).replace(/'/g, "\\'");
-                                    html += `
-                                        <div onclick="openPersonProfileModal(${p.id})" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
-                                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                                <strong style="font-size: 0.85rem; color: var(--accent);">${escapeHtml(p.name)}</strong>
-                                                <button onclick="event.stopPropagation(); insertEntityLinkIntoChat('${escName}', 'person', ${p.id})" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--accent); cursor: pointer; border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'" title="In Chat verlinken">🔗 Link</button>
+                                    if (p.isOwner) {
+                                        html += `
+                                            <div onclick="openPersonProfileModal(${p.id})" style="background: rgba(203, 166, 247, 0.12); border: 1.5px solid #cba6f7; padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s; box-shadow: 0 0 15px rgba(203, 166, 247, 0.1);" onmouseover="this.style.background='rgba(203, 166, 247, 0.2)'" onmouseout="this.style.background='rgba(203, 166, 247, 0.12)'">
+                                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                                        <span style="font-size: 0.85rem;">⭐</span>
+                                                        <strong style="font-size: 0.9rem; color: #cba6f7;">Mein Profil (${escapeHtml(p.name)})</strong>
+                                                    </div>
+                                                    <button onclick="event.stopPropagation(); insertEntityLinkIntoChat('${escName}', 'person', ${p.id})" style="background: rgba(203, 166, 247, 0.2); border: 1px solid #cba6f7; color: white; cursor: pointer; border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; font-weight: bold;" title="In Chat verlinken">🔗 Link</button>
+                                                </div>
+                                                <div style="font-size: 0.75rem; opacity: 0.9; color: #cdd6f4; white-space: pre-wrap; word-break: break-word; line-height: 1.3; margin-top: 4px;">${escapeHtml(p.notes)}</div>
                                             </div>
-                                            <div style="font-size: 0.75rem; opacity: 0.8; white-space: pre-wrap; word-break: break-word; line-height: 1.3; margin-top: 4px;">${escapeHtml(p.notes)}</div>
-                                        </div>
-                                    `;
+                                        `;
+                                    } else {
+                                        html += `
+                                            <div onclick="openPersonProfileModal(${p.id})" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+                                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                    <strong style="font-size: 0.85rem; color: var(--accent);">${escapeHtml(p.name)}</strong>
+                                                    <button onclick="event.stopPropagation(); insertEntityLinkIntoChat('${escName}', 'person', ${p.id})" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--accent); cursor: pointer; border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'" title="In Chat verlinken">🔗 Link</button>
+                                                </div>
+                                                <div style="font-size: 0.75rem; opacity: 0.8; white-space: pre-wrap; word-break: break-word; line-height: 1.3; margin-top: 4px;">${escapeHtml(p.notes)}</div>
+                                            </div>
+                                        `;
+                                    }
                                 });
                             }
                             html += `</div>`;
                             widgetDiv.innerHTML = html;
+                        } else if (widget.data.widgetType === 'journal_widget') {
+                            widgetDiv.id = 'widget-journal';
+                            renderJournalWidget(widget.data.todaySummary, widgetDiv);
                         } else if (widget.data.widgetType === 'tasks_overview') {
                             let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">`;
                             
@@ -3032,10 +3073,13 @@
             const btnTasks = document.getElementById('btn-nav-tasks');
             const btnProjects = document.getElementById('btn-nav-projects');
 
+            const btnJournal = document.getElementById('btn-nav-journal');
+
             if (btnCal) btnCal.style.display = activePluginNames.has('Calendar') ? 'flex' : 'none';
             if (btnTimer) btnTimer.style.display = activePluginNames.has('Timer') ? 'flex' : 'none';
             if (btnTasks) btnTasks.style.display = activePluginNames.has('Tasks') ? 'flex' : 'none';
             if (btnProjects) btnProjects.style.display = activePluginNames.has('Projects') ? 'flex' : 'none';
+            if (btnJournal) btnJournal.style.display = activePluginNames.has('Journal') ? 'flex' : 'none';
 
             // Update Calendar badge
             const calBadge = document.getElementById('badge-calendar');
@@ -3051,6 +3095,274 @@
             // Also trigger real-time timer badge update
             updateTimerBadge();
         }
+
+        let currentJournalDateStr = new Date().toISOString().split('T')[0];
+
+        async function renderJournalWidget(summaryData, containerDiv) {
+            if (!summaryData) {
+                summaryData = {
+                    date: currentJournalDateStr,
+                    diaryEntries: [],
+                    events: [],
+                    completedTasks: []
+                };
+            } else {
+                currentJournalDateStr = summaryData.date || currentJournalDateStr;
+            }
+
+            const dateObj = new Date(currentJournalDateStr + 'T12:00:00.000Z');
+            const formattedDate = dateObj.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+
+            let html = `
+                <div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 12px;">
+                    
+                    <!-- Datum Navigation -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 8px 12px; border-radius: 8px;">
+                        <button onclick="navigateJournalDate(-1)" class="nav-btn" style="padding: 4px 8px; font-size: 0.75rem;">⬅️ Gestern</button>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <input type="date" id="journal-date-input" value="${currentJournalDateStr}" onchange="onJournalDateChange(this.value)" style="background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 2px 6px; font-size: 0.8rem; color-scheme: dark;">
+                            <button onclick="navigateJournalDate(0)" class="nav-btn" style="padding: 2px 8px; font-size: 0.75rem;" title="Heute">Heute</button>
+                        </div>
+                        <button onclick="navigateJournalDate(1)" class="nav-btn" style="padding: 4px 8px; font-size: 0.75rem;">Morgen ➡️</button>
+                    </div>
+
+                    <div style="font-size: 0.85rem; font-weight: bold; color: var(--accent); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
+                        📖 Tagebuch für ${formattedDate}
+                    </div>
+
+                    <!-- Semantische Suche im Tagebuch -->
+                    <div style="background: rgba(250, 179, 135, 0.05); border: 1px solid rgba(250, 179, 135, 0.2); padding: 10px; border-radius: 8px;">
+                        <label style="display: block; font-size: 0.7rem; font-weight: bold; color: #fab387; text-transform: uppercase; margin-bottom: 4px;">🔍 Semantische Vektorsuche</label>
+                        <div style="display: flex; gap: 6px;">
+                            <input type="text" id="journal-search-query" placeholder="Suchen in vergangenen Einträgen..." style="flex: 1; padding: 6px 10px; font-size: 0.8rem; border-radius: 6px; background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.1); outline: none;">
+                            <button onclick="performJournalSearch()" class="nav-btn" style="padding: 0 12px; height: 32px; font-size: 0.8rem; background: #fab387; color: #11111b; font-weight: bold; border: none; cursor: pointer;">Suchen</button>
+                        </div>
+                        <div id="journal-search-results" style="display: none; margin-top: 8px; max-height: 150px; overflow-y: auto; flex-direction: column; gap: 6px;"></div>
+                    </div>
+
+                    <!-- Neuer Tagebucheintrag verfassen -->
+                    <div style="display: flex; flex-direction: column; gap: 6px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
+                        <label style="font-size: 0.75rem; font-weight: bold; color: var(--accent);">✍️ Eintrag zum Tagebuch hinzufügen</label>
+                        <input type="text" id="journal-entry-title-input" placeholder="Titel (optional)..." style="padding: 6px 10px; font-size: 0.8rem; border-radius: 6px; background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.1); outline: none;">
+                        <textarea id="journal-entry-content-input" placeholder="Was ist heute passiert? Gedanken, Erlebnisse, Notizen..." style="width: 100%; height: 60px; padding: 8px; font-size: 0.8rem; border-radius: 6px; background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.1); outline: none; font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+                        <button onclick="saveJournalEntry()" class="nav-btn" style="width: 100%; height: 30px; font-size: 0.8rem; background: var(--accent); color: #11111b; font-weight: bold; border: none; cursor: pointer;">Eintrag speichern</button>
+                    </div>
+
+                    <!-- Verfasste Tagebucheinträge -->
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <div style="font-size: 0.75rem; font-weight: bold; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px;">📝 Einträge an diesem Tag</div>
+                        <div id="journal-entries-list" style="display: flex; flex-direction: column; gap: 6px;">
+            `;
+
+            if (!summaryData.diaryEntries || summaryData.diaryEntries.length === 0) {
+                html += `<p style="font-size: 0.75rem; opacity: 0.5; margin: 2px 0;">Keine schriftlichen Einträge für diesen Tag.</p>`;
+            } else {
+                summaryData.diaryEntries.forEach(e => {
+                    const timeStr = new Date(e.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                    const escTitle = escapeHtml(e.title || "Tagebucheintrag").replace(/'/g, "\\'");
+                    html += `
+                        <div style="background: rgba(250, 179, 135, 0.06); border: 1px solid rgba(250, 179, 135, 0.2); padding: 8px 10px; border-radius: 6px; font-size: 0.8rem; display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <strong style="color: #fab387; font-size: 0.8rem;">${escapeHtml(e.title || "Tagebucheintrag")}</strong>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="font-size: 0.65rem; opacity: 0.5;">${timeStr} Uhr</span>
+                                    <button onclick="insertEntityLinkIntoChat('${escTitle}', 'journal', ${e.id})" style="background: transparent; border: none; color: #fab387; cursor: pointer; font-size: 0.75rem;" title="In Chat verlinken">🔗</button>
+                                    <button onclick="deleteJournalEntry(${e.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem;" title="Löschen">✖</button>
+                                </div>
+                            </div>
+                            <div style="white-space: pre-wrap; word-break: break-word; line-height: 1.3;">${escapeHtml(e.content)}</div>
+                        </div>
+                    `;
+                });
+            }
+
+            html += `
+                        </div>
+                    </div>
+
+                    <!-- Kalendertermine an diesem Tag -->
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <div style="font-size: 0.75rem; font-weight: bold; color: #a6e3a1; text-transform: uppercase; letter-spacing: 0.5px;">📅 Kalendertermine an diesem Tag</div>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+            `;
+
+            if (!summaryData.events || summaryData.events.length === 0) {
+                html += `<p style="font-size: 0.75rem; opacity: 0.5; margin: 2px 0;">Keine Termine an diesem Tag.</p>`;
+            } else {
+                summaryData.events.forEach(ev => {
+                    const startStr = new Date(ev.start).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                    const timeInfo = ev.isAllDay ? 'Ganztägig' : `${startStr} Uhr`;
+                    html += `
+                        <div style="background: rgba(166, 227, 161, 0.05); border: 1px solid rgba(166, 227, 161, 0.2); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong style="color: #a6e3a1;">${escapeHtml(ev.title)}</strong>
+                                ${ev.description ? `<div style="font-size: 0.7rem; opacity: 0.7;">${escapeHtml(ev.description)}</div>` : ''}
+                            </div>
+                            <span style="font-size: 0.65rem; opacity: 0.6; white-space: nowrap;">${timeInfo}</span>
+                        </div>
+                    `;
+                });
+            }
+
+            html += `
+                        </div>
+                    </div>
+
+                    <!-- Erledigte Aufgaben an diesem Tag -->
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <div style="font-size: 0.75rem; font-weight: bold; color: #89b4fa; text-transform: uppercase; letter-spacing: 0.5px;">✅ Erledigte Aufgaben an diesem Tag</div>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+            `;
+
+            if (!summaryData.completedTasks || summaryData.completedTasks.length === 0) {
+                html += `<p style="font-size: 0.75rem; opacity: 0.5; margin: 2px 0;">Keine erledigten Aufgaben verzeichnet.</p>`;
+            } else {
+                summaryData.completedTasks.forEach(t => {
+                    const doneTime = t.completedAt ? new Date(t.completedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+                    html += `
+                        <div style="background: rgba(137, 180, 250, 0.05); border: 1px solid rgba(137, 180, 250, 0.2); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: var(--text);">✔️ ${escapeHtml(t.title)}</span>
+                            <span style="font-size: 0.65rem; color: #89b4fa;">erledigt um ${doneTime} Uhr</span>
+                        </div>
+                    `;
+                });
+            }
+
+            html += `
+                        </div>
+                    </div>
+
+                </div>
+            `;
+
+            containerDiv.innerHTML = html;
+        }
+
+        async function loadJournalForDate(dateStr) {
+            currentJournalDateStr = dateStr;
+            const widgetDiv = document.getElementById('widget-journal');
+            if (!widgetDiv) return;
+            try {
+                const res = await fetch(getApiUrl(`/api/journal/day-summary?date=${dateStr}`));
+                if (res.ok) {
+                    const summary = await res.json();
+                    renderJournalWidget(summary, widgetDiv);
+                }
+            } catch (e) {
+                console.error("Fehler beim Laden des Tagebuchs für Datum:", e);
+            }
+        }
+        window.loadJournalForDate = loadJournalForDate;
+
+        function onJournalDateChange(val) {
+            if (val) loadJournalForDate(val);
+        }
+        window.onJournalDateChange = onJournalDateChange;
+
+        function navigateJournalDate(offsetDays) {
+            const cur = new Date(currentJournalDateStr + 'T12:00:00.000Z');
+            if (offsetDays === 0) {
+                currentJournalDateStr = new Date().toISOString().split('T')[0];
+            } else {
+                cur.setDate(cur.getDate() + offsetDays);
+                currentJournalDateStr = cur.toISOString().split('T')[0];
+            }
+            loadJournalForDate(currentJournalDateStr);
+        }
+        window.navigateJournalDate = navigateJournalDate;
+
+        async function saveJournalEntry() {
+            const titleIn = document.getElementById('journal-entry-title-input');
+            const contentIn = document.getElementById('journal-entry-content-input');
+            const title = titleIn ? titleIn.value.trim() : '';
+            const content = contentIn ? contentIn.value.trim() : '';
+
+            if (!content) {
+                alert("Bitte gib einen Inhalt für den Tagebucheintrag ein.");
+                return;
+            }
+
+            try {
+                const res = await fetch(getApiUrl('/api/journal/entries'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, content, date: currentJournalDateStr })
+                });
+                if (res.ok) {
+                    if (titleIn) titleIn.value = '';
+                    if (contentIn) contentIn.value = '';
+                    loadJournalForDate(currentJournalDateStr);
+                } else {
+                    const err = await res.json();
+                    alert("Fehler: " + (err.error || "Konnte Eintrag nicht speichern."));
+                }
+            } catch (e) {
+                console.error("Fehler beim Speichern des Tagebucheintrags:", e);
+                alert("Netzwerkfehler beim Speichern des Tagebucheintrags.");
+            }
+        }
+        window.saveJournalEntry = saveJournalEntry;
+
+        async function deleteJournalEntry(id) {
+            if (!confirm("Möchtest du diesen Tagebucheintrag wirklich löschen?")) return;
+            try {
+                const res = await fetch(getApiUrl(`/api/journal/entries/${id}`), { method: 'DELETE' });
+                if (res.ok) {
+                    loadJournalForDate(currentJournalDateStr);
+                }
+            } catch (e) {
+                console.error("Fehler beim Löschen des Tagebucheintrags:", e);
+            }
+        }
+        window.deleteJournalEntry = deleteJournalEntry;
+
+        async function performJournalSearch() {
+            const queryIn = document.getElementById('journal-search-query');
+            const resultsDiv = document.getElementById('journal-search-results');
+            const query = queryIn ? queryIn.value.trim() : '';
+            if (!query || !resultsDiv) return;
+
+            resultsDiv.style.display = 'flex';
+            resultsDiv.innerHTML = '<p style="font-size: 0.75rem; opacity: 0.6; margin: 0;">Suche läuft...</p>';
+
+            try {
+                const res = await fetch(getApiUrl(`/api/journal/search?q=${encodeURIComponent(query)}`));
+                if (res.ok) {
+                    const matches = await res.json();
+                    if (!matches || matches.length === 0) {
+                        resultsDiv.innerHTML = '<p style="font-size: 0.75rem; opacity: 0.6; margin: 0;">Keine passenden Tagebucheinträge gefunden.</p>';
+                    } else {
+                        resultsDiv.innerHTML = '';
+                        matches.forEach(m => {
+                            const dateStr = new Date(m.date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                            const item = document.createElement('div');
+                            item.style.background = 'rgba(0,0,0,0.2)';
+                            item.style.border = '1px solid rgba(250, 179, 135, 0.3)';
+                            item.style.padding = '6px 8px';
+                            item.style.borderRadius = '6px';
+                            item.style.fontSize = '0.75rem';
+                            item.style.cursor = 'pointer';
+                            item.innerHTML = `
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                                    <strong style="color: #fab387;">${escapeHtml(m.title || "Tagebucheintrag")}</strong>
+                                    <span style="font-size: 0.65rem; opacity: 0.6;">📅 ${dateStr}</span>
+                                </div>
+                                <div style="line-height: 1.2; opacity: 0.9;">${escapeHtml(m.content)}</div>
+                            `;
+                            item.onclick = () => {
+                                const dateOnly = new Date(m.date).toISOString().split('T')[0];
+                                loadJournalForDate(dateOnly);
+                            };
+                            resultsDiv.appendChild(item);
+                        });
+                    }
+                }
+            } catch (e) {
+                console.error("Fehler bei der Vektorsuche im Tagebuch:", e);
+                resultsDiv.innerHTML = '<p style="font-size: 0.75rem; color: var(--off); margin: 0;">Fehler bei der Vektorsuche.</p>';
+            }
+        }
+        window.performJournalSearch = performJournalSearch;
 
         function updateTimerBadge() {
             const timerBadge = document.getElementById('badge-timer');
