@@ -2392,6 +2392,7 @@
             personNewFactCat = document.getElementById('person-new-fact-cat');
             personMergeTargetSelect = document.getElementById('person-merge-target-select');
             personProfileMemories = document.getElementById('person-profile-memories');
+            syncWidgetSettings();
         });
 
         window.openPersonProfileModal = async function(id) {
@@ -2772,13 +2773,32 @@
             syncWidgetSettings();
         }
 
+        function getWidgetSettingsPlugin() {
+            if (!window.Capacitor) return null;
+            if (window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetSettings) {
+                return window.Capacitor.Plugins.WidgetSettings;
+            }
+            if (typeof window.Capacitor.registerPlugin === 'function') {
+                try {
+                    const plugin = window.Capacitor.registerPlugin('WidgetSettings');
+                    if (!window.Capacitor.Plugins) window.Capacitor.Plugins = {};
+                    window.Capacitor.Plugins.WidgetSettings = plugin;
+                    return plugin;
+                } catch (e) {
+                    console.error("Fehler beim Registrieren von WidgetSettings Plugin:", e);
+                }
+            }
+            return null;
+        }
+
         function syncWidgetSettings() {
-            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetSettings) {
+            const plugin = getWidgetSettingsPlugin();
+            if (plugin) {
                 try {
                     const username = localStorage.getItem('api_username') || '';
                     const password = localStorage.getItem('api_password') || '';
                     const serverUrl = localStorage.getItem('api_server_url') || (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de';
-                    window.Capacitor.Plugins.WidgetSettings.saveSettings({
+                    plugin.saveSettings({
                         username: username,
                         password: password,
                         serverUrl: serverUrl
@@ -2787,8 +2807,7 @@
                     console.error("Widget-Settings Sync Fehler:", e);
                 }
             } else if (window.Capacitor) {
-                // Falls Capacitor da ist, aber Plugins noch laden, in 1s wiederholen
-                setTimeout(syncWidgetSettings, 1000);
+                setTimeout(syncWidgetSettings, 500);
             }
         }
 

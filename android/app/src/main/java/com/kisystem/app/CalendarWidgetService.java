@@ -364,14 +364,6 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
     }
 
     @Override
-    public int getItemViewType(int position) {
-        if (position >= 0 && position < mItems.size()) {
-            return mItems.get(position).type;
-        }
-        return TYPE_HEADER;
-    }
-
-    @Override
     public long getItemId(int position) {
         return position;
     }
