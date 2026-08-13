@@ -72,7 +72,7 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
             serverUrl += "/";
         }
 
-        // Prepare time range (today 00:00:00 UTC to today + 7 days 23:59:59 UTC)
+        // Prepare time range (today 00:00:00 to 14 days later 23:59:59)
         Calendar cal = Calendar.getInstance();
         cal.set(Calendar.HOUR_OF_DAY, 0);
         cal.set(Calendar.MINUTE, 0);
@@ -80,12 +80,14 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
         cal.set(Calendar.MILLISECOND, 0);
         Date startDate = cal.getTime();
 
-        cal.add(Calendar.DAY_OF_YEAR, 7);
-        cal.set(Calendar.HOUR_OF_DAY, 23);
-        cal.set(Calendar.MINUTE, 59);
-        cal.set(Calendar.SECOND, 59);
-        cal.set(Calendar.MILLISECOND, 999);
-        Date endDate = cal.getTime();
+        Calendar calEnd = Calendar.getInstance();
+        calEnd.setTime(startDate);
+        calEnd.add(Calendar.DAY_OF_YEAR, 14);
+        calEnd.set(Calendar.HOUR_OF_DAY, 23);
+        calEnd.set(Calendar.MINUTE, 59);
+        calEnd.set(Calendar.SECOND, 59);
+        calEnd.set(Calendar.MILLISECOND, 999);
+        Date endDate = calEnd.getTime();
 
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
         sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
@@ -212,24 +214,35 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
     }
 
     private Date parseIsoDate(String dateStr) {
-        try {
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-            sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
-            return sdf.parse(dateStr);
-        } catch (Exception e1) {
+        if (dateStr == null || dateStr.trim().isEmpty()) {
+            return new Date();
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             try {
-                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+                return Date.from(java.time.Instant.parse(dateStr));
+            } catch (Exception ignored) {}
+            try {
+                return Date.from(java.time.OffsetDateTime.parse(dateStr).toInstant());
+            } catch (Exception ignored) {}
+            try {
+                return Date.from(java.time.LocalDate.parse(dateStr).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant());
+            } catch (Exception ignored) {}
+        }
+        String[] formats = new String[] {
+            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.SSS",
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd"
+        };
+        for (String fmt : formats) {
+            try {
+                SimpleDateFormat sdf = new SimpleDateFormat(fmt);
                 sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
                 return sdf.parse(dateStr);
-            } catch (Exception e2) {
-                try {
-                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-                    return sdf.parse(dateStr);
-                } catch (Exception e3) {
-                    return new Date();
-                }
-            }
+            } catch (Exception ignored) {}
         }
+        return new Date();
     }
 
     private String getEventTimeText(JSONObject ev) {
@@ -348,6 +361,14 @@ class CalendarWidgetFactory implements RemoteViewsService.RemoteViewsFactory {
     @Override
     public int getViewTypeCount() {
         return 3; // Header, Event, Task
+    }
+
+    @Override
+    public int getItemViewType(int position) {
+        if (position >= 0 && position < mItems.size()) {
+            return mItems.get(position).type;
+        }
+        return TYPE_HEADER;
     }
 
     @Override

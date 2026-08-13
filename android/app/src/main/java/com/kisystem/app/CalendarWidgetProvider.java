@@ -28,6 +28,7 @@ public class CalendarWidgetProvider extends AppWidgetProvider {
         for (int appWidgetId : appWidgetIds) {
             updateWidget(context, appWidgetManager, appWidgetId);
         }
+        appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.calendar_list);
         super.onUpdate(context, appWidgetManager, appWidgetIds);
     }
 

@@ -2219,9 +2219,9 @@
 
         // Helper to resolve API URLs (either absolute or relative depending on configuration)
         function getApiUrl(path) {
-            // Für die mobile App (Capacitor) verwenden wir die feste Serveradresse
+            // Für die mobile App (Capacitor) verwenden wir die konfigurierte Serveradresse
             if (window.Capacitor) {
-                const baseUrl = (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de';
+                const baseUrl = localStorage.getItem('api_server_url') || (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de';
                 return baseUrl + (path.startsWith('/') ? path : '/' + path);
             }
             return path;
@@ -2777,7 +2777,7 @@
                 try {
                     const username = localStorage.getItem('api_username') || '';
                     const password = localStorage.getItem('api_password') || '';
-                    const serverUrl = (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de';
+                    const serverUrl = localStorage.getItem('api_server_url') || (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de';
                     window.Capacitor.Plugins.WidgetSettings.saveSettings({
                         username: username,
                         password: password,
@@ -2892,9 +2892,10 @@
                     return;
                 }
 
-                // Temporary save to localStorage to test connection via authFetch/fetch
+                // Save credentials and server URL to localStorage
                 localStorage.setItem('api_username', username);
                 localStorage.setItem('api_password', password);
+                localStorage.setItem('api_server_url', serverUrl);
                 
                 if (window.ENV_CONFIG) {
                     window.ENV_CONFIG.MOBILE_SERVER_URL = serverUrl;
