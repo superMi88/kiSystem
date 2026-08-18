@@ -97,6 +97,141 @@ export async function getDaySummaryData(targetDate: Date, prisma: any) {
   };
 }
 
+export async function getRangeSummaryData(startDate: Date, endDate: Date, prisma: any) {
+  const sYear = startDate.getFullYear();
+  const sMonth = startDate.getMonth();
+  const sDay = startDate.getDate();
+
+  const eYear = endDate.getFullYear();
+  const eMonth = endDate.getMonth();
+  const eDay = endDate.getDate();
+
+  const localStart = new Date(sYear, sMonth, sDay, 0, 0, 0, 0);
+  const localEnd = new Date(eYear, eMonth, eDay, 23, 59, 59, 999);
+
+  const utcStart = new Date(Date.UTC(sYear, sMonth, sDay, 0, 0, 0, 0));
+  const utcEnd = new Date(Date.UTC(eYear, eMonth, eDay, 23, 59, 59, 999));
+
+  const startOfRange = localStart < utcStart ? localStart : utcStart;
+  const endOfRange = localEnd > utcEnd ? localEnd : utcEnd;
+
+  // 1. Handgeschriebene Tagebucheinträge im Datumsbereich
+  const diaryEntries = await prisma.diaryEntry.findMany({
+    where: {
+      isDeleted: false,
+      date: {
+        gte: startOfRange,
+        lte: endOfRange
+      }
+    },
+    orderBy: { createdAt: 'asc' }
+  });
+
+  // 2. Kalendertermine im Datumsbereich
+  const events = await getEventsForRange(startOfRange, endOfRange, prisma);
+
+  // 3. An diesen Tagen erledigte Aufgaben
+  const completedTasks = await prisma.task.findMany({
+    where: {
+      isDeleted: false,
+      completed: true,
+      completedAt: {
+        gte: startOfRange,
+        lte: endOfRange
+      }
+    },
+    orderBy: { completedAt: 'asc' }
+  });
+
+  // Map of days from endDate down to startDate
+  const daysMap: { [key: string]: { date: string; diaryEntries: any[]; events: any[]; completedTasks: any[] } } = {};
+  
+  let curr = new Date(endDate);
+  curr.setHours(12, 0, 0, 0);
+  const minDate = new Date(startDate);
+  minDate.setHours(12, 0, 0, 0);
+
+  while (curr >= minDate) {
+    const y = curr.getFullYear();
+    const m = String(curr.getMonth() + 1).padStart(2, '0');
+    const d = String(curr.getDate()).padStart(2, '0');
+    const key = `${y}-${m}-${d}`;
+    daysMap[key] = {
+      date: key,
+      diaryEntries: [],
+      events: [],
+      completedTasks: []
+    };
+    curr.setDate(curr.getDate() - 1);
+  }
+
+  // Populate diary entries
+  diaryEntries.forEach((e: any) => {
+    const d = new Date(e.date);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const key = `${y}-${m}-${day}`;
+    if (!daysMap[key]) {
+      daysMap[key] = { date: key, diaryEntries: [], events: [], completedTasks: [] };
+    }
+    daysMap[key].diaryEntries.push({
+      id: e.id,
+      title: e.title || "Tagebucheintrag",
+      content: e.content,
+      createdAt: e.createdAt
+    });
+  });
+
+  // Populate events
+  events.filter((ev: any) => !ev.isTask).forEach((ev: any) => {
+    const eventTime = ev.start || ev.time;
+    if (!eventTime) return;
+    const d = new Date(eventTime);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const key = `${y}-${m}-${day}`;
+    if (!daysMap[key]) {
+      daysMap[key] = { date: key, diaryEntries: [], events: [], completedTasks: [] };
+    }
+    daysMap[key].events.push({
+      id: ev.id,
+      title: ev.title,
+      description: ev.description || "",
+      start: ev.start || ev.time,
+      end: ev.end || ev.endTime,
+      isAllDay: !!ev.isAllDay,
+      isBirthday: !!ev.isBirthday
+    });
+  });
+
+  // Populate completed tasks
+  completedTasks.forEach((t: any) => {
+    if (!t.completedAt) return;
+    const d = new Date(t.completedAt);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const key = `${y}-${m}-${day}`;
+    if (!daysMap[key]) {
+      daysMap[key] = { date: key, diaryEntries: [], events: [], completedTasks: [] };
+    }
+    daysMap[key].completedTasks.push({
+      id: t.id,
+      title: t.title,
+      notes: t.notes,
+      completedAt: t.completedAt,
+      listTitle: t.listTitle
+    });
+  });
+
+  const sortedKeys = Object.keys(daysMap).sort().reverse();
+  return {
+    days: sortedKeys.map(k => daysMap[k])
+  };
+}
+
 export const journalPlugin: Plugin = {
   name: "Journal",
   description: "Verwaltet das Tagebuch mit täglichen Einträgen, Aktivitäten, Kalenderereignissen, erledigten Aufgaben und semantischer Vektorsuche.",
@@ -275,7 +410,12 @@ export const journalPlugin: Plugin = {
     try {
       const today = new Date();
       today.setHours(12, 0, 0, 0);
-      const summary = await getDaySummaryData(today, prisma);
+      const pastDays = new Date(today);
+      pastDays.setDate(today.getDate() - 6);
+      pastDays.setHours(12, 0, 0, 0);
+
+      const rangeData = await getRangeSummaryData(pastDays, today, prisma);
+      const summary = rangeData.days.find(d => d.date === today.toISOString().split('T')[0]) || await getDaySummaryData(today, prisma);
 
       return [
         {
@@ -283,7 +423,8 @@ export const journalPlugin: Plugin = {
           type: "custom",
           data: {
             widgetType: "journal_widget",
-            todaySummary: summary
+            todaySummary: summary,
+            initialDays: rangeData.days
           }
         }
       ];

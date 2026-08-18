@@ -537,7 +537,7 @@
                 if (viewName === 'journal') {
                     const jEl = document.getElementById('widget-journal');
                     if (!jEl || !jEl.children.length) {
-                        loadJournalForDate(currentJournalDateStr);
+                        loadTopWidgets();
                     }
                 }
                 if (document.body.classList.contains('mobile-mode')) {
@@ -2974,7 +2974,7 @@
                             widgetDiv.innerHTML = html;
                         } else if (widget.data.widgetType === 'journal_widget') {
                             widgetDiv.id = 'widget-journal';
-                            renderJournalWidget(widget.data.todaySummary, widgetDiv);
+                            renderJournalWidget(widget.data.initialDays || widget.data.todaySummary, widgetDiv);
                         } else if (widget.data.widgetType === 'tasks_overview') {
                             let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">`;
                             
@@ -3111,276 +3111,318 @@
             return `${year}-${month}-${day}`;
         }
 
-        let currentJournalDateStr = getLocalDateString();
+        let isJournalLoadingMore = false;
+        let journalOldestLoadedDateStr = null;
+        let journalNewestLoadedDateStr = null;
+        let journalCanScrollLoad = true;
 
-        async function renderJournalWidget(summaryData, containerDiv) {
-            if (!summaryData) {
-                summaryData = {
-                    date: currentJournalDateStr,
-                    diaryEntries: [],
-                    events: [],
-                    completedTasks: []
-                };
-            } else {
-                currentJournalDateStr = summaryData.date || currentJournalDateStr;
-            }
-
-            const parts = currentJournalDateStr.split('-').map(Number);
+        function renderSingleDayJournalHtml(dayData) {
+            const dateStr = dayData.date;
+            const parts = dateStr.split('-').map(Number);
             const dateObj = (parts.length === 3 && !isNaN(parts[0])) ? new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0) : new Date();
             const formattedDate = dateObj.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+            
+            const todayStr = getLocalDateString();
+            const yesterdayDate = new Date();
+            yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+            const yesterdayStr = getLocalDateString(yesterdayDate);
+
+            let dayBadge = '';
+            if (dateStr === todayStr) {
+                dayBadge = `<span style="background: rgba(250, 179, 135, 0.2); color: #fab387; font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; font-weight: bold; border: 1px solid rgba(250, 179, 135, 0.4);">Heute</span>`;
+            } else if (dateStr === yesterdayStr) {
+                dayBadge = `<span style="background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.8); font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; font-weight: 500;">Gestern</span>`;
+            }
+
+            const hasEntries = dayData.diaryEntries && dayData.diaryEntries.length > 0;
+            const hasEvents = dayData.events && dayData.events.length > 0;
+            const hasTasks = dayData.completedTasks && dayData.completedTasks.length > 0;
 
             let html = `
-                <div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 12px;">
-                    
-                    <!-- Datum Navigation -->
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 8px 12px; border-radius: 8px;">
-                        <button onclick="navigateJournalDate(-1)" class="nav-btn" style="padding: 4px 8px; font-size: 0.75rem;">⬅️ Gestern</button>
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <input type="date" id="journal-date-input" value="${currentJournalDateStr}" onchange="onJournalDateChange(this.value)" style="background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 2px 6px; font-size: 0.8rem; color-scheme: dark;">
-                            <button onclick="navigateJournalDate(0)" class="nav-btn" style="padding: 2px 8px; font-size: 0.75rem;" title="Heute">Heute</button>
+                <div class="journal-day-box" id="journal-day-${dateStr}" data-date="${dateStr}" style="display: flex; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); margin-bottom: 12px;">
+                    <!-- Akzentbalken links -->
+                    <div style="width: 5px; background-color: #fab387; flex-shrink: 0;"></div>
+
+                    <div style="flex: 1; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;">
+                        
+                        <!-- Datum Header -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px;">
+                            <div style="font-size: 0.85rem; font-weight: bold; color: var(--accent); display: flex; align-items: center; gap: 6px;">
+                                📖 ${formattedDate}
+                            </div>
+                            ${dayBadge}
                         </div>
-                        <button onclick="navigateJournalDate(1)" class="nav-btn" style="padding: 4px 8px; font-size: 0.75rem;">Morgen ➡️</button>
-                    </div>
-
-                    <div style="font-size: 0.85rem; font-weight: bold; color: var(--accent); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
-                        📖 Tagebuch für ${formattedDate}
-                    </div>
-
-                    <!-- Semantische Suche im Tagebuch -->
-                    <div style="background: rgba(250, 179, 135, 0.05); border: 1px solid rgba(250, 179, 135, 0.2); padding: 10px; border-radius: 8px;">
-                        <label style="display: block; font-size: 0.7rem; font-weight: bold; color: #fab387; text-transform: uppercase; margin-bottom: 4px;">🔍 Semantische Vektorsuche</label>
-                        <div style="display: flex; gap: 6px;">
-                            <input type="text" id="journal-search-query" placeholder="Suchen in vergangenen Einträgen..." style="flex: 1; padding: 6px 10px; font-size: 0.8rem; border-radius: 6px; background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.1); outline: none;">
-                            <button onclick="performJournalSearch()" class="nav-btn" style="padding: 0 12px; height: 32px; font-size: 0.8rem; background: #fab387; color: #11111b; font-weight: bold; border: none; cursor: pointer;">Suchen</button>
-                        </div>
-                        <div id="journal-search-results" style="display: none; margin-top: 8px; max-height: 150px; overflow-y: auto; flex-direction: column; gap: 6px;"></div>
-                    </div>
-
-                    <!-- Neuer Tagebucheintrag verfassen -->
-                    <div style="display: flex; flex-direction: column; gap: 6px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
-                        <label style="font-size: 0.75rem; font-weight: bold; color: var(--accent);">✍️ Eintrag zum Tagebuch hinzufügen</label>
-                        <input type="text" id="journal-entry-title-input" placeholder="Titel (optional)..." style="padding: 6px 10px; font-size: 0.8rem; border-radius: 6px; background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.1); outline: none;">
-                        <textarea id="journal-entry-content-input" placeholder="Was ist heute passiert? Gedanken, Erlebnisse, Notizen..." style="width: 100%; height: 60px; padding: 8px; font-size: 0.8rem; border-radius: 6px; background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.1); outline: none; font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
-                        <button onclick="saveJournalEntry()" class="nav-btn" style="width: 100%; height: 30px; font-size: 0.8rem; background: var(--accent); color: #11111b; font-weight: bold; border: none; cursor: pointer;">Eintrag speichern</button>
-                    </div>
-
-                    <!-- Verfasste Tagebucheinträge -->
-                    <div style="display: flex; flex-direction: column; gap: 6px;">
-                        <div style="font-size: 0.75rem; font-weight: bold; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px;">📝 Einträge an diesem Tag</div>
-                        <div id="journal-entries-list" style="display: flex; flex-direction: column; gap: 6px;">
             `;
 
-            if (!summaryData.diaryEntries || summaryData.diaryEntries.length === 0) {
-                html += `<p style="font-size: 0.75rem; opacity: 0.5; margin: 2px 0;">Keine schriftlichen Einträge für diesen Tag.</p>`;
+            if (!hasEntries && !hasEvents && !hasTasks) {
+                html += `<p style="font-size: 0.75rem; opacity: 0.4; margin: 4px 0; font-style: italic;">Keine Einträge oder Aktivitäten für diesen Tag.</p>`;
             } else {
-                summaryData.diaryEntries.forEach(e => {
-                    const timeStr = new Date(e.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                    const escTitle = escapeHtml(e.title || "Tagebucheintrag").replace(/'/g, "\\'");
+                // 1. Tagebucheinträge
+                if (hasEntries) {
                     html += `
-                        <div style="background: rgba(250, 179, 135, 0.06); border: 1px solid rgba(250, 179, 135, 0.2); padding: 8px 10px; border-radius: 6px; font-size: 0.8rem; display: flex; flex-direction: column; gap: 4px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <strong style="color: #fab387; font-size: 0.8rem;">${escapeHtml(e.title || "Tagebucheintrag")}</strong>
-                                <div style="display: flex; align-items: center; gap: 6px;">
-                                     <span style="font-size: 0.65rem; opacity: 0.5;">${timeStr} Uhr</span>
-                                    <button onclick="insertEntityLinkIntoChat('${escTitle}', 'journal', ${e.id})" style="background: transparent; border: none; color: #fab387; cursor: pointer; font-size: 0.75rem;" title="In Chat verlinken">🔗</button>
-                                    <button onclick="deleteJournalEntry(${e.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem;" title="Löschen">✖</button>
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            <div style="font-size: 0.72rem; font-weight: bold; color: #fab387; text-transform: uppercase; letter-spacing: 0.5px;">📝 Einträge</div>
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                    `;
+                    dayData.diaryEntries.forEach(e => {
+                        const timeStr = new Date(e.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                        const escTitle = escapeHtml(e.title || "Tagebucheintrag").replace(/'/g, "\\'");
+                        html += `
+                            <div style="background: rgba(250, 179, 135, 0.06); border: 1px solid rgba(250, 179, 135, 0.2); padding: 8px 10px; border-radius: 6px; font-size: 0.8rem; display: flex; flex-direction: column; gap: 4px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <strong style="color: #fab387; font-size: 0.8rem;">${escapeHtml(e.title || "Tagebucheintrag")}</strong>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <span style="font-size: 0.65rem; opacity: 0.5;">${timeStr} Uhr</span>
+                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'journal', ${e.id})" style="background: transparent; border: none; color: #fab387; cursor: pointer; font-size: 0.75rem;" title="In Chat verlinken">🔗</button>
+                                        <button onclick="deleteJournalEntry(${e.id}, '${dateStr}')" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem;" title="Löschen">✖</button>
+                                    </div>
                                 </div>
+                                <div style="white-space: pre-wrap; word-break: break-word; line-height: 1.3;">${escapeHtml(e.content)}</div>
                             </div>
-                            <div style="white-space: pre-wrap; word-break: break-word; line-height: 1.3;">${escapeHtml(e.content)}</div>
+                        `;
+                    });
+                    html += `
+                            </div>
                         </div>
                     `;
-                });
+                }
+
+                // 2. Kalendertermine
+                if (hasEvents) {
+                    html += `
+                        <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 2px;">
+                            <div style="font-size: 0.72rem; font-weight: bold; color: #a6e3a1; text-transform: uppercase; letter-spacing: 0.5px;">📅 Kalendertermine</div>
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                    `;
+                    dayData.events.forEach(ev => {
+                        const eventTime = ev.start || ev.time;
+                        const startStr = eventTime ? new Date(eventTime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+                        const timeInfo = ev.isAllDay ? 'Ganztägig' : (startStr ? `${startStr} Uhr` : '');
+                        html += `
+                            <div style="background: rgba(166, 227, 161, 0.05); border: 1px solid rgba(166, 227, 161, 0.2); padding: 5px 8px; border-radius: 6px; font-size: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <strong style="color: #a6e3a1;">${escapeHtml(ev.title)}</strong>
+                                    ${ev.description ? `<div style="font-size: 0.7rem; opacity: 0.7;">${escapeHtml(ev.description)}</div>` : ''}
+                                </div>
+                                <span style="font-size: 0.65rem; opacity: 0.6; white-space: nowrap;">${timeInfo}</span>
+                            </div>
+                        `;
+                    });
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // 3. Erledigte Aufgaben
+                if (hasTasks) {
+                    html += `
+                        <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 2px;">
+                            <div style="font-size: 0.72rem; font-weight: bold; color: #89b4fa; text-transform: uppercase; letter-spacing: 0.5px;">✅ Erledigte Aufgaben</div>
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                    `;
+                    dayData.completedTasks.forEach(t => {
+                        const doneTime = t.completedAt ? new Date(t.completedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+                        html += `
+                            <div style="background: rgba(137, 180, 250, 0.05); border: 1px solid rgba(137, 180, 250, 0.2); padding: 5px 8px; border-radius: 6px; font-size: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+                                <span style="color: var(--text);">✔️ ${escapeHtml(t.title)}</span>
+                                <span style="font-size: 0.65rem; color: #89b4fa;">${doneTime ? 'erledigt um ' + doneTime + ' Uhr' : 'erledigt'}</span>
+                            </div>
+                        `;
+                    });
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                }
             }
 
             html += `
+                    </div>
+                </div>
+            `;
+            return html;
+        }
+
+        async function renderJournalWidget(data, containerDiv) {
+            let days = [];
+            if (Array.isArray(data)) {
+                days = data;
+            } else if (data && data.initialDays) {
+                days = data.initialDays;
+            } else if (data && data.date) {
+                days = [data];
+            }
+
+            if (!days || days.length === 0) {
+                const todayStr = getLocalDateString();
+                days = [{ date: todayStr, diaryEntries: [], events: [], completedTasks: [] }];
+            }
+
+            days.sort((a, b) => b.date.localeCompare(a.date));
+            journalNewestLoadedDateStr = days[0].date;
+            journalOldestLoadedDateStr = days[days.length - 1].date;
+            journalCanScrollLoad = true;
+
+            const todayStr = getLocalDateString();
+
+            let html = `
+                <div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 10px;">
+                    
+                    <!-- Sticky Datum-Eingabe & Schnell-Sprung Header -->
+                    <div style="position: sticky; top: 0; z-index: 10; background: #11111b; padding: 6px 0 10px 0; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                        <div style="font-size: 0.85rem; font-weight: bold; color: var(--accent); display: flex; align-items: center; gap: 6px;">
+                            📖 Tagebuch
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <input type="date" id="journal-jump-date-input" value="${todayStr}" onchange="jumpToJournalDate(this.value)" style="background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 3px 8px; font-size: 0.8rem; color-scheme: dark;">
+                            <button onclick="jumpToJournalDate('today')" class="nav-btn" style="padding: 3px 10px; font-size: 0.75rem; font-weight: bold;" title="Zu heute springen">Heute</button>
                         </div>
                     </div>
 
-                    <!-- Kalendertermine an diesem Tag -->
-                    <div style="display: flex; flex-direction: column; gap: 6px;">
-                        <div style="font-size: 0.75rem; font-weight: bold; color: #a6e3a1; text-transform: uppercase; letter-spacing: 0.5px;">📅 Kalendertermine an diesem Tag</div>
-                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <!-- Scrollbare Tage-Liste -->
+                    <div id="journal-days-list" style="display: flex; flex-direction: column;">
             `;
 
-            if (!summaryData.events || summaryData.events.length === 0) {
-                html += `<p style="font-size: 0.75rem; opacity: 0.5; margin: 2px 0;">Keine Termine an diesem Tag.</p>`;
-            } else {
-                summaryData.events.forEach(ev => {
-                    const eventTime = ev.start || ev.time;
-                    const startStr = eventTime ? new Date(eventTime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
-                    const timeInfo = ev.isAllDay ? 'Ganztägig' : (startStr ? `${startStr} Uhr` : '');
-                    html += `
-                        <div style="background: rgba(166, 227, 161, 0.05); border: 1px solid rgba(166, 227, 161, 0.2); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <strong style="color: #a6e3a1;">${escapeHtml(ev.title)}</strong>
-                                ${ev.description ? `<div style="font-size: 0.7rem; opacity: 0.7;">${escapeHtml(ev.description)}</div>` : ''}
-                            </div>
-                            <span style="font-size: 0.65rem; opacity: 0.6; white-space: nowrap;">${timeInfo}</span>
-                        </div>
-                    `;
-                });
-            }
+            days.forEach(d => {
+                html += renderSingleDayJournalHtml(d);
+            });
 
             html += `
-                        </div>
                     </div>
-
-                    <!-- Erledigte Aufgaben an diesem Tag -->
-                    <div style="display: flex; flex-direction: column; gap: 6px;">
-                        <div style="font-size: 0.75rem; font-weight: bold; color: #89b4fa; text-transform: uppercase; letter-spacing: 0.5px;">✅ Erledigte Aufgaben an diesem Tag</div>
-                        <div style="display: flex; flex-direction: column; gap: 4px;">
-            `;
-
-            if (!summaryData.completedTasks || summaryData.completedTasks.length === 0) {
-                html += `<p style="font-size: 0.75rem; opacity: 0.5; margin: 2px 0;">Keine erledigten Aufgaben verzeichnet.</p>`;
-            } else {
-                summaryData.completedTasks.forEach(t => {
-                    const doneTime = t.completedAt ? new Date(t.completedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
-                    html += `
-                        <div style="background: rgba(137, 180, 250, 0.05); border: 1px solid rgba(137, 180, 250, 0.2); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
-                            <span style="color: var(--text);">✔️ ${escapeHtml(t.title)}</span>
-                            <span style="font-size: 0.65rem; color: #89b4fa;">${doneTime ? 'erledigt um ' + doneTime + ' Uhr' : 'erledigt'}</span>
-                        </div>
-                    `;
-                });
-            }
-
-            html += `
-                        </div>
-                    </div>
-
+                    <div id="journal-loading-more" style="display: none; text-align: center; padding: 8px; font-size: 0.75rem; color: #fab387; opacity: 0.8;">Lade vergangene Tage...</div>
                 </div>
             `;
 
             containerDiv.innerHTML = html;
         }
 
-        async function loadJournalForDate(dateStr) {
-            currentJournalDateStr = dateStr;
-            const widgetDiv = document.getElementById('widget-journal');
-            if (!widgetDiv) return;
+        async function loadMoreJournalDays() {
+            if (isJournalLoadingMore || !journalOldestLoadedDateStr || !journalCanScrollLoad) return;
+            isJournalLoadingMore = true;
+
+            const loadingIndicator = document.getElementById('journal-loading-more');
+            if (loadingIndicator) loadingIndicator.style.display = 'block';
+
             try {
-                const res = await fetch(getApiUrl(`/api/journal/day-summary?date=${dateStr}`));
-                if (res.ok) {
-                    const summary = await res.json();
-                    renderJournalWidget(summary, widgetDiv);
+                const oldestParts = journalOldestLoadedDateStr.split('-').map(Number);
+                const endDate = new Date(oldestParts[0], oldestParts[1] - 1, oldestParts[2] - 1, 12, 0, 0);
+                const startDate = new Date(endDate);
+                startDate.setDate(startDate.getDate() - 6);
+
+                const startStr = getLocalDateString(startDate);
+                const endStr = getLocalDateString(endDate);
+
+                const res = await fetch(getApiUrl(`/api/journal/days?start=${startStr}&end=${endStr}`));
+                if (!res.ok) throw new Error("Fehler beim Laden");
+                const data = await res.json();
+                const days = data.days || [];
+
+                const daysListDiv = document.getElementById('journal-days-list');
+                if (daysListDiv && days.length > 0) {
+                    days.forEach(d => {
+                        if (!document.getElementById(`journal-day-${d.date}`)) {
+                            daysListDiv.insertAdjacentHTML('beforeend', renderSingleDayJournalHtml(d));
+                        }
+                    });
+                    journalOldestLoadedDateStr = startStr;
+                } else {
+                    journalCanScrollLoad = false;
                 }
             } catch (e) {
-                console.error("Fehler beim Laden des Tagebuchs für Datum:", e);
+                console.error("Fehler beim Nachladen vergangener Tage:", e);
+            } finally {
+                isJournalLoadingMore = false;
+                if (loadingIndicator) loadingIndicator.style.display = 'none';
             }
         }
-        window.loadJournalForDate = loadJournalForDate;
 
-        function onJournalDateChange(val) {
-            if (val) loadJournalForDate(val);
-        }
-        window.onJournalDateChange = onJournalDateChange;
-
-        function navigateJournalDate(offsetDays) {
-            if (offsetDays === 0) {
-                currentJournalDateStr = getLocalDateString();
-            } else {
-                const parts = currentJournalDateStr.split('-').map(Number);
-                const cur = (parts.length === 3 && !isNaN(parts[0])) ? new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0) : new Date();
-                cur.setDate(cur.getDate() + offsetDays);
-                currentJournalDateStr = getLocalDateString(cur);
+        async function jumpToJournalDate(dateStr) {
+            if (!dateStr) return;
+            if (dateStr === 'today') {
+                dateStr = getLocalDateString();
             }
-            loadJournalForDate(currentJournalDateStr);
-        }
-        window.navigateJournalDate = navigateJournalDate;
 
-        async function saveJournalEntry() {
-            const titleIn = document.getElementById('journal-entry-title-input');
-            const contentIn = document.getElementById('journal-entry-content-input');
-            const title = titleIn ? titleIn.value.trim() : '';
-            const content = contentIn ? contentIn.value.trim() : '';
+            const inputEl = document.getElementById('journal-jump-date-input');
+            if (inputEl) inputEl.value = dateStr;
 
-            if (!content) {
-                alert("Bitte gib einen Inhalt für den Tagebucheintrag ein.");
+            let targetEl = document.getElementById(`journal-day-${dateStr}`);
+            if (targetEl) {
+                targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                flashJournalDay(targetEl);
                 return;
             }
 
             try {
-                const res = await fetch(getApiUrl('/api/journal/entries'), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ title, content, date: currentJournalDateStr })
-                });
+                const parts = dateStr.split('-').map(Number);
+                const targetObj = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+                const startObj = new Date(targetObj);
+                startObj.setDate(startObj.getDate() - 6);
+
+                const startStr = getLocalDateString(startObj);
+                const endStr = getLocalDateString(targetObj);
+
+                const res = await fetch(getApiUrl(`/api/journal/days?start=${startStr}&end=${endStr}`));
                 if (res.ok) {
-                    if (titleIn) titleIn.value = '';
-                    if (contentIn) contentIn.value = '';
-                    loadJournalForDate(currentJournalDateStr);
-                } else {
-                    const err = await res.json();
-                    alert("Fehler: " + (err.error || "Konnte Eintrag nicht speichern."));
+                    const data = await res.json();
+                    const days = data.days || [];
+                    const daysListDiv = document.getElementById('journal-days-list');
+                    if (daysListDiv) {
+                        let newHtml = '';
+                        days.forEach(d => {
+                            newHtml += renderSingleDayJournalHtml(d);
+                        });
+                        daysListDiv.innerHTML = newHtml;
+                        journalNewestLoadedDateStr = endStr;
+                        journalOldestLoadedDateStr = startStr;
+                        journalCanScrollLoad = true;
+
+                        setTimeout(() => {
+                            const newTarget = document.getElementById(`journal-day-${dateStr}`);
+                            if (newTarget) {
+                                newTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                flashJournalDay(newTarget);
+                            }
+                        }, 50);
+                    }
                 }
             } catch (e) {
-                console.error("Fehler beim Speichern des Tagebucheintrags:", e);
-                alert("Netzwerkfehler beim Speichern des Tagebucheintrags.");
+                console.error("Fehler beim Laden des Datums:", e);
             }
         }
-        window.saveJournalEntry = saveJournalEntry;
+        window.jumpToJournalDate = jumpToJournalDate;
 
-        async function deleteJournalEntry(id) {
+        function flashJournalDay(el) {
+            if (!el) return;
+            el.classList.add('journal-jump-highlight');
+            setTimeout(() => {
+                el.classList.remove('journal-jump-highlight');
+            }, 1600);
+        }
+
+        async function deleteJournalEntry(id, dateStr) {
             if (!confirm("Möchtest du diesen Tagebucheintrag wirklich löschen?")) return;
             try {
                 const res = await fetch(getApiUrl(`/api/journal/entries/${id}`), { method: 'DELETE' });
                 if (res.ok) {
-                    loadJournalForDate(currentJournalDateStr);
+                    if (dateStr) {
+                        const dayRes = await fetch(getApiUrl(`/api/journal/day-summary?date=${dateStr}`));
+                        if (dayRes.ok) {
+                            const summary = await dayRes.json();
+                            const dayCard = document.getElementById(`journal-day-${dateStr}`);
+                            if (dayCard) {
+                                dayCard.outerHTML = renderSingleDayJournalHtml(summary);
+                            }
+                        }
+                    } else {
+                        loadTopWidgets();
+                    }
                 }
             } catch (e) {
                 console.error("Fehler beim Löschen des Tagebucheintrags:", e);
             }
         }
         window.deleteJournalEntry = deleteJournalEntry;
-
-        async function performJournalSearch() {
-            const queryIn = document.getElementById('journal-search-query');
-            const resultsDiv = document.getElementById('journal-search-results');
-            const query = queryIn ? queryIn.value.trim() : '';
-            if (!query || !resultsDiv) return;
-
-            resultsDiv.style.display = 'flex';
-            resultsDiv.innerHTML = '<p style="font-size: 0.75rem; opacity: 0.6; margin: 0;">Suche läuft...</p>';
-
-            try {
-                const res = await fetch(getApiUrl(`/api/journal/search?q=${encodeURIComponent(query)}`));
-                if (res.ok) {
-                    const matches = await res.json();
-                    if (!matches || matches.length === 0) {
-                        resultsDiv.innerHTML = '<p style="font-size: 0.75rem; opacity: 0.6; margin: 0;">Keine passenden Tagebucheinträge gefunden.</p>';
-                    } else {
-                        resultsDiv.innerHTML = '';
-                        matches.forEach(m => {
-                            const dateStr = new Date(m.date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                            const item = document.createElement('div');
-                            item.style.background = 'rgba(0,0,0,0.2)';
-                            item.style.border = '1px solid rgba(250, 179, 135, 0.3)';
-                            item.style.padding = '6px 8px';
-                            item.style.borderRadius = '6px';
-                            item.style.fontSize = '0.75rem';
-                            item.style.cursor = 'pointer';
-                            item.innerHTML = `
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
-                                    <strong style="color: #fab387;">${escapeHtml(m.title || "Tagebucheintrag")}</strong>
-                                    <span style="font-size: 0.65rem; opacity: 0.6;">📅 ${dateStr}</span>
-                                </div>
-                                <div style="line-height: 1.2; opacity: 0.9;">${escapeHtml(m.content)}</div>
-                            `;
-                            item.onclick = () => {
-                                const dateOnly = new Date(m.date).toISOString().split('T')[0];
-                                loadJournalForDate(dateOnly);
-                            };
-                            resultsDiv.appendChild(item);
-                        });
-                    }
-                }
-            } catch (e) {
-                console.error("Fehler bei der Vektorsuche im Tagebuch:", e);
-                resultsDiv.innerHTML = '<p style="font-size: 0.75rem; color: var(--off); margin: 0;">Fehler bei der Vektorsuche.</p>';
-            }
-        }
-        window.performJournalSearch = performJournalSearch;
 
         function updateTimerBadge() {
             const timerBadge = document.getElementById('badge-timer');
@@ -3882,7 +3924,7 @@
                 console.error("Konnte keine Verbindung zum Server herstellen:", err);
             }
 
-            // Scroll-Listener für Infinite Scroll im Terminkalender
+            // Scroll-Listener für Infinite Scroll im Terminkalender und Tagebuch
             const topPanel = document.querySelector('.top-panel');
             if (topPanel) {
                 topPanel.addEventListener('scroll', () => {
@@ -3890,6 +3932,13 @@
                     if (widgetCalendar && !isCalendarLoadingMore && calendarCanScrollLoad) {
                         if (topPanel.scrollHeight - topPanel.scrollTop - topPanel.clientHeight < 100) {
                             loadMoreCalendarEvents();
+                        }
+                    }
+
+                    const widgetJournal = document.getElementById('widget-journal');
+                    if (widgetJournal && !isJournalLoadingMore && journalCanScrollLoad) {
+                        if (topPanel.scrollHeight - topPanel.scrollTop - topPanel.clientHeight < 150) {
+                            loadMoreJournalDays();
                         }
                     }
                 });

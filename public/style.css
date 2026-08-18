@@ -1545,3 +1545,13 @@ body.mobile-mode .top-panel > div:first-child {
     color: var(--accent);
     margin-right: 6px;
 }
+
+/* Journal Widget Styles */
+.journal-day-box {
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.journal-day-box.journal-jump-highlight {
+    border-color: #fab387 !important;
+    box-shadow: 0 0 16px rgba(250, 179, 135, 0.45) !important;
+    transform: scale(1.01);
+}

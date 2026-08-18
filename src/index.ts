@@ -17,7 +17,7 @@ import { getSettings, saveSettings } from "./settings.js";
 import { runAutomaticMigration } from "./migrate.js";
 import { getEventsForRange } from "./plugins/Calendar/index.js";
 import { calculateNextDueDate } from "./plugins/Tasks/index.js";
-import { getDaySummaryData, parseLocalDate } from "./plugins/Journal/index.js";
+import { getDaySummaryData, getRangeSummaryData, parseLocalDate } from "./plugins/Journal/index.js";
 
 dotenv.config();
 
@@ -215,6 +215,23 @@ app.post("/tasks/complete", async (req, res) => {
 /**
  * Journal / Tagebuch API
  */
+app.get("/api/journal/days", async (req, res) => {
+  try {
+    const startStr = req.query.start as string;
+    const endStr = req.query.end as string;
+    if (!startStr || !endStr) {
+      return res.status(400).json({ error: "start und end Parameter sind erforderlich." });
+    }
+    const startDate = parseLocalDate(startStr);
+    const endDate = parseLocalDate(endStr);
+    const data = await getRangeSummaryData(startDate, endDate, prisma);
+    res.json(data);
+  } catch (e: any) {
+    console.error("Fehler beim Abrufen des Tagebuch-Datumsbereichs:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get("/api/journal/day-summary", async (req, res) => {
   try {
     const dateStr = req.query.date as string;
