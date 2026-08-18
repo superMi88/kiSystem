@@ -767,7 +767,7 @@
 
         function handleDrawerMail() {
             closeMobileDrawer();
-            switchMobileView('mail');
+            focusWidget('mail');
         }
         window.handleDrawerMail = handleDrawerMail;
 
@@ -3707,6 +3707,10 @@
         function focusWidget(name) {
             if (document.body.classList.contains('mobile-mode')) {
                 switchMobileView(name);
+                const el = document.getElementById('widget-' + name);
+                if (!el) {
+                    loadTopWidgets();
+                }
             } else {
                 const el = document.getElementById('widget-' + name);
                 if (el) {
@@ -3720,6 +3724,7 @@
                     }, 1500);
                 } else {
                     console.warn('Widget not found: widget-' + name);
+                    loadTopWidgets();
                 }
             }
         }
