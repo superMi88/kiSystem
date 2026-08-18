@@ -8,6 +8,7 @@ import { timerPlugin } from "./Timer/index.js";
 import { projectsPlugin } from "./Projects/index.js";
 import { tasksPlugin } from "./Tasks/index.js";
 import { journalPlugin } from "./Journal/index.js";
+import { mailPlugin } from "./Mail/index.js";
 import { getSettings } from "../settings.js";
 
 export class PluginManager {
@@ -24,6 +25,7 @@ export class PluginManager {
     this.registerPlugin(projectsPlugin);
     this.registerPlugin(tasksPlugin);
     this.registerPlugin(journalPlugin);
+    this.registerPlugin(mailPlugin);
   }
 
   registerPlugin(plugin: Plugin) {

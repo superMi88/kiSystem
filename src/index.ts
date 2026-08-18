@@ -18,6 +18,7 @@ import { runAutomaticMigration } from "./migrate.js";
 import { getEventsForRange, getTimelineRangeData } from "./plugins/Calendar/index.js";
 import { calculateNextDueDate } from "./plugins/Tasks/index.js";
 import { getDaySummaryData, getRangeSummaryData, parseLocalDate } from "./plugins/Journal/index.js";
+import { MailService } from "./plugins/Mail/service.js";
 
 dotenv.config();
 
@@ -397,6 +398,265 @@ app.get("/api/entities/:type/:id", async (req, res) => {
     res.json(entity);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Mail API
+ */
+app.get("/api/mail/accounts", async (req, res) => {
+  try {
+    const accounts = await prisma.mailAccount.findMany({
+      where: { isDeleted: false },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        imapHost: true,
+        imapPort: true,
+        imapTls: true,
+        smtpHost: true,
+        smtpPort: true,
+        smtpTls: true,
+        color: true,
+        createdAt: true,
+        _count: {
+          select: {
+            cachedEmails: { where: { isRead: false } }
+          }
+        }
+      },
+      orderBy: { createdAt: "asc" }
+    });
+    res.json(accounts);
+  } catch (e: any) {
+    console.error("Fehler beim Abrufen der Mail-Konten:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/mail/accounts", async (req, res) => {
+  try {
+    const { name, email, password, imapHost, imapPort, imapTls, smtpHost, smtpPort, smtpTls, color } = req.body;
+    if (!name || !email || !password || !imapHost || !smtpHost) {
+      return res.status(400).json({ error: "Name, E-Mail, Passwort, IMAP- und SMTP-Host sind erforderlich." });
+    }
+
+    const newAccount = await prisma.mailAccount.create({
+      data: {
+        name,
+        email,
+        password,
+        imapHost,
+        imapPort: imapPort ? Number(imapPort) : 993,
+        imapTls: imapTls !== undefined ? !!imapTls : true,
+        smtpHost,
+        smtpPort: smtpPort ? Number(smtpPort) : 587,
+        smtpTls: smtpTls !== undefined ? !!smtpTls : true,
+        color: color || (email.toLowerCase().includes("web.de") ? "#fab387" : (email.toLowerCase().includes("gmail") ? "#f38ba8" : "#89b4fa"))
+      }
+    });
+
+    // Sofortige erste Synchronisation im Hintergrund anstoßen
+    MailService.syncAccountEmails(newAccount, prisma).catch(err => {
+      console.warn(`[Mail] Fehler bei Erstsynchronisierung von ${newAccount.email}:`, err);
+    });
+
+    res.json({
+      id: newAccount.id,
+      name: newAccount.name,
+      email: newAccount.email,
+      imapHost: newAccount.imapHost,
+      imapPort: newAccount.imapPort,
+      imapTls: newAccount.imapTls,
+      smtpHost: newAccount.smtpHost,
+      smtpPort: newAccount.smtpPort,
+      smtpTls: newAccount.smtpTls,
+      color: newAccount.color
+    });
+  } catch (e: any) {
+    console.error("Fehler beim Anlegen des Mail-Kontos:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/api/mail/accounts/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { name, email, password, imapHost, imapPort, imapTls, smtpHost, smtpPort, smtpTls, color } = req.body;
+
+    const data: any = {};
+    if (name) data.name = name;
+    if (email) data.email = email;
+    if (password) data.password = password;
+    if (imapHost) data.imapHost = imapHost;
+    if (imapPort) data.imapPort = Number(imapPort);
+    if (imapTls !== undefined) data.imapTls = !!imapTls;
+    if (smtpHost) data.smtpHost = smtpHost;
+    if (smtpPort) data.smtpPort = Number(smtpPort);
+    if (smtpTls !== undefined) data.smtpTls = !!smtpTls;
+    if (color) data.color = color;
+
+    const updated = await prisma.mailAccount.update({
+      where: { id },
+      data,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        imapHost: true,
+        imapPort: true,
+        imapTls: true,
+        smtpHost: true,
+        smtpPort: true,
+        smtpTls: true,
+        color: true
+      }
+    });
+
+    res.json(updated);
+  } catch (e: any) {
+    console.error("Fehler beim Aktualisieren des Mail-Kontos:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/mail/accounts/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    await prisma.mailAccount.update({
+      where: { id },
+      data: { isDeleted: true }
+    });
+    res.json({ success: true, message: "Konto erfolgreich entfernt." });
+  } catch (e: any) {
+    console.error("Fehler beim Löschen des Mail-Kontos:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/mail/accounts/test", async (req, res) => {
+  try {
+    const { email, password, imapHost, imapPort, imapTls } = req.body;
+    if (!email || !password || !imapHost) {
+      return res.status(400).json({ error: "E-Mail, Passwort und IMAP-Host sind erforderlich." });
+    }
+
+    const testRes = await MailService.testConnection({
+      email,
+      password,
+      imapHost,
+      imapPort: imapPort ? Number(imapPort) : 993,
+      imapTls: imapTls !== undefined ? !!imapTls : true
+    });
+
+    res.json(testRes);
+  } catch (e: any) {
+    console.error("Fehler beim Verbindungstest:", e);
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+app.get("/api/mail/messages", async (req, res) => {
+  try {
+    const accountId = req.query.accountId ? Number(req.query.accountId) : undefined;
+    const query = req.query.q as string | undefined;
+    const limit = req.query.limit ? Number(req.query.limit) : 50;
+    const offset = req.query.offset ? Number(req.query.offset) : 0;
+
+    const result = await MailService.getUnifiedEmails(prisma, {
+      accountId,
+      query,
+      limit,
+      offset
+    });
+
+    res.json(result);
+  } catch (e: any) {
+    console.error("Fehler beim Abrufen der Nachrichten:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/mail/messages/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const mail = await prisma.cachedEmail.findUnique({
+      where: { id },
+      include: {
+        account: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            color: true
+          }
+        }
+      }
+    });
+
+    if (!mail) {
+      return res.status(404).json({ error: `E-Mail mit ID ${id} nicht gefunden.` });
+    }
+
+    if (!mail.isRead) {
+      await prisma.cachedEmail.update({
+        where: { id },
+        data: { isRead: true }
+      });
+      mail.isRead = true;
+    }
+
+    res.json(mail);
+  } catch (e: any) {
+    console.error("Fehler beim Laden der E-Mail:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/mail/send", async (req, res) => {
+  try {
+    const { accountId, to, subject, body, inReplyTo, references } = req.body;
+    if (!accountId || !to || !subject || !body) {
+      return res.status(400).json({ error: "accountId, to, subject und body sind erforderlich." });
+    }
+
+    const sendRes = await MailService.sendEmail(
+      Number(accountId),
+      {
+        to,
+        subject,
+        body,
+        inReplyTo,
+        references
+      },
+      prisma
+    );
+
+    res.json(sendRes);
+  } catch (e: any) {
+    console.error("Fehler beim Senden der Mail:", e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post("/api/mail/sync", async (req, res) => {
+  try {
+    const accountId = req.body?.accountId ? Number(req.body.accountId) : undefined;
+    if (accountId) {
+      const account = await prisma.mailAccount.findUnique({ where: { id: accountId } });
+      if (!account || account.isDeleted) {
+        return res.status(404).json({ error: "Konto nicht gefunden." });
+      }
+      const syncRes = await MailService.syncAccountEmails(account, prisma);
+      return res.json({ success: true, count: syncRes.count, error: syncRes.error });
+    }
+
+    const allSync = await MailService.syncAllAccounts(prisma);
+    res.json({ success: true, totalSynced: allSync.totalSynced, results: allSync.results });
+  } catch (e: any) {
+    console.error("Fehler beim Synchronisieren:", e);
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 

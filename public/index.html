@@ -49,6 +49,13 @@
                 </svg>
                 Tagebuch
             </button>
+            <button class="drawer-item" onclick="handleDrawerMail()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                    <polyline points="22,6 12,13 2,6"></polyline>
+                </svg>
+                Mails
+            </button>
             
             <div class="drawer-divider"></div>
             
@@ -260,6 +267,166 @@
             </div>
         </div>
 
+        <!-- Mail Reading Modal -->
+        <div id="mail-read-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 20px; border-radius: 12px; z-index: 300; width: 90%; max-width: 600px; max-height: 85vh; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px); flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; margin-bottom: 12px; gap: 10px;">
+                <div style="flex: 1; min-width: 0;">
+                    <div id="mail-read-account-badge" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin-bottom: 6px; background: rgba(137, 180, 250, 0.15); color: var(--accent); border: 1px solid rgba(137, 180, 250, 0.3);">
+                        <!-- Account Badge -->
+                    </div>
+                    <h3 id="mail-read-subject" style="color: white; margin: 0 0 6px 0; font-size: 1.05rem; word-break: break-word; line-height: 1.3;">Betreff</h3>
+                    <div style="font-size: 0.78rem; opacity: 0.75; display: flex; flex-direction: column; gap: 2px;">
+                        <div><strong>Von:</strong> <span id="mail-read-from"></span></div>
+                        <div><strong>An:</strong> <span id="mail-read-to"></span></div>
+                        <div><strong>Datum:</strong> <span id="mail-read-date"></span></div>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button id="mail-read-link-btn" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--accent); cursor: pointer; border-radius: 6px; padding: 5px 8px; font-size: 0.75rem; font-weight: bold;" title="In Chat verlinken">🔗 Link</button>
+                    <button onclick="closeMailReadModal()" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 1.2rem; padding: 2px 6px;" title="Schließen">✖</button>
+                </div>
+            </div>
+
+            <!-- Mail Body Container (Sicher bereinigtes HTML / Text) -->
+            <div id="mail-read-body" class="mail-body-container" style="flex: 1; overflow-y: auto; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); font-size: 0.88rem; line-height: 1.5; color: #cdd6f4; max-height: 48vh; user-select: text; word-break: break-word;">
+                <!-- Mail Inhalt -->
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button class="cancel" onclick="closeMailReadModal()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Schließen</button>
+                <button id="mail-read-reply-btn" onclick="openReplyFromReadModal()" class="save" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 17 4 12 9 7"></polyline><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path></svg>
+                    Antworten
+                </button>
+            </div>
+        </div>
+
+        <!-- Mail Compose / Reply Modal -->
+        <div id="mail-compose-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 20px; border-radius: 12px; z-index: 310; width: 90%; max-width: 550px; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px); flex-direction: column;">
+            <h3 id="mail-compose-title" style="color: var(--accent); margin: 0 0 15px 0; font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">E-Mail verfassen</h3>
+            
+            <input type="hidden" id="mail-compose-reply-id">
+            <input type="hidden" id="mail-compose-in-reply-to">
+            
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;">
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Absender-Postfach</label>
+                    <select id="mail-compose-account-select" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: var(--input); color: white; outline: none; font-size: 0.85rem; color-scheme: dark;">
+                        <!-- Options generated dynamically -->
+                    </select>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Empfänger</label>
+                    <input type="email" id="mail-compose-to" placeholder="empfaenger@beispiel.de" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: var(--input); color: white; outline: none; font-size: 0.85rem;">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Betreff</label>
+                    <input type="text" id="mail-compose-subject" placeholder="Betreff der E-Mail..." style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: var(--input); color: white; outline: none; font-size: 0.85rem;">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Nachricht</label>
+                    <textarea id="mail-compose-body" placeholder="Schreibe deine Nachricht..." style="width: 100%; height: 140px; background: var(--input); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; color: white; font-family: inherit; font-size: 0.88rem; resize: vertical; outline: none; box-sizing: border-box;"></textarea>
+                </div>
+            </div>
+
+            <div id="mail-compose-status" style="display: none; font-size: 0.8rem; margin-bottom: 10px; padding: 6px 10px; border-radius: 6px;"></div>
+
+            <div style="display: flex; gap: 10px;">
+                <button class="cancel" onclick="closeMailComposeModal()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Abbrechen</button>
+                <button id="mail-compose-send-btn" onclick="sendComposedEmail()" class="save" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    Senden
+                </button>
+            </div>
+        </div>
+
+        <!-- Mail Accounts Management Modal -->
+        <div id="mail-accounts-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 20px; border-radius: 12px; z-index: 300; width: 90%; max-width: 550px; max-height: 85vh; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px); flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 15px;">
+                <h3 style="color: var(--accent); margin: 0; font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1px;">⚙️ E-Mail-Konten verwalten</h3>
+                <button onclick="closeMailAccountsModal()" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 1.2rem;" title="Schließen">✖</button>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <span style="font-size: 0.8rem; opacity: 0.7;">Hinterlegte Postfächer (Web.de, Gmail etc.)</span>
+                <button onclick="openMailAccountFormModal()" class="nav-btn" style="padding: 5px 10px; font-size: 0.75rem; background: var(--accent); color: #11111b; font-weight: bold; border: none; border-radius: 6px; cursor: pointer;">➕ Konto hinzufügen</button>
+            </div>
+
+            <div id="mail-accounts-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; margin-bottom: 15px;">
+                <!-- Kontenliste dynamisch -->
+            </div>
+
+            <button class="cancel" onclick="closeMailAccountsModal()" style="width: 100%; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Schließen</button>
+        </div>
+
+        <!-- Mail Account Add / Edit Form Modal -->
+        <div id="mail-account-form-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 20px; border-radius: 12px; z-index: 320; width: 90%; max-width: 500px; max-height: 90vh; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px); flex-direction: column;">
+            <h3 id="mail-account-form-title" style="color: var(--accent); margin: 0 0 12px 0; font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">E-Mail-Konto hinzufügen</h3>
+            
+            <input type="hidden" id="mail-form-account-id">
+            
+            <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; margin-bottom: 15px;">
+                <!-- Preset Schnellwahl -->
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Schnellauswahl Anbieter</label>
+                    <select id="mail-form-preset" onchange="handleMailPresetChange(this.value)" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: var(--input); color: white; outline: none; font-size: 0.85rem; color-scheme: dark;">
+                        <option value="webde">🟠 Web.de (IMAP & SMTP vorkonfiguriert)</option>
+                        <option value="gmail">🔴 Gmail (IMAP & SMTP vorkonfiguriert)</option>
+                        <option value="custom">⚙️ Manuell / Anderer Anbieter</option>
+                    </select>
+                </div>
+
+                <div id="mail-preset-hint" style="background: rgba(137, 180, 250, 0.08); border: 1px solid rgba(137, 180, 250, 0.2); padding: 8px 10px; border-radius: 6px; font-size: 0.75rem; line-height: 1.35; color: #cdd6f4;">
+                    💡 Bei Web.de: Bitte in den Web.de Einstellungen den Abruf per IMAP/POP3 aktivieren.
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Anzeigename</label>
+                    <input type="text" id="mail-form-name" placeholder="Z.B. Web.de Privat oder Google Mail" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: var(--input); color: white; outline: none; font-size: 0.85rem;">
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">E-Mail-Adresse</label>
+                    <input type="email" id="mail-form-email" placeholder="mein.name@web.de" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: var(--input); color: white; outline: none; font-size: 0.85rem;">
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Passwort / App-Passwort</label>
+                    <input type="password" id="mail-form-password" placeholder="Passwort eingeben" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: var(--input); color: white; outline: none; font-size: 0.85rem;">
+                </div>
+
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px;">
+                    <div>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">IMAP-Server</label>
+                        <input type="text" id="mail-form-imap-host" value="imap.web.de" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: var(--input); color: white; outline: none; font-size: 0.85rem;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Port</label>
+                        <input type="number" id="mail-form-imap-port" value="993" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: var(--input); color: white; outline: none; font-size: 0.85rem;">
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px;">
+                    <div>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">SMTP-Server</label>
+                        <input type="text" id="mail-form-smtp-host" value="smtp.web.de" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: var(--input); color: white; outline: none; font-size: 0.85rem;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Port</label>
+                        <input type="number" id="mail-form-smtp-port" value="587" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: var(--input); color: white; outline: none; font-size: 0.85rem;">
+                    </div>
+                </div>
+            </div>
+
+            <div id="mail-form-status" style="display: none; font-size: 0.8rem; margin-bottom: 10px; padding: 6px 10px; border-radius: 6px;"></div>
+
+            <div style="display: flex; gap: 8px;">
+                <button type="button" onclick="testCurrentAccountConnection()" class="nav-btn" style="flex: 1; padding: 8px; font-size: 0.8rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);">🔍 Testen</button>
+                <button type="button" onclick="closeMailAccountFormModal()" class="cancel" style="flex: 1; padding: 8px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white; font-size: 0.8rem;">Abbrechen</button>
+                <button type="button" onclick="saveMailAccountForm()" class="save" style="flex: 1; padding: 8px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold; font-size: 0.8rem;">Speichern</button>
+            </div>
+        </div>
+
         <!-- Linke Spalte: Plugins & Dashboard -->
         <div class="top-panel glass-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; width: 100%;">
@@ -349,6 +516,14 @@
                                 <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                             </svg>
                             <span class="badge" id="badge-memory" style="display: none;">0</span>
+                        </button>
+
+                        <button class="plugin-nav-btn" id="btn-nav-mail" onclick="focusWidget('mail')" title="E-Mails">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                <polyline points="22,6 12,13 2,6"></polyline>
+                            </svg>
+                            <span class="badge" id="badge-mail" style="display: none;">0</span>
                         </button>
 
                         <button class="plugin-nav-btn chat-toggle-btn" id="btn-nav-chat" onclick="switchMobileView('chat')" title="Zurück zum Chat">
@@ -484,7 +659,7 @@
             }
 
             // Remove all view classes from body
-            document.body.classList.remove('view-chat', 'view-calendar', 'view-timer', 'view-tasks', 'view-projects', 'view-plugins', 'view-settings', 'view-history', 'view-memory', 'view-journal');
+            document.body.classList.remove('view-chat', 'view-calendar', 'view-timer', 'view-tasks', 'view-projects', 'view-plugins', 'view-settings', 'view-history', 'view-memory', 'view-journal', 'view-mail');
             
             // Add the new active view class
             document.body.classList.add('view-' + viewName);
@@ -502,7 +677,8 @@
                     'calendar': 'Kalender & Tagebuch',
                     'timer': 'Timer & Wecker',
                     'projects': 'Projekte',
-                    'memory': 'Personen & Gedächtnis'
+                    'memory': 'Personen & Gedächtnis',
+                    'mail': 'E-Mails (Posteingang)'
                 };
                 titleEl.textContent = titles[viewName] || 'Plugins & Dashboard';
             }
@@ -515,6 +691,7 @@
                     'timer': 'Timer',
                     'projects': 'Projekte',
                     'memory': 'Gedächtnis',
+                    'mail': 'E-Mails',
                     'chat': 'Chat',
                     'history': 'Verlauf',
                     'settings': 'Einstellungen'
@@ -587,6 +764,12 @@
             switchMobileView('journal');
         }
         window.handleDrawerJournal = handleDrawerJournal;
+
+        function handleDrawerMail() {
+            closeMobileDrawer();
+            switchMobileView('mail');
+        }
+        window.handleDrawerMail = handleDrawerMail;
 
         function toggleKeyboard() {
             document.body.classList.toggle('keyboard-active');
@@ -3385,6 +3568,9 @@
                             }
                             html += `</div>`;
                             widgetDiv.innerHTML = html;
+                        } else if (widget.data.widgetType === 'mail_overview') {
+                            widgetDiv.id = 'widget-mail';
+                            renderMailWidget(widget.data, widgetDiv);
                         }
                     }
                     
@@ -3404,6 +3590,7 @@
         function updateBadges(widgets) {
             const activePluginNames = new Set();
             let calendarCount = 0;
+            let mailUnreadCount = 0;
             
             const today = new Date();
             
@@ -3428,6 +3615,10 @@
                         }
                     });
                 }
+
+                if (widget.pluginName === 'Mail' || widget.data?.widgetType === 'mail_overview') {
+                    mailUnreadCount = widget.data.unreadCount || 0;
+                }
             });
 
             // Update button visibilities
@@ -3435,9 +3626,9 @@
             const btnTimer = document.getElementById('btn-nav-timer');
             const btnTasks = document.getElementById('btn-nav-tasks');
             const btnProjects = document.getElementById('btn-nav-projects');
-
             const btnJournal = document.getElementById('btn-nav-journal');
             const btnMemory = document.getElementById('btn-nav-memory');
+            const btnMail = document.getElementById('btn-nav-mail');
 
             if (btnCal) btnCal.style.display = activePluginNames.has('Calendar') ? 'flex' : 'none';
             if (btnTimer) btnTimer.style.display = activePluginNames.has('Timer') ? 'flex' : 'none';
@@ -3445,6 +3636,7 @@
             if (btnProjects) btnProjects.style.display = activePluginNames.has('Projects') ? 'flex' : 'none';
             if (btnJournal) btnJournal.style.display = activePluginNames.has('Journal') ? 'flex' : 'none';
             if (btnMemory) btnMemory.style.display = activePluginNames.has('Memory') ? 'flex' : 'none';
+            if (btnMail) btnMail.style.display = activePluginNames.has('Mail') ? 'flex' : 'none';
 
             // Update Calendar badge
             const calBadge = document.getElementById('badge-calendar');
@@ -3454,6 +3646,17 @@
                     calBadge.style.display = 'flex';
                 } else {
                     calBadge.style.display = 'none';
+                }
+            }
+
+            // Update Mail badge
+            const mailBadge = document.getElementById('badge-mail');
+            if (mailBadge) {
+                if (mailUnreadCount > 0) {
+                    mailBadge.textContent = mailUnreadCount;
+                    mailBadge.style.display = 'flex';
+                } else {
+                    mailBadge.style.display = 'none';
                 }
             }
             
@@ -3542,6 +3745,720 @@
         }
 
         window.callTool = callTool;
+
+        // ==========================================
+        // E-Mail System (Web.de & Gmail) Client Logic
+        // ==========================================
+        let activeMailAccountFilter = null;
+        let currentMailSearchQuery = '';
+        let currentReadMailId = null;
+
+        function filterMailByAccount(accountId) {
+            activeMailAccountFilter = accountId !== null ? Number(accountId) : null;
+            loadTopWidgets();
+        }
+        window.filterMailByAccount = filterMailByAccount;
+
+        function filterMailBySearch(query) {
+            currentMailSearchQuery = query || '';
+            loadTopWidgets();
+        }
+        window.filterMailBySearch = filterMailBySearch;
+
+        function renderMailWidget(data, container) {
+            const accounts = data.accounts || [];
+            const rawEmails = data.emails || [];
+
+            // Filter by selected account
+            let filteredEmails = rawEmails;
+            if (activeMailAccountFilter !== null) {
+                filteredEmails = filteredEmails.filter(e => Number(e.accountId) === Number(activeMailAccountFilter));
+            }
+
+            // Filter by search query if any
+            if (currentMailSearchQuery && currentMailSearchQuery.trim()) {
+                const q = currentMailSearchQuery.toLowerCase().trim();
+                filteredEmails = filteredEmails.filter(e => 
+                    (e.subject && e.subject.toLowerCase().includes(q)) ||
+                    (e.from && e.from.toLowerCase().includes(q)) ||
+                    (e.fromName && e.fromName.toLowerCase().includes(q)) ||
+                    (e.snippet && e.snippet.toLowerCase().includes(q)) ||
+                    (e.accountEmail && e.accountEmail.toLowerCase().includes(q))
+                );
+            }
+
+            let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 10px;">`;
+
+            // 1. Header Toolbar
+            html += `
+                <div style="display: flex; gap: 6px; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; gap: 6px; flex: 1;">
+                        <button onclick="openMailComposeModal()" class="nav-btn" style="flex: 1; font-size: 0.75rem; padding: 6px 10px; height: 30px; background: var(--accent); color: #11111b; font-weight: bold; border: none; border-radius: 6px;">
+                            ✍️ Verfassen
+                        </button>
+                        <button id="mail-sync-btn" onclick="syncAllMailsManual()" class="nav-btn" style="flex: 1; font-size: 0.75rem; padding: 6px 10px; height: 30px; border-radius: 6px;" title="Postfächer abrufen">
+                            🔄 Synchronisieren
+                        </button>
+                    </div>
+                    <button onclick="openMailAccountsModal()" class="nav-btn" style="flex: 0; padding: 6px 10px; height: 30px; font-size: 0.75rem; border-radius: 6px;" title="Konten verwalten">
+                        ⚙️ Konten (${accounts.length})
+                    </button>
+                </div>
+            `;
+
+            // 2. If no accounts, show empty state with call to action
+            if (accounts.length === 0) {
+                html += `
+                    <div style="padding: 20px 15px; text-align: center; background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; margin-top: 5px;">
+                        <div style="font-size: 2rem; margin-bottom: 8px;">📬</div>
+                        <strong style="color: var(--accent); font-size: 0.9rem; display: block; margin-bottom: 4px;">Noch kein E-Mail-Konto hinterlegt</strong>
+                        <p style="font-size: 0.75rem; opacity: 0.7; margin: 0 0 12px 0; line-height: 1.4;">Verbinde deine Web.de- oder Gmail-Adresse, um E-Mails direkt in der App zu lesen und zu beantworten.</p>
+                        <button onclick="openMailAccountFormModal()" class="save" style="padding: 8px 16px; font-size: 0.8rem; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold;">
+                            ➕ Web.de / Gmail Konto verbinden
+                        </button>
+                    </div>
+                </div>`;
+                container.innerHTML = html;
+                return;
+            }
+
+            // 3. Filter Pills Bar (Alle Postfächer, Web.de, Gmail etc.)
+            html += `<div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none;">`;
+            const allActiveStyle = activeMailAccountFilter === null ? 'background: var(--accent); color: #11111b; font-weight: bold; border-color: var(--accent);' : 'background: rgba(255,255,255,0.04); color: var(--text); border-color: rgba(255,255,255,0.1);';
+            html += `<button onclick="filterMailByAccount(null)" class="nav-btn" style="flex: 0 0 auto; height: 26px; font-size: 0.7rem; padding: 0 10px; border-radius: 13px; ${allActiveStyle}">Alle (${rawEmails.length})</button>`;
+            
+            accounts.forEach(acc => {
+                const isSelected = Number(activeMailAccountFilter) === Number(acc.id);
+                const color = acc.color || '#89b4fa';
+                const pillStyle = isSelected ? `background: ${color}; color: #11111b; font-weight: bold; border-color: ${color};` : `background: rgba(255,255,255,0.04); color: var(--text); border-color: rgba(255,255,255,0.1);`;
+                const icon = acc.email.toLowerCase().includes('web.de') ? '🟠' : (acc.email.toLowerCase().includes('gmail') ? '🔴' : '✉️');
+                html += `<button onclick="filterMailByAccount(${acc.id})" class="nav-btn" style="flex: 0 0 auto; height: 26px; font-size: 0.7rem; padding: 0 10px; border-radius: 13px; ${pillStyle}">${icon} ${escapeHtml(acc.email)}</button>`;
+            });
+            html += `</div>`;
+
+            // 4. Search Input
+            html += `
+                <div style="display: flex; gap: 6px;">
+                    <input type="text" id="mail-search-input" value="${escapeHtml(currentMailSearchQuery)}" placeholder="E-Mails durchsuchen (Absender, Betreff, Text)..." oninput="filterMailBySearch(this.value)" style="width: 100%; height: 32px; padding: 6px 10px; font-size: 0.78rem; border-radius: 6px; background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.1); outline: none;">
+                </div>
+            `;
+
+            // 5. Emails List
+            if (filteredEmails.length === 0) {
+                html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 15px 0;">Keine E-Mails vorhanden. Klicke auf 'Synchronisieren' zum Abrufen.</p>`;
+            } else {
+                html += `<div style="display: flex; flex-direction: column; gap: 6px;">`;
+                filteredEmails.forEach(e => {
+                    const escSubject = escapeHtml(e.subject || '(Kein Betreff)').replace(/'/g, "\\'");
+                    const unreadBadge = !e.isRead ? `<span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; margin-right: 4px; flex-shrink: 0;" title="Ungelesen"></span>` : '';
+                    const unreadBg = !e.isRead ? 'rgba(137, 180, 250, 0.08)' : 'rgba(255,255,255,0.02)';
+                    const unreadBorder = !e.isRead ? 'rgba(137, 180, 250, 0.25)' : 'rgba(255,255,255,0.05)';
+                    const subjectWeight = !e.isRead ? '700' : '500';
+                    const subjectColor = !e.isRead ? '#ffffff' : 'var(--text)';
+
+                    const accColor = e.accountColor || '#89b4fa';
+                    const accIcon = e.accountEmail.toLowerCase().includes('web.de') ? '🟠' : (e.accountEmail.toLowerCase().includes('gmail') ? '🔴' : '✉️');
+
+                    const dateObj = new Date(e.date);
+                    const isToday = getLocalDateString(dateObj) === getLocalDateString();
+                    const dateStr = isToday ? dateObj.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr' : dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+
+                    const attachBadge = e.hasAttachments ? ` <span style="font-size: 0.7rem;" title="Mit Anhang">📎</span>` : '';
+
+                    html += `
+                        <div class="mail-item-card" onclick="openMailReadModal(${e.id})" style="display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 8px; background: ${unreadBg}; border: 1px solid ${unreadBorder}; border-left: 3.5px solid ${accColor}; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='${unreadBg}'">
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+                                <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+                                    ${unreadBadge}
+                                    <span style="font-size: 0.8rem; font-weight: 600; color: ${subjectColor}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                        ${escapeHtml(e.fromName || e.from)}
+                                    </span>
+                                    ${attachBadge}
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                                    <!-- Klares Postfach-Badge mit E-Mail-Adresse -->
+                                    <span style="font-size: 0.65rem; font-weight: 700; padding: 1px 6px; border-radius: 10px; background: rgba(255,255,255,0.05); color: ${accColor}; border: 1px solid ${accColor};" title="Empfangen auf: ${escapeHtml(e.accountEmail)}">
+                                        ${accIcon} ${escapeHtml(e.accountEmail)}
+                                    </span>
+                                    <span style="font-size: 0.68rem; opacity: 0.5; margin-left: 4px;">${dateStr}</span>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px;">
+                                <div style="font-size: 0.78rem; font-weight: ${subjectWeight}; color: ${subjectColor}; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
+                                    ${escapeHtml(e.subject || '(Kein Betreff)')}
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 2px; flex-shrink: 0;" onclick="event.stopPropagation()">
+                                    <button onclick="insertEntityLinkIntoChat('${escSubject}', 'mail', ${e.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="In Chat verlinken">🔗</button>
+                                    <button onclick="openMailComposeModal(${e.id})" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Antworten">↩️</button>
+                                </div>
+                            </div>
+
+                            ${e.snippet ? `<div style="font-size: 0.72rem; opacity: 0.6; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(e.snippet)}</div>` : ''}
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            }
+
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        async function syncAllMailsManual() {
+            const syncBtn = document.getElementById('mail-sync-btn');
+            if (syncBtn) {
+                syncBtn.innerHTML = '⏳ Rufe ab...';
+                syncBtn.style.opacity = '0.7';
+            }
+
+            try {
+                const res = await fetch(getApiUrl('/api/mail/sync'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+                if (data && data.success) {
+                    console.log(`[Mail] Sync beendet. ${data.totalSynced} E-Mails synchronisiert.`);
+                }
+            } catch (err) {
+                console.error("[Mail] Sync Fehler:", err);
+            } finally {
+                if (syncBtn) {
+                    syncBtn.innerHTML = '🔄 Synchronisieren';
+                    syncBtn.style.opacity = '1';
+                }
+                loadTopWidgets();
+            }
+        }
+        window.syncAllMailsManual = syncAllMailsManual;
+
+        async function openMailReadModal(id) {
+            currentReadMailId = id;
+            try {
+                const res = await fetch(getApiUrl(`/api/mail/messages/${id}`));
+                if (!res.ok) {
+                    alert("E-Mail konnte nicht geladen werden.");
+                    return;
+                }
+                const mail = await res.json();
+
+                const modal = document.getElementById('mail-read-modal');
+                const badgeEl = document.getElementById('mail-read-account-badge');
+                const subjectEl = document.getElementById('mail-read-subject');
+                const fromEl = document.getElementById('mail-read-from');
+                const toEl = document.getElementById('mail-read-to');
+                const dateEl = document.getElementById('mail-read-date');
+                const bodyEl = document.getElementById('mail-read-body');
+                const linkBtn = document.getElementById('mail-read-link-btn');
+
+                const acc = mail.account || {};
+                const accColor = acc.color || '#89b4fa';
+                const accIcon = (acc.email || '').toLowerCase().includes('web.de') ? '🟠' : ((acc.email || '').toLowerCase().includes('gmail') ? '🔴' : '✉️');
+
+                if (badgeEl) {
+                    badgeEl.innerHTML = `${accIcon} Empfangen auf: <strong>${escapeHtml(acc.email || '')}</strong>`;
+                    badgeEl.style.color = accColor;
+                    badgeEl.style.borderColor = accColor;
+                }
+
+                if (subjectEl) subjectEl.textContent = mail.subject || '(Kein Betreff)';
+                if (fromEl) fromEl.textContent = mail.fromName ? `${mail.fromName} <${mail.from}>` : mail.from;
+                if (toEl) toEl.textContent = mail.to || '';
+                
+                if (dateEl) {
+                    const dateObj = new Date(mail.date);
+                    dateEl.textContent = dateObj.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                }
+
+                // Sicher bereinigter Inhalt wird gerendert (Safe Sanitized HTML oder Plain Text)
+                if (bodyEl) {
+                    if (mail.bodyHtml && mail.bodyHtml.trim()) {
+                        bodyEl.innerHTML = mail.bodyHtml;
+                    } else {
+                        bodyEl.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">${escapeHtml(mail.bodyText || 'Kein Inhalt.')}</pre>`;
+                    }
+                }
+
+                if (linkBtn) {
+                    const escSubj = (mail.subject || 'E-Mail').replace(/'/g, "\\'");
+                    linkBtn.onclick = () => {
+                        insertEntityLinkIntoChat(escSubj, 'mail', mail.id);
+                        closeMailReadModal();
+                    };
+                }
+
+                if (modal) modal.style.display = 'flex';
+                document.body.classList.add('modal-active');
+
+                // Aktualisiere Widgets im Hintergrund (gelesen-Status aktualisiert Badge)
+                loadTopWidgets();
+            } catch (err) {
+                console.error("[Mail] Fehler beim Öffnen der E-Mail:", err);
+                alert("Fehler beim Laden der E-Mail.");
+            }
+        }
+        window.openMailReadModal = openMailReadModal;
+
+        function closeMailReadModal() {
+            const modal = document.getElementById('mail-read-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.classList.remove('modal-active');
+            currentReadMailId = null;
+        }
+        window.closeMailReadModal = closeMailReadModal;
+
+        function openReplyFromReadModal() {
+            const id = currentReadMailId;
+            closeMailReadModal();
+            if (id) {
+                openMailComposeModal(id);
+            }
+        }
+        window.openReplyFromReadModal = openReplyFromReadModal;
+
+        async function openMailComposeModal(replyToId = null, defaultAccountId = null) {
+            const modal = document.getElementById('mail-compose-modal');
+            const titleEl = document.getElementById('mail-compose-title');
+            const accSelect = document.getElementById('mail-compose-account-select');
+            const toInput = document.getElementById('mail-compose-to');
+            const subjectInput = document.getElementById('mail-compose-subject');
+            const bodyInput = document.getElementById('mail-compose-body');
+            const inReplyToInput = document.getElementById('mail-compose-in-reply-to');
+            const statusEl = document.getElementById('mail-compose-status');
+
+            if (statusEl) statusEl.style.display = 'none';
+
+            // Konten laden und Dropdown befüllen
+            try {
+                const res = await fetch(getApiUrl('/api/mail/accounts'));
+                const accounts = await res.json();
+                
+                if (!accounts || accounts.length === 0) {
+                    alert("Bitte richte zuerst mindestens ein E-Mail-Konto ein.");
+                    openMailAccountFormModal();
+                    return;
+                }
+
+                if (accSelect) {
+                    accSelect.innerHTML = '';
+                    accounts.forEach(a => {
+                        const opt = document.createElement('option');
+                        opt.value = a.id;
+                        opt.textContent = `${a.name} (${a.email})`;
+                        accSelect.appendChild(opt);
+                    });
+                }
+
+                if (replyToId) {
+                    // Antwort auf E-Mail
+                    const mRes = await fetch(getApiUrl(`/api/mail/messages/${replyToId}`));
+                    if (mRes.ok) {
+                        const mail = await mRes.json();
+                        if (titleEl) titleEl.textContent = `↩️ Antwort an ${mail.fromName || mail.from}`;
+                        if (accSelect) accSelect.value = mail.accountId;
+                        
+                        // Absender-Adresse aus "Name <email>" extrahieren falls vorhanden
+                        let replyToAddr = mail.from;
+                        const match = mail.from.match(/<([^>]+)>/);
+                        if (match) replyToAddr = match[1];
+
+                        if (toInput) toInput.value = replyToAddr;
+                        if (subjectInput) {
+                            subjectInput.value = mail.subject.startsWith('Re:') ? mail.subject : `Re: ${mail.subject}`;
+                        }
+                        if (inReplyToInput) inReplyToInput.value = mail.messageId || '';
+                        if (bodyInput) {
+                            bodyInput.value = '';
+                            setTimeout(() => bodyInput.focus(), 50);
+                        }
+                    }
+                } else {
+                    // Neue E-Mail
+                    if (titleEl) titleEl.textContent = '✍️ Neue E-Mail verfassen';
+                    if (defaultAccountId && accSelect) accSelect.value = defaultAccountId;
+                    if (toInput) toInput.value = '';
+                    if (subjectInput) subjectInput.value = '';
+                    if (inReplyToInput) inReplyToInput.value = '';
+                    if (bodyInput) bodyInput.value = '';
+                    setTimeout(() => toInput && toInput.focus(), 50);
+                }
+
+                if (modal) modal.style.display = 'flex';
+                document.body.classList.add('modal-active');
+            } catch (err) {
+                console.error("[Mail] Fehler beim Öffnen des Composers:", err);
+                alert("Fehler beim Öffnen des E-Mail-Editors.");
+            }
+        }
+        window.openMailComposeModal = openMailComposeModal;
+
+        function closeMailComposeModal() {
+            const modal = document.getElementById('mail-compose-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.classList.remove('modal-active');
+        }
+        window.closeMailComposeModal = closeMailComposeModal;
+
+        async function sendComposedEmail() {
+            const accSelect = document.getElementById('mail-compose-account-select');
+            const toInput = document.getElementById('mail-compose-to');
+            const subjectInput = document.getElementById('mail-compose-subject');
+            const bodyInput = document.getElementById('mail-compose-body');
+            const inReplyToInput = document.getElementById('mail-compose-in-reply-to');
+            const statusEl = document.getElementById('mail-compose-status');
+            const sendBtn = document.getElementById('mail-compose-send-btn');
+
+            const accountId = accSelect ? accSelect.value : null;
+            const to = toInput ? toInput.value.trim() : '';
+            const subject = subjectInput ? subjectInput.value.trim() : '';
+            const body = bodyInput ? bodyInput.value.trim() : '';
+            const inReplyTo = inReplyToInput ? inReplyToInput.value.trim() : undefined;
+
+            if (!accountId || !to || !subject || !body) {
+                if (statusEl) {
+                    statusEl.style.display = 'block';
+                    statusEl.style.background = 'rgba(243, 139, 168, 0.15)';
+                    statusEl.style.color = 'var(--off)';
+                    statusEl.textContent = 'Bitte alle Felder (Empfänger, Betreff, Nachricht) ausfüllen.';
+                }
+                return;
+            }
+
+            if (sendBtn) {
+                sendBtn.disabled = true;
+                sendBtn.innerHTML = '⏳ Senden...';
+            }
+
+            if (statusEl) {
+                statusEl.style.display = 'block';
+                statusEl.style.background = 'rgba(137, 180, 250, 0.15)';
+                statusEl.style.color = 'var(--accent)';
+                statusEl.textContent = 'E-Mail wird über SMTP gesendet...';
+            }
+
+            try {
+                const res = await fetch(getApiUrl('/api/mail/send'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        accountId: Number(accountId),
+                        to,
+                        subject,
+                        body,
+                        inReplyTo
+                    })
+                });
+
+                const result = await res.json();
+                if (res.ok && result.success) {
+                    alert("✅ E-Mail erfolgreich gesendet!");
+                    closeMailComposeModal();
+                } else {
+                    if (statusEl) {
+                        statusEl.style.display = 'block';
+                        statusEl.style.background = 'rgba(243, 139, 168, 0.15)';
+                        statusEl.style.color = 'var(--off)';
+                        statusEl.textContent = `Fehler beim Senden: ${result.error || 'Unbekannter Fehler'}`;
+                    }
+                }
+            } catch (err) {
+                console.error("[Mail] Sende-Fehler:", err);
+                if (statusEl) {
+                    statusEl.style.display = 'block';
+                    statusEl.style.background = 'rgba(243, 139, 168, 0.15)';
+                    statusEl.style.color = 'var(--off)';
+                    statusEl.textContent = `Netzwerkfehler: ${err.message}`;
+                }
+            } finally {
+                if (sendBtn) {
+                    sendBtn.disabled = false;
+                    sendBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg> Senden';
+                }
+            }
+        }
+        window.sendComposedEmail = sendComposedEmail;
+
+        // Kontoverwaltung
+        async function openMailAccountsModal() {
+            const modal = document.getElementById('mail-accounts-modal');
+            const listEl = document.getElementById('mail-accounts-list');
+
+            if (!modal || !listEl) return;
+
+            listEl.innerHTML = '<p style="font-size: 0.75rem; opacity: 0.5; text-align: center;">Lade Konten...</p>';
+
+            try {
+                const res = await fetch(getApiUrl('/api/mail/accounts'));
+                const accounts = await res.json();
+
+                listEl.innerHTML = '';
+                if (!accounts || accounts.length === 0) {
+                    listEl.innerHTML = '<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine Konten hinterlegt.</p>';
+                } else {
+                    accounts.forEach(acc => {
+                        const icon = acc.email.toLowerCase().includes('web.de') ? '🟠' : (acc.email.toLowerCase().includes('gmail') ? '🔴' : '✉️');
+                        const card = document.createElement('div');
+                        card.style.cssText = `background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-left: 3.5px solid ${acc.color || '#89b4fa'}; border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px;`;
+                        
+                        card.innerHTML = `
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="font-size: 0.9rem;">${icon}</span>
+                                    <strong style="font-size: 0.85rem; color: var(--text);">${escapeHtml(acc.name)}</strong>
+                                </div>
+                                <div style="font-size: 0.75rem; opacity: 0.7; color: var(--accent); margin-top: 2px;">${escapeHtml(acc.email)}</div>
+                                <div style="font-size: 0.68rem; opacity: 0.4; margin-top: 2px;">IMAP: ${escapeHtml(acc.imapHost)} | SMTP: ${escapeHtml(acc.smtpHost)}</div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <button onclick="testExistingAccount(${acc.id})" class="nav-btn" style="padding: 4px 8px; font-size: 0.7rem;" title="Verbindung prüfen">🔍 Testen</button>
+                                <button onclick="deleteMailAccount(${acc.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.9rem; padding: 4px;" title="Konto löschen">🗑️</button>
+                            </div>
+                        `;
+                        listEl.appendChild(card);
+                    });
+                }
+
+                modal.style.display = 'flex';
+                document.body.classList.add('modal-active');
+            } catch (err) {
+                console.error("[Mail] Fehler beim Laden der Konten:", err);
+            }
+        }
+        window.openMailAccountsModal = openMailAccountsModal;
+
+        function closeMailAccountsModal() {
+            const modal = document.getElementById('mail-accounts-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.classList.remove('modal-active');
+        }
+        window.closeMailAccountsModal = closeMailAccountsModal;
+
+        function openMailAccountFormModal(accountId = null) {
+            const modal = document.getElementById('mail-account-form-modal');
+            const titleEl = document.getElementById('mail-account-form-title');
+            const idInput = document.getElementById('mail-form-account-id');
+            const presetSelect = document.getElementById('mail-form-preset');
+            const nameInput = document.getElementById('mail-form-name');
+            const emailInput = document.getElementById('mail-form-email');
+            const passwordInput = document.getElementById('mail-form-password');
+            const statusEl = document.getElementById('mail-form-status');
+
+            if (statusEl) statusEl.style.display = 'none';
+
+            if (idInput) idInput.value = accountId || '';
+            if (titleEl) titleEl.textContent = accountId ? 'E-Mail-Konto bearbeiten' : 'E-Mail-Konto hinzufügen';
+            if (nameInput) nameInput.value = '';
+            if (emailInput) emailInput.value = '';
+            if (passwordInput) passwordInput.value = '';
+
+            if (presetSelect) {
+                presetSelect.value = 'webde';
+                handleMailPresetChange('webde');
+            }
+
+            if (modal) modal.style.display = 'flex';
+            document.body.classList.add('modal-active');
+        }
+        window.openMailAccountFormModal = openMailAccountFormModal;
+
+        function closeMailAccountFormModal() {
+            const modal = document.getElementById('mail-account-form-modal');
+            if (modal) modal.style.display = 'none';
+            // If accounts modal was open, keep modal-active
+            const accModal = document.getElementById('mail-accounts-modal');
+            if (!accModal || accModal.style.display === 'none') {
+                document.body.classList.remove('modal-active');
+            }
+        }
+        window.closeMailAccountFormModal = closeMailAccountFormModal;
+
+        function handleMailPresetChange(preset) {
+            const imapHost = document.getElementById('mail-form-imap-host');
+            const imapPort = document.getElementById('mail-form-imap-port');
+            const smtpHost = document.getElementById('mail-form-smtp-host');
+            const smtpPort = document.getElementById('mail-form-smtp-port');
+            const hintEl = document.getElementById('mail-preset-hint');
+            const nameInput = document.getElementById('mail-form-name');
+            const emailInput = document.getElementById('mail-form-email');
+
+            if (preset === 'webde') {
+                if (imapHost) imapHost.value = 'imap.web.de';
+                if (imapPort) imapPort.value = '993';
+                if (smtpHost) smtpHost.value = 'smtp.web.de';
+                if (smtpPort) smtpPort.value = '587';
+                if (hintEl) hintEl.innerHTML = '💡 <strong>Web.de:</strong> Bitte in deinen Web.de-Einstellungen unter <em>"Einstellungen > POP3/IMAP Abruf"</em> den externen Zugriff aktivieren.';
+                if (nameInput && !nameInput.value) nameInput.value = 'Web.de';
+                if (emailInput) emailInput.placeholder = 'max.mustermann@web.de';
+            } else if (preset === 'gmail') {
+                if (imapHost) imapHost.value = 'imap.gmail.com';
+                if (imapPort) imapPort.value = '993';
+                if (smtpHost) smtpHost.value = 'smtp.gmail.com';
+                if (smtpPort) smtpPort.value = '465';
+                if (hintEl) hintEl.innerHTML = '💡 <strong>Gmail:</strong> Google verlangt ein <strong>App-Passwort</strong>. Erstelle eins unter <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color: var(--accent); text-decoration: underline;">myaccount.google.com/apppasswords</a>.';
+                if (nameInput && !nameInput.value) nameInput.value = 'Google Mail';
+                if (emailInput) emailInput.placeholder = 'mein.name@gmail.com';
+            } else {
+                if (hintEl) hintEl.innerHTML = '⚙️ Trage die IMAP- und SMTP-Serverdaten deines E-Mail-Anbieters manuell ein.';
+            }
+        }
+        window.handleMailPresetChange = handleMailPresetChange;
+
+        async function testCurrentAccountConnection() {
+            const emailInput = document.getElementById('mail-form-email');
+            const passwordInput = document.getElementById('mail-form-password');
+            const imapHostInput = document.getElementById('mail-form-imap-host');
+            const imapPortInput = document.getElementById('mail-form-imap-port');
+            const statusEl = document.getElementById('mail-form-status');
+
+            const email = emailInput ? emailInput.value.trim() : '';
+            const password = passwordInput ? passwordInput.value.trim() : '';
+            const imapHost = imapHostInput ? imapHostInput.value.trim() : '';
+            const imapPort = imapPortInput ? Number(imapPortInput.value) : 993;
+
+            if (!email || !password || !imapHost) {
+                if (statusEl) {
+                    statusEl.style.display = 'block';
+                    statusEl.style.background = 'rgba(243, 139, 168, 0.15)';
+                    statusEl.style.color = 'var(--off)';
+                    statusEl.textContent = 'Bitte E-Mail, Passwort und IMAP-Host ausfüllen.';
+                }
+                return;
+            }
+
+            if (statusEl) {
+                statusEl.style.display = 'block';
+                statusEl.style.background = 'rgba(137, 180, 250, 0.15)';
+                statusEl.style.color = 'var(--accent)';
+                statusEl.textContent = '⏳ Verbindung wird getestet...';
+            }
+
+            try {
+                const res = await fetch(getApiUrl('/api/mail/accounts/test'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, imapHost, imapPort, imapTls: true })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    statusEl.style.background = 'rgba(166, 227, 161, 0.15)';
+                    statusEl.style.color = 'var(--on)';
+                    statusEl.textContent = `✅ ${result.message}`;
+                } else {
+                    statusEl.style.background = 'rgba(243, 139, 168, 0.15)';
+                    statusEl.style.color = 'var(--off)';
+                    statusEl.textContent = `❌ ${result.message}`;
+                }
+            } catch (err) {
+                statusEl.style.background = 'rgba(243, 139, 168, 0.15)';
+                statusEl.style.color = 'var(--off)';
+                statusEl.textContent = `❌ Fehler: ${err.message}`;
+            }
+        }
+        window.testCurrentAccountConnection = testCurrentAccountConnection;
+
+        async function testExistingAccount(id) {
+            try {
+                const res = await callTool('verwalte_mail_konten', { aktion: 'test', kontoId: Number(id) });
+                if (res && res.status === 'success') {
+                    alert(`✅ Verbindungstest erfolgreich!\n\n${res.message}`);
+                } else {
+                    alert(`❌ Verbindungstest fehlgeschlagen:\n\n${res?.message || 'Unbekannter Fehler'}`);
+                }
+            } catch (err) {
+                alert(`Fehler: ${err.message}`);
+            }
+        }
+        window.testExistingAccount = testExistingAccount;
+
+        async function saveMailAccountForm() {
+            const idInput = document.getElementById('mail-form-account-id');
+            const nameInput = document.getElementById('mail-form-name');
+            const emailInput = document.getElementById('mail-form-email');
+            const passwordInput = document.getElementById('mail-form-password');
+            const imapHostInput = document.getElementById('mail-form-imap-host');
+            const imapPortInput = document.getElementById('mail-form-imap-port');
+            const smtpHostInput = document.getElementById('mail-form-smtp-host');
+            const smtpPortInput = document.getElementById('mail-form-smtp-port');
+            const statusEl = document.getElementById('mail-form-status');
+
+            const id = idInput ? idInput.value : '';
+            const name = nameInput ? nameInput.value.trim() : '';
+            const email = emailInput ? emailInput.value.trim() : '';
+            const password = passwordInput ? passwordInput.value.trim() : '';
+            const imapHost = imapHostInput ? imapHostInput.value.trim() : '';
+            const imapPort = imapPortInput ? Number(imapPortInput.value) : 993;
+            const smtpHost = smtpHostInput ? smtpHostInput.value.trim() : '';
+            const smtpPort = smtpPortInput ? Number(smtpPortInput.value) : 587;
+
+            if (!name || !email || !password || !imapHost || !smtpHost) {
+                if (statusEl) {
+                    statusEl.style.display = 'block';
+                    statusEl.style.background = 'rgba(243, 139, 168, 0.15)';
+                    statusEl.style.color = 'var(--off)';
+                    statusEl.textContent = 'Bitte alle Pflichtfelder ausfüllen.';
+                }
+                return;
+            }
+
+            const payload = {
+                name,
+                email,
+                password,
+                imapHost,
+                imapPort,
+                imapTls: true,
+                smtpHost,
+                smtpPort,
+                smtpTls: true,
+                color: email.toLowerCase().includes('web.de') ? '#fab387' : (email.toLowerCase().includes('gmail') ? '#f38ba8' : '#89b4fa')
+            };
+
+            try {
+                const url = id ? getApiUrl(`/api/mail/accounts/${id}`) : getApiUrl('/api/mail/accounts');
+                const method = id ? 'PUT' : 'POST';
+
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    closeMailAccountFormModal();
+                    openMailAccountsModal();
+                    loadTopWidgets();
+                    // Initial sync auslösen
+                    syncAllMailsManual();
+                } else {
+                    const err = await res.json();
+                    if (statusEl) {
+                        statusEl.style.display = 'block';
+                        statusEl.style.background = 'rgba(243, 139, 168, 0.15)';
+                        statusEl.style.color = 'var(--off)';
+                        statusEl.textContent = `Fehler beim Speichern: ${err.error || 'Unbekannt'}`;
+                    }
+                }
+            } catch (err) {
+                console.error("[Mail] Speicher-Fehler:", err);
+            }
+        }
+        window.saveMailAccountForm = saveMailAccountForm;
+
+        async function deleteMailAccount(id) {
+            if (!confirm("Möchtest du dieses E-Mail-Konto wirklich aus der App entfernen?")) return;
+
+            try {
+                const res = await fetch(getApiUrl(`/api/mail/accounts/${id}`), { method: 'DELETE' });
+                if (res.ok) {
+                    openMailAccountsModal();
+                    loadTopWidgets();
+                }
+            } catch (err) {
+                console.error("[Mail] Lösch-Fehler:", err);
+            }
+        }
+        window.deleteMailAccount = deleteMailAccount;
 
         // Notes and Tasks JS Modals Logic
         const noteModal = document.getElementById('note-modal');

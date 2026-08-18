@@ -189,6 +189,48 @@ model DiaryEntry {
   isDeleted Boolean                 @default(false) // Soft-Delete-Flag
 }
 
+/// [Mail Plugin] Verwaltet E-Mail-Konten (z.B. Web.de, Gmail) mit IMAP- und SMTP-Zugangsdaten.
+model MailAccount {
+  id          Int           @id @default(autoincrement()) // Eindeutige ID des Mail-Kontos
+  name        String        // Anzeigename (z.B. "Web.de Privat", "Google Mail")
+  email       String        // E-Mail-Adresse (z.B. max@web.de)
+  password    String        // Passwort oder App-Passwort
+  imapHost    String        @default("imap.web.de") // IMAP-Server
+  imapPort    Int           @default(993) // IMAP-Port
+  imapTls     Boolean       @default(true) // SSL/TLS für IMAP
+  smtpHost    String        @default("smtp.web.de") // SMTP-Server
+  smtpPort    Int           @default(587) // SMTP-Port
+  smtpTls     Boolean       @default(true) // SSL/TLS für SMTP
+  color       String?       // Kennzeichnungsfarbe für Badges (z.B. "#fab387" für web.de, "#f38ba8" für gmail)
+  isDeleted   Boolean       @default(false) // Soft-Delete-Flag
+  createdAt   DateTime      @default(now()) // Erstellungszeitpunkt
+  updatedAt   DateTime      @updatedAt // Letzte Aktualisierung
+  cachedEmails CachedEmail[] // Gecachte E-Mails dieses Kontos
+}
+
+/// [Mail Plugin] Speichert abgerufene und bereinigte E-Mails für schnellen Offline-Zugriff und einheitliche Anzeige.
+model CachedEmail {
+  id             Int         @id @default(autoincrement()) // Eindeutige interne ID
+  accountId      Int         // ID des zugehörigen Mail-Kontos
+  account        MailAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  messageId      String?     // Eindeutige Message-ID des Mailheaders
+  uid            Int         // IMAP UID des Postfachs
+  subject        String      // Betreff der E-Mail
+  from           String      // Absender (Format: "Name <email>" oder "email")
+  fromName       String?     // Extrahierter Anzeigename des Absenders
+  to             String      // Empfängeradresse(n)
+  date           DateTime    // Empfangsdatum der E-Mail
+  bodyText       String?     // Sicherer Plain-Text-Inhalt
+  bodyHtml       String?     // Bereinigter HTML-Inhalt (ohne JS/Skripte/iFrames)
+  snippet        String?     // Kurze Textvorschau
+  isRead         Boolean     @default(false) // Gelesen-Status
+  hasAttachments Boolean     @default(false) // Enthält Anhänge
+  createdAt      DateTime    @default(now()) // Abrufzeitpunkt
+
+  @@unique([accountId, uid])
+}
+
+
 
 
 

@@ -1006,7 +1006,8 @@ body.mobile-mode.view-timer #top-widgets-container > #widget-timer,
 body.mobile-mode.view-projects #top-widgets-container > #widget-projects,
 body.mobile-mode.view-memory #top-widgets-container > #widget-memory,
 body.mobile-mode.view-journal #top-widgets-container > #widget-journal,
-body.mobile-mode.view-tasks #top-widgets-container > #widget-tasks {
+body.mobile-mode.view-tasks #top-widgets-container > #widget-tasks,
+body.mobile-mode.view-mail #top-widgets-container > #widget-mail {
     display: block !important;
 }
 
@@ -1558,3 +1559,57 @@ body.mobile-mode .top-panel > div:first-child {
     box-shadow: 0 0 18px rgba(137, 180, 250, 0.5) !important;
     transform: scale(1.01);
 }
+
+/* Mail Plugin Styles */
+.mail-item-card {
+    position: relative;
+    user-select: none;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mail-item-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.mail-body-container {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #cdd6f4;
+    line-height: 1.6;
+}
+
+.mail-body-container a {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
+.mail-body-container p {
+    margin: 0.5em 0;
+}
+
+.mail-body-container table {
+    border-collapse: collapse;
+    max-width: 100%;
+    margin: 0.5em 0;
+}
+
+.mail-body-container td,
+.mail-body-container th {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 6px 10px;
+}
+
+.mail-body-container img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+}
+
+.mail-body-container blockquote {
+    border-left: 3px solid var(--accent);
+    padding-left: 10px;
+    margin: 0.5em 0;
+    opacity: 0.8;
+}
+
