@@ -2409,10 +2409,29 @@
             } else if (eventTime) {
                 const startStr = new Date(eventTime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
                 const endStr = eventEndTime ? new Date(eventEndTime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
-                const timeDisplay = endStr ? `${startStr} - ${endStr}` : `${startStr} Uhr`;
                 timeBadge = `<span style="background: rgba(137, 180, 250, 0.15); color: var(--accent); font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold;">${timeDisplay}</span>`;
             }
             return timeBadge;
+        }
+
+        function hasTimelineDayContent(dayData) {
+            if (!dayData) return false;
+            const hasEntries = dayData.diaryEntries && dayData.diaryEntries.length > 0;
+            const hasEvents = dayData.events && dayData.events.length > 0;
+            const hasCompletedTasks = dayData.completedTasks && dayData.completedTasks.length > 0;
+            return !!(hasEntries || hasEvents || hasCompletedTasks);
+        }
+
+        function getTimelineDayDiff(dateStr1, dateStr2) {
+            if (!dateStr1 || !dateStr2) return 0;
+            const d1 = new Date(dateStr1 + 'T12:00:00');
+            const d2 = new Date(dateStr2 + 'T12:00:00');
+            const diffTime = Math.abs(d2.getTime() - d1.getTime());
+            return Math.round(diffTime / (1000 * 60 * 60 * 24));
+        }
+
+        function renderGapDividerHtml() {
+            return `<div class="timeline-gap-divider" style="border-top: 1px dashed rgba(255, 255, 255, 0.15); margin: 10px 0; width: 100%;"></div>`;
         }
 
         function renderTimelineDayHtml(dayData) {
@@ -2643,28 +2662,55 @@
             return html;
         }
 
-        async function renderTimelineWidget(data, containerDiv) {
-            let days = [];
+        function checkAndLoadMoreTimelineIfNoScrollbar() {
+            const topPanel = document.querySelector('.top-panel');
+            const widgetCalendar = document.getElementById('widget-calendar');
+            if (widgetCalendar && topPanel) {
+                if (topPanel.scrollHeight <= topPanel.clientHeight && timelineCanScrollFuture && !isTimelineLoadingFuture) {
+                    const today = new Date();
+                    const newestParts = timelineNewestLoadedDateStr ? timelineNewestLoadedDateStr.split('-').map(Number) : [today.getFullYear(), today.getMonth() + 1, today.getDate()];
+                    const newestDate = new Date(newestParts[0], newestParts[1] - 1, newestParts[2]);
+                    const loadedDays = Math.ceil((newestDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                    if (loadedDays < 90) {
+                        loadMoreFutureTimelineDays().then(() => {
+                            setTimeout(checkAndLoadMoreTimelineIfNoScrollbar, 200);
+                        });
+                    }
+                }
+            }
+        }
+
+        async function renderTimelineWidget(data, containerDiv, forceIncludeDateStr = null) {
+            let rawDays = [];
             if (data && data.timeline) {
-                days = data.timeline;
+                rawDays = data.timeline;
             } else if (Array.isArray(data)) {
-                days = data;
+                rawDays = data;
             } else if (data && data.days) {
-                days = data.days;
+                rawDays = data.days;
             }
 
-            if (!days || days.length === 0) {
-                const todayStr = getLocalDateString();
-                days = [{ date: todayStr, displayDate: 'Heute', events: [], diaryEntries: [], completedTasks: [] }];
+            const todayStr = getLocalDateString();
+
+            if (!rawDays || rawDays.length === 0) {
+                rawDays = [{ date: todayStr, displayDate: 'Heute', events: [], diaryEntries: [], completedTasks: [] }];
             }
 
-            days.sort((a, b) => a.date.localeCompare(b.date)); // Chronological ascending: past at top, future at bottom
-            timelineOldestLoadedDateStr = days[0].date;
-            timelineNewestLoadedDateStr = days[days.length - 1].date;
+            rawDays.sort((a, b) => a.date.localeCompare(b.date));
+            timelineOldestLoadedDateStr = rawDays[0].date;
+            timelineNewestLoadedDateStr = rawDays[rawDays.length - 1].date;
             timelineCanScrollPast = true;
             timelineCanScrollFuture = true;
 
-            const todayStr = getLocalDateString();
+            // Nur Tage mit Inhalt anzeigen, plus "Heute" und ggf. das explizit angesprungene Datum
+            let visibleDays = rawDays.filter(d => hasTimelineDayContent(d) || d.date === todayStr || (forceIncludeDateStr && d.date === forceIncludeDateStr));
+
+            if (visibleDays.length === 0) {
+                const fallbackDate = forceIncludeDateStr || todayStr;
+                visibleDays = [{ date: fallbackDate, displayDate: 'Heute', events: [], diaryEntries: [], completedTasks: [] }];
+            }
+
+            visibleDays.sort((a, b) => a.date.localeCompare(b.date)); // Chronological ascending
 
             let html = `
                 <div style="text-align: left; padding: 5px 0 15px 0; display: flex; flex-direction: column; gap: 10px;">
@@ -2676,7 +2722,7 @@
                                 📅 Kalender & Tagebuch
                             </div>
                             <div style="display: flex; align-items: center; gap: 6px;">
-                                <input type="date" id="timeline-jump-date-input" value="${todayStr}" onchange="jumpToTimelineDate(this.value)" style="background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 3px 6px; font-size: 0.8rem; color-scheme: dark;">
+                                <input type="date" id="timeline-jump-date-input" value="${forceIncludeDateStr || todayStr}" onchange="jumpToTimelineDate(this.value)" style="background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 3px 6px; font-size: 0.8rem; color-scheme: dark;">
                                 <button onclick="jumpToTimelineDate('today')" class="nav-btn" style="padding: 3px 8px; font-size: 0.75rem; font-weight: bold;" title="Zu heute springen">Heute</button>
                             </div>
                         </div>
@@ -2702,13 +2748,20 @@
             html += `
                     <div id="timeline-loading-past" style="display: none; text-align: center; padding: 6px; font-size: 0.72rem; color: #fab387; opacity: 0.85;">⬆️ Lade vergangene Tage...</div>
                     
-                    <!-- Scrollbare Tage-Liste (Oben: Vergangenheit, Unten: Zukunft) -->
+                    <!-- Scrollbare Tage-Liste (Oben: Vergangenheit, Unten: Zukunft) mit gestrichelten Linien bei Lücken -->
                     <div id="timeline-days-list" style="display: flex; flex-direction: column;">
             `;
 
-            days.forEach(d => {
-                html += renderTimelineDayHtml(d);
-            });
+            for (let i = 0; i < visibleDays.length; i++) {
+                if (i > 0) {
+                    const prevDate = visibleDays[i - 1].date;
+                    const currDate = visibleDays[i].date;
+                    if (getTimelineDayDiff(prevDate, currDate) > 1) {
+                        html += renderGapDividerHtml();
+                    }
+                }
+                html += renderTimelineDayHtml(visibleDays[i]);
+            }
 
             html += `
                     </div>
@@ -2719,12 +2772,16 @@
 
             containerDiv.innerHTML = html;
 
-            // Nach dem Rendern automatisch sanft zu "Heute" scrollen
+            const scrollTargetDate = forceIncludeDateStr || todayStr;
             setTimeout(() => {
-                const todayEl = document.getElementById(`timeline-day-${todayStr}`);
-                if (todayEl) {
-                    todayEl.scrollIntoView({ behavior: 'auto', block: 'center' });
+                const targetEl = document.getElementById(`timeline-day-${scrollTargetDate}`);
+                if (targetEl) {
+                    targetEl.scrollIntoView({ behavior: 'auto', block: 'center' });
+                    if (forceIncludeDateStr) {
+                        flashTimelineDay(targetEl);
+                    }
                 }
+                checkAndLoadMoreTimelineIfNoScrollbar();
             }, 60);
         }
 
@@ -2743,7 +2800,7 @@
                 const oldestParts = timelineOldestLoadedDateStr.split('-').map(Number);
                 const endDate = new Date(oldestParts[0], oldestParts[1] - 1, oldestParts[2] - 1, 12, 0, 0);
                 const startDate = new Date(endDate);
-                startDate.setDate(startDate.getDate() - 6);
+                startDate.setDate(startDate.getDate() - 13); // 14 Tage Vergangenheit nachladen
 
                 const startStr = getLocalDateString(startDate);
                 const endStr = getLocalDateString(endDate);
@@ -2751,27 +2808,48 @@
                 const res = await fetch(getApiUrl(`/api/calendar/timeline?start=${startStr}&end=${endStr}`));
                 if (!res.ok) throw new Error("Fehler beim Laden");
                 const data = await res.json();
-                const days = data.days || [];
+                const rawDays = data.days || [];
+                const todayStr = getLocalDateString();
+
+                timelineOldestLoadedDateStr = startStr;
+
+                const visibleDays = rawDays.filter(d => hasTimelineDayContent(d) || d.date === todayStr);
 
                 const daysListDiv = document.getElementById('timeline-days-list');
-                if (daysListDiv && days.length > 0) {
-                    days.sort((a, b) => a.date.localeCompare(b.date));
+                if (daysListDiv && visibleDays.length > 0) {
+                    visibleDays.sort((a, b) => a.date.localeCompare(b.date));
+                    
+                    const oldestExistingCard = daysListDiv.querySelector('.timeline-day-box');
+                    const oldestExistingDate = oldestExistingCard ? oldestExistingCard.getAttribute('data-date') : null;
+
                     let prependHtml = '';
-                    days.forEach(d => {
-                        if (!document.getElementById(`timeline-day-${d.date}`)) {
-                            prependHtml += renderTimelineDayHtml(d);
+                    for (let i = 0; i < visibleDays.length; i++) {
+                        if (i > 0) {
+                            const prevDate = visibleDays[i - 1].date;
+                            const currDate = visibleDays[i].date;
+                            if (getTimelineDayDiff(prevDate, currDate) > 1) {
+                                prependHtml += renderGapDividerHtml();
+                            }
                         }
-                    });
+                        if (!document.getElementById(`timeline-day-${visibleDays[i].date}`)) {
+                            prependHtml += renderTimelineDayHtml(visibleDays[i]);
+                        }
+                    }
+
+                    if (oldestExistingDate && visibleDays.length > 0) {
+                        const lastNewDate = visibleDays[visibleDays.length - 1].date;
+                        if (getTimelineDayDiff(lastNewDate, oldestExistingDate) > 1) {
+                            prependHtml += renderGapDividerHtml();
+                        }
+                    }
+
                     if (prependHtml) {
                         daysListDiv.insertAdjacentHTML('afterbegin', prependHtml);
-                        timelineOldestLoadedDateStr = startStr;
                         if (topPanel) {
                             const newScrollHeight = topPanel.scrollHeight;
                             topPanel.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
                         }
                     }
-                } else {
-                    timelineCanScrollPast = false;
                 }
             } catch (e) {
                 console.error("Fehler beim Nachladen vergangener Tage:", e);
@@ -2800,19 +2878,45 @@
                 const res = await fetch(getApiUrl(`/api/calendar/timeline?start=${startStr}&end=${endStr}`));
                 if (!res.ok) throw new Error("Fehler beim Laden");
                 const data = await res.json();
-                const days = data.days || [];
+                const rawDays = data.days || [];
+                const todayStr = getLocalDateString();
+
+                timelineNewestLoadedDateStr = endStr;
+
+                const visibleDays = rawDays.filter(d => hasTimelineDayContent(d) || d.date === todayStr);
 
                 const daysListDiv = document.getElementById('timeline-days-list');
-                if (daysListDiv && days.length > 0) {
-                    days.sort((a, b) => a.date.localeCompare(b.date));
-                    days.forEach(d => {
-                        if (!document.getElementById(`timeline-day-${d.date}`)) {
-                            daysListDiv.insertAdjacentHTML('beforeend', renderTimelineDayHtml(d));
+                if (daysListDiv && visibleDays.length > 0) {
+                    visibleDays.sort((a, b) => a.date.localeCompare(b.date));
+
+                    const allCards = daysListDiv.querySelectorAll('.timeline-day-box');
+                    const newestExistingCard = allCards.length > 0 ? allCards[allCards.length - 1] : null;
+                    const newestExistingDate = newestExistingCard ? newestExistingCard.getAttribute('data-date') : null;
+
+                    let appendHtml = '';
+                    if (newestExistingDate) {
+                        const firstNewDate = visibleDays[0].date;
+                        if (getTimelineDayDiff(newestExistingDate, firstNewDate) > 1) {
+                            appendHtml += renderGapDividerHtml();
                         }
-                    });
-                    timelineNewestLoadedDateStr = endStr;
-                } else {
-                    timelineCanScrollFuture = false;
+                    }
+
+                    for (let i = 0; i < visibleDays.length; i++) {
+                        if (i > 0) {
+                            const prevDate = visibleDays[i - 1].date;
+                            const currDate = visibleDays[i].date;
+                            if (getTimelineDayDiff(prevDate, currDate) > 1) {
+                                appendHtml += renderGapDividerHtml();
+                            }
+                        }
+                        if (!document.getElementById(`timeline-day-${visibleDays[i].date}`)) {
+                            appendHtml += renderTimelineDayHtml(visibleDays[i]);
+                        }
+                    }
+
+                    if (appendHtml) {
+                        daysListDiv.insertAdjacentHTML('beforeend', appendHtml);
+                    }
                 }
             } catch (e) {
                 console.error("Fehler beim Nachladen zukünftiger Tage:", e);
@@ -2842,7 +2946,7 @@
                 const parts = dateStr.split('-').map(Number);
                 const targetObj = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
                 const startObj = new Date(targetObj);
-                startObj.setDate(startObj.getDate() - 6);
+                startObj.setDate(startObj.getDate() - 7);
                 const endObj = new Date(targetObj);
                 endObj.setDate(endObj.getDate() + 7);
 
@@ -2852,27 +2956,9 @@
                 const res = await fetch(getApiUrl(`/api/calendar/timeline?start=${startStr}&end=${endStr}`));
                 if (res.ok) {
                     const data = await res.json();
-                    const days = data.days || [];
-                    const daysListDiv = document.getElementById('timeline-days-list');
-                    if (daysListDiv) {
-                        days.sort((a, b) => a.date.localeCompare(b.date));
-                        let newHtml = '';
-                        days.forEach(d => {
-                            newHtml += renderTimelineDayHtml(d);
-                        });
-                        daysListDiv.innerHTML = newHtml;
-                        timelineOldestLoadedDateStr = startStr;
-                        timelineNewestLoadedDateStr = endStr;
-                        timelineCanScrollPast = true;
-                        timelineCanScrollFuture = true;
-
-                        setTimeout(() => {
-                            const newTarget = document.getElementById(`timeline-day-${dateStr}`);
-                            if (newTarget) {
-                                newTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                flashTimelineDay(newTarget);
-                            }
-                        }, 50);
+                    const widgetCalendar = document.getElementById('widget-calendar');
+                    if (widgetCalendar) {
+                        renderTimelineWidget(data, widgetCalendar, dateStr);
                     }
                 }
             } catch (e) {
