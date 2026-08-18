@@ -1004,7 +1004,9 @@ body.mobile-mode.view-plugins #top-widgets-container > div {
 body.mobile-mode.view-calendar #top-widgets-container > #widget-calendar,
 body.mobile-mode.view-timer #top-widgets-container > #widget-timer,
 body.mobile-mode.view-projects #top-widgets-container > #widget-projects,
-body.mobile-mode.view-memory #top-widgets-container > #widget-memory {
+body.mobile-mode.view-memory #top-widgets-container > #widget-memory,
+body.mobile-mode.view-journal #top-widgets-container > #widget-journal,
+body.mobile-mode.view-tasks #top-widgets-container > #widget-tasks {
     display: block !important;
 }
 

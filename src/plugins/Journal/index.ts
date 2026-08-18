@@ -29,10 +29,18 @@ export function parseLocalDate(dateStr?: string): Date {
 }
 
 export async function getDaySummaryData(targetDate: Date, prisma: any) {
-  const startOfDay = new Date(targetDate);
-  startOfDay.setUTCHours(0, 0, 0, 0);
-  const endOfDay = new Date(targetDate);
-  endOfDay.setUTCHours(23, 59, 59, 999);
+  const year = targetDate.getFullYear();
+  const month = targetDate.getMonth();
+  const day = targetDate.getDate();
+
+  const localStart = new Date(year, month, day, 0, 0, 0, 0);
+  const localEnd = new Date(year, month, day, 23, 59, 59, 999);
+
+  const utcStart = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+  const utcEnd = new Date(Date.UTC(year, month, day, 23, 59, 59, 999));
+
+  const startOfDay = localStart < utcStart ? localStart : utcStart;
+  const endOfDay = localEnd > utcEnd ? localEnd : utcEnd;
 
   // 1. Handgeschriebene Tagebucheinträge für diesen Tag
   const diaryEntries = await prisma.diaryEntry.findMany({
@@ -70,13 +78,14 @@ export async function getDaySummaryData(targetDate: Date, prisma: any) {
       content: e.content,
       createdAt: e.createdAt
     })),
-    events: events.map((ev: any) => ({
+    events: events.filter((ev: any) => !ev.isTask).map((ev: any) => ({
       id: ev.id,
       title: ev.title,
-      description: ev.description,
-      start: ev.start,
-      end: ev.end,
-      isAllDay: ev.isAllDay
+      description: ev.description || "",
+      start: ev.start || ev.time,
+      end: ev.end || ev.endTime,
+      isAllDay: !!ev.isAllDay,
+      isBirthday: !!ev.isBirthday
     })),
     completedTasks: completedTasks.map((t: any) => ({
       id: t.id,
@@ -118,16 +127,24 @@ export const journalPlugin: Plugin = {
           console.error("Fehler beim Erstellen der Vektoreinbettung für Tagebuch:", e);
         }
 
+        let saved = false;
         if (embedding && embedding.length > 0) {
-          await prisma.$executeRawUnsafe(
-            `INSERT INTO "DiaryEntry" (date, title, content, embedding, "createdAt", "updatedAt", "isDeleted")
-             VALUES ($1, $2, $3, $4::vector, NOW(), NOW(), false)`,
-            targetDate,
-            titel || null,
-            inhalt,
-            `[${embedding.join(",")}]`
-          );
-        } else {
+          try {
+            await prisma.$executeRawUnsafe(
+              `INSERT INTO "DiaryEntry" (date, title, content, embedding, "createdAt", "updatedAt", "isDeleted")
+               VALUES ($1, $2, $3, $4::vector, NOW(), NOW(), false)`,
+              targetDate,
+              titel || null,
+              inhalt,
+              `[${embedding.join(",")}]`
+            );
+            saved = true;
+          } catch (rawErr) {
+            console.warn("Vektoreinbettung konnte nicht direkt als vector gespeichert werden, Fallback auf Standard-Insert:", rawErr);
+          }
+        }
+        
+        if (!saved) {
           await prisma.diaryEntry.create({
             data: {
               date: targetDate,
@@ -208,17 +225,34 @@ export const journalPlugin: Plugin = {
         const { suchbegriff, limit: inputLimit } = args;
         const limit = inputLimit ? Number(inputLimit) : 5;
 
-        const result = await embeddingModel.embedContent(suchbegriff);
-        const embedding = result.embedding.values;
+        let matches: any[] = [];
+        try {
+          const result = await embeddingModel.embedContent(suchbegriff);
+          const embedding = result.embedding.values;
 
-        const matches: any[] = await prisma.$queryRawUnsafe(
-          `SELECT id, date, title, content, "createdAt"
-           FROM "DiaryEntry"
-           WHERE "isDeleted" = false AND embedding IS NOT NULL
-           ORDER BY embedding <=> $1::vector LIMIT $2`,
-          `[${embedding.join(",")}]`,
-          limit
-        );
+          matches = await prisma.$queryRawUnsafe(
+            `SELECT id, date, title, content, "createdAt"
+             FROM "DiaryEntry"
+             WHERE "isDeleted" = false AND embedding IS NOT NULL
+             ORDER BY embedding <=> $1::vector LIMIT $2`,
+            `[${embedding.join(",")}]`,
+            limit
+          );
+        } catch (searchErr) {
+          console.warn("Vektorsuche fehlgeschlagen oder nicht verfügbar, Fallback auf Textsuche:", searchErr);
+          const fallbackEntries = await prisma.diaryEntry.findMany({
+            where: {
+              isDeleted: false,
+              OR: [
+                { content: { contains: suchbegriff, mode: 'insensitive' } },
+                { title: { contains: suchbegriff, mode: 'insensitive' } }
+              ]
+            },
+            take: limit,
+            orderBy: { date: 'desc' }
+          });
+          matches = fallbackEntries;
+        }
 
         if (matches.length === 0) {
           return { message: "Keine passenden Tagebucheinträge gefunden." };

@@ -534,6 +534,12 @@
             
             // If it's a plugin view, we scroll it to top on desktop, or reset scroll on mobile
             if (viewName !== 'chat' && viewName !== 'settings' && viewName !== 'history') {
+                if (viewName === 'journal') {
+                    const jEl = document.getElementById('widget-journal');
+                    if (!jEl || !jEl.children.length) {
+                        loadJournalForDate(currentJournalDateStr);
+                    }
+                }
                 if (document.body.classList.contains('mobile-mode')) {
                     const topPanel = document.querySelector('.top-panel');
                     if (topPanel) {
@@ -1786,7 +1792,7 @@
                 if (rightSide) rightSide.style.display = 'none';
 
                 // Remove all view classes from body
-                document.body.classList.remove('view-chat', 'view-calendar', 'view-timer', 'view-tasks', 'view-projects', 'view-plugins', 'view-settings', 'view-history', 'view-memory');
+                document.body.classList.remove('view-chat', 'view-calendar', 'view-timer', 'view-tasks', 'view-projects', 'view-plugins', 'view-settings', 'view-history', 'view-memory', 'view-journal');
                 document.body.classList.add('view-login');
             } else {
                 if (loginSec) loginSec.style.display = 'none';
@@ -3074,12 +3080,14 @@
             const btnProjects = document.getElementById('btn-nav-projects');
 
             const btnJournal = document.getElementById('btn-nav-journal');
+            const btnMemory = document.getElementById('btn-nav-memory');
 
             if (btnCal) btnCal.style.display = activePluginNames.has('Calendar') ? 'flex' : 'none';
             if (btnTimer) btnTimer.style.display = activePluginNames.has('Timer') ? 'flex' : 'none';
             if (btnTasks) btnTasks.style.display = activePluginNames.has('Tasks') ? 'flex' : 'none';
             if (btnProjects) btnProjects.style.display = activePluginNames.has('Projects') ? 'flex' : 'none';
             if (btnJournal) btnJournal.style.display = activePluginNames.has('Journal') ? 'flex' : 'none';
+            if (btnMemory) btnMemory.style.display = activePluginNames.has('Memory') ? 'flex' : 'none';
 
             // Update Calendar badge
             const calBadge = document.getElementById('badge-calendar');
@@ -3096,7 +3104,14 @@
             updateTimerBadge();
         }
 
-        let currentJournalDateStr = new Date().toISOString().split('T')[0];
+        function getLocalDateString(d = new Date()) {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        let currentJournalDateStr = getLocalDateString();
 
         async function renderJournalWidget(summaryData, containerDiv) {
             if (!summaryData) {
@@ -3110,7 +3125,8 @@
                 currentJournalDateStr = summaryData.date || currentJournalDateStr;
             }
 
-            const dateObj = new Date(currentJournalDateStr + 'T12:00:00.000Z');
+            const parts = currentJournalDateStr.split('-').map(Number);
+            const dateObj = (parts.length === 3 && !isNaN(parts[0])) ? new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0) : new Date();
             const formattedDate = dateObj.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 
             let html = `
@@ -3165,7 +3181,7 @@
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <strong style="color: #fab387; font-size: 0.8rem;">${escapeHtml(e.title || "Tagebucheintrag")}</strong>
                                 <div style="display: flex; align-items: center; gap: 6px;">
-                                    <span style="font-size: 0.65rem; opacity: 0.5;">${timeStr} Uhr</span>
+                                     <span style="font-size: 0.65rem; opacity: 0.5;">${timeStr} Uhr</span>
                                     <button onclick="insertEntityLinkIntoChat('${escTitle}', 'journal', ${e.id})" style="background: transparent; border: none; color: #fab387; cursor: pointer; font-size: 0.75rem;" title="In Chat verlinken">🔗</button>
                                     <button onclick="deleteJournalEntry(${e.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem;" title="Löschen">✖</button>
                                 </div>
@@ -3190,8 +3206,9 @@
                 html += `<p style="font-size: 0.75rem; opacity: 0.5; margin: 2px 0;">Keine Termine an diesem Tag.</p>`;
             } else {
                 summaryData.events.forEach(ev => {
-                    const startStr = new Date(ev.start).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                    const timeInfo = ev.isAllDay ? 'Ganztägig' : `${startStr} Uhr`;
+                    const eventTime = ev.start || ev.time;
+                    const startStr = eventTime ? new Date(eventTime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+                    const timeInfo = ev.isAllDay ? 'Ganztägig' : (startStr ? `${startStr} Uhr` : '');
                     html += `
                         <div style="background: rgba(166, 227, 161, 0.05); border: 1px solid rgba(166, 227, 161, 0.2); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
                             <div>
@@ -3222,7 +3239,7 @@
                     html += `
                         <div style="background: rgba(137, 180, 250, 0.05); border: 1px solid rgba(137, 180, 250, 0.2); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
                             <span style="color: var(--text);">✔️ ${escapeHtml(t.title)}</span>
-                            <span style="font-size: 0.65rem; color: #89b4fa;">erledigt um ${doneTime} Uhr</span>
+                            <span style="font-size: 0.65rem; color: #89b4fa;">${doneTime ? 'erledigt um ' + doneTime + ' Uhr' : 'erledigt'}</span>
                         </div>
                     `;
                 });
@@ -3260,12 +3277,13 @@
         window.onJournalDateChange = onJournalDateChange;
 
         function navigateJournalDate(offsetDays) {
-            const cur = new Date(currentJournalDateStr + 'T12:00:00.000Z');
             if (offsetDays === 0) {
-                currentJournalDateStr = new Date().toISOString().split('T')[0];
+                currentJournalDateStr = getLocalDateString();
             } else {
+                const parts = currentJournalDateStr.split('-').map(Number);
+                const cur = (parts.length === 3 && !isNaN(parts[0])) ? new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0) : new Date();
                 cur.setDate(cur.getDate() + offsetDays);
-                currentJournalDateStr = cur.toISOString().split('T')[0];
+                currentJournalDateStr = getLocalDateString(cur);
             }
             loadJournalForDate(currentJournalDateStr);
         }

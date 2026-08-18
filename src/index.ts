@@ -246,16 +246,27 @@ app.post("/api/journal/entries", async (req, res) => {
 
     let entry: any;
     if (embedding && embedding.length > 0) {
-      const inserted: any[] = await prisma.$queryRawUnsafe(
-        `INSERT INTO "DiaryEntry" (date, title, content, embedding, "createdAt", "updatedAt", "isDeleted")
-         VALUES ($1, $2, $3, $4::vector, NOW(), NOW(), false)
-         RETURNING id, date, title, content, "createdAt"`,
-        targetDate,
-        title || null,
-        content,
-        `[${embedding.join(",")}]`
-      );
-      entry = inserted[0];
+      try {
+        const inserted: any[] = await prisma.$queryRawUnsafe(
+          `INSERT INTO "DiaryEntry" (date, title, content, embedding, "createdAt", "updatedAt", "isDeleted")
+           VALUES ($1, $2, $3, $4::vector, NOW(), NOW(), false)
+           RETURNING id, date, title, content, "createdAt"`,
+          targetDate,
+          title || null,
+          content,
+          `[${embedding.join(",")}]`
+        );
+        entry = inserted[0];
+      } catch (rawErr) {
+        console.warn("Vektoreinbettung konnte nicht direkt gespeichert werden, Fallback auf Standard-Insert:", rawErr);
+        entry = await prisma.diaryEntry.create({
+          data: {
+            date: targetDate,
+            title: title || null,
+            content
+          }
+        });
+      }
     } else {
       entry = await prisma.diaryEntry.create({
         data: {
@@ -293,17 +304,35 @@ app.get("/api/journal/search", async (req, res) => {
     if (!queryStr) {
       return res.status(400).json({ error: "q (Suchbegriff) ist erforderlich." });
     }
-    const embeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" }, { apiVersion: "v1beta" });
-    const result = await embeddingModel.embedContent(queryStr);
-    const embedding = result.embedding.values;
 
-    const matches: any[] = await prisma.$queryRawUnsafe(
-      `SELECT id, date, title, content, "createdAt"
-       FROM "DiaryEntry"
-       WHERE "isDeleted" = false AND embedding IS NOT NULL
-       ORDER BY embedding <=> $1::vector LIMIT 10`,
-      `[${embedding.join(",")}]`
-    );
+    let matches: any[] = [];
+    try {
+      const embeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" }, { apiVersion: "v1beta" });
+      const result = await embeddingModel.embedContent(queryStr);
+      const embedding = result.embedding.values;
+
+      matches = await prisma.$queryRawUnsafe(
+        `SELECT id, date, title, content, "createdAt"
+         FROM "DiaryEntry"
+         WHERE "isDeleted" = false AND embedding IS NOT NULL
+         ORDER BY embedding <=> $1::vector LIMIT 10`,
+        `[${embedding.join(",")}]`
+      );
+    } catch (searchErr) {
+      console.warn("Vektorsuche fehlgeschlagen oder nicht verfügbar, Fallback auf Textsuche:", searchErr);
+      const fallbackEntries = await prisma.diaryEntry.findMany({
+        where: {
+          isDeleted: false,
+          OR: [
+            { content: { contains: queryStr, mode: 'insensitive' } },
+            { title: { contains: queryStr, mode: 'insensitive' } }
+          ]
+        },
+        take: 10,
+        orderBy: { date: 'desc' }
+      });
+      matches = fallbackEntries;
+    }
 
     res.json(matches);
   } catch (e: any) {
