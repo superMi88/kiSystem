@@ -312,7 +312,7 @@
                 <div class="input-area">
                     <!-- Floating Mobile Plugins Bar (merged inside input-area for mobile) -->
                     <div id="view-toggle-container" class="mobile-only">
-                        <button class="plugin-nav-btn" id="btn-nav-calendar" onclick="focusWidget('calendar')" title="Kalender">
+                        <button class="plugin-nav-btn" id="btn-nav-calendar" onclick="focusWidget('calendar')" title="Kalender & Tagebuch">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
                                 <line x1="16" y1="2" x2="16" y2="6"></line>
@@ -349,14 +349,6 @@
                                 <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                             </svg>
                             <span class="badge" id="badge-memory" style="display: none;">0</span>
-                        </button>
-
-                        <button class="plugin-nav-btn" id="btn-nav-journal" onclick="focusWidget('journal')" title="Tagebuch">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-                            </svg>
-                            <span class="badge" id="badge-journal" style="display: none;">0</span>
                         </button>
 
                         <button class="plugin-nav-btn chat-toggle-btn" id="btn-nav-chat" onclick="switchMobileView('chat')" title="Zurück zum Chat">
@@ -507,11 +499,10 @@
             const titleEl = document.getElementById('plugin-view-title');
             if (titleEl) {
                 const titles = {
-                    'calendar': 'Kalender',
+                    'calendar': 'Kalender & Tagebuch',
                     'timer': 'Timer & Wecker',
                     'projects': 'Projekte',
-                    'memory': 'Personen & Gedächtnis',
-                    'journal': 'Tagebuch'
+                    'memory': 'Personen & Gedächtnis'
                 };
                 titleEl.textContent = titles[viewName] || 'Plugins & Dashboard';
             }
@@ -520,11 +511,10 @@
             const mobTitleEl = document.getElementById('mobile-view-title');
             if (mobTitleEl) {
                 const titles = {
-                    'calendar': 'Kalender',
+                    'calendar': 'Kalender & Tagebuch',
                     'timer': 'Timer',
                     'projects': 'Projekte',
                     'memory': 'Gedächtnis',
-                    'journal': 'Tagebuch',
                     'chat': 'Chat',
                     'history': 'Verlauf',
                     'settings': 'Einstellungen'
@@ -534,13 +524,15 @@
             
             // If it's a plugin view, we scroll it to top on desktop, or reset scroll on mobile
             if (viewName !== 'chat' && viewName !== 'settings' && viewName !== 'history') {
-                if (viewName === 'journal') {
-                    const jEl = document.getElementById('widget-journal');
-                    if (!jEl || !jEl.children.length) {
-                        loadTopWidgets();
-                    }
-                }
-                if (document.body.classList.contains('mobile-mode')) {
+                if (viewName === 'calendar') {
+                    setTimeout(() => {
+                        const todayStr = getLocalDateString();
+                        const todayEl = document.getElementById(`timeline-day-${todayStr}`);
+                        if (todayEl) {
+                            todayEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }, 80);
+                } else if (document.body.classList.contains('mobile-mode')) {
                     const topPanel = document.querySelector('.top-panel');
                     if (topPanel) {
                         topPanel.scrollTop = 0;
@@ -2400,261 +2392,527 @@
             }
         }
 
-        let isCalendarLoadingMore = false;
-        let calendarLoadedUntil = null;
-        let calendarLastRenderedDayKey = null;
-        let calendarCanScrollLoad = true;
-        let calendarJumpsCount = 0;
+        let isTimelineLoadingPast = false;
+        let isTimelineLoadingFuture = false;
+        let timelineOldestLoadedDateStr = null;
+        let timelineNewestLoadedDateStr = null;
+        let timelineCanScrollPast = true;
+        let timelineCanScrollFuture = true;
 
-        function checkAndLoadMoreIfNoScrollbar() {
-            const topPanel = document.querySelector('.top-panel');
-            const widgetCalendar = document.getElementById('widget-calendar');
-            if (widgetCalendar && topPanel) {
-                if (topPanel.scrollHeight <= topPanel.clientHeight && calendarCanScrollLoad && !isCalendarLoadingMore) {
-                    const today = new Date();
-                    const loadedDays = Math.ceil((calendarLoadedUntil - today) / (1000 * 60 * 60 * 24));
-                    if (loadedDays < 60) {
-                        loadMoreCalendarEvents().then(() => {
-                            setTimeout(checkAndLoadMoreIfNoScrollbar, 200);
-                        });
-                    }
-                }
+        function getEventTimeBadge(ev) {
+            const eventTime = ev.time || ev.start;
+            const eventEndTime = ev.endTime || ev.end;
+            let timeBadge = '';
+            
+            if (ev.isAllDay) {
+                timeBadge = `<span style="background: rgba(166, 227, 161, 0.15); color: #a6e3a1; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase;">Ganztägig</span>`;
+            } else if (eventTime) {
+                const startStr = new Date(eventTime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                const endStr = eventEndTime ? new Date(eventEndTime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+                const timeDisplay = endStr ? `${startStr} - ${endStr}` : `${startStr} Uhr`;
+                timeBadge = `<span style="background: rgba(137, 180, 250, 0.15); color: var(--accent); font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold;">${timeDisplay}</span>`;
             }
+            return timeBadge;
         }
 
-        function renderCalendarEvents(events, isAppend = false) {
-            if (!events || events.length === 0) {
-                if (!isAppend) {
-                    return `<p id="calendar-empty-msg" style="font-size: 0.75rem; opacity: 0.6; margin: 10px 0; text-align: center;">Keine Termine.</p>`;
-                }
-                return '';
+        function renderTimelineDayHtml(dayData) {
+            const dateStr = dayData.date;
+            const parts = dateStr.split('-').map(Number);
+            const dateObj = (parts.length === 3 && !isNaN(parts[0])) ? new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0) : new Date();
+            const formattedDate = dateObj.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+            const longFormattedDate = dateObj.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+            
+            const todayStr = getLocalDateString();
+            const yesterdayDate = new Date();
+            yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+            const yesterdayStr = getLocalDateString(yesterdayDate);
+
+            const tomorrowDate = new Date();
+            tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+            const tomorrowStr = getLocalDateString(tomorrowDate);
+
+            const isToday = (dateStr === todayStr);
+            const isYesterday = (dateStr === yesterdayStr);
+            const isTomorrow = (dateStr === tomorrowStr);
+            const isFuture = (dateStr > todayStr);
+
+            let dayBadge = '';
+            let accentColor = isFuture ? '#2ecc71' : (isToday ? '#89b4fa' : '#fab387');
+            let boxClass = 'timeline-day-box';
+
+            if (isToday) {
+                dayBadge = `<span style="background: rgba(137, 180, 250, 0.2); color: #89b4fa; font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; font-weight: bold; border: 1px solid rgba(137, 180, 250, 0.4);">Heute</span>`;
+                boxClass += ' today-box';
+            } else if (isYesterday) {
+                dayBadge = `<span style="background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.8); font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; font-weight: 500;">Gestern</span>`;
+            } else if (isTomorrow) {
+                dayBadge = `<span style="background: rgba(166, 227, 161, 0.15); color: #a6e3a1; font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; font-weight: bold; border: 1px solid rgba(166, 227, 161, 0.3);">Morgen</span>`;
             }
 
-            // 1. Group events by local date
-            const eventsByDay = {};
-            events.forEach(ev => {
-                const dateObj = new Date(ev.time);
-                const key = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
-                
-                if (!eventsByDay[key]) {
-                    const weekday = dateObj.toLocaleDateString('de-DE', { weekday: 'short' }).replace(/\.$/, '');
-                    const dayAndMonth = dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-                    const displayDate = `${weekday}. ${dayAndMonth}`;
-                    
-                    eventsByDay[key] = {
-                        displayDate: displayDate,
-                        dateObj: dateObj,
-                        events: []
-                    };
-                }
-                eventsByDay[key].events.push(ev);
-            });
+            const hasEntries = dayData.diaryEntries && dayData.diaryEntries.length > 0;
+            const hasEvents = dayData.events && dayData.events.length > 0;
+            const hasCompletedTasks = dayData.completedTasks && dayData.completedTasks.length > 0;
 
-            // 2. Sort and iterate over grouped days
-            const sortedKeys = Object.keys(eventsByDay).sort();
-            let html = '';
-            
-            for (let i = 0; i < sortedKeys.length; i++) {
-                const currentKey = sortedKeys[i];
-                const dayData = eventsByDay[currentKey];
-                
-                // Render gap divider if there is a day gap (diff > 1 day)
-                if (calendarLastRenderedDayKey) {
-                    const prevDate = new Date(calendarLastRenderedDayKey + 'T00:00:00');
-                    const currDate = new Date(currentKey + 'T00:00:00');
-                    const diffTime = Math.abs(currDate - prevDate);
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    
-                    if (diffDays > 1) {
-                        html += `<div style="border-top: 1px dashed rgba(255, 255, 255, 0.15); margin: 12px 0; width: 100%;"></div>`;
-                    }
-                }
-                
-                calendarLastRenderedDayKey = currentKey;
-                
-                // Render Day Box with a left green bar
-                html += `
-                    <div class="calendar-day-box" style="display: flex; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); margin-bottom: 4px;">
-                        <!-- Grüner Balken links -->
-                        <div style="width: 5px; background-color: #2ecc71; flex-shrink: 0;"></div>
+            let html = `
+                <div class="${boxClass}" id="timeline-day-${dateStr}" data-date="${dateStr}" style="display: flex; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); margin-bottom: 8px;">
+                    <!-- Akzentbalken links: Grün (Zukunft), Blau (Heute), Pfirsich (Vergangenheit) -->
+                    <div style="width: 5px; background-color: ${accentColor}; flex-shrink: 0;"></div>
+
+                    <div style="flex: 1; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px;">
                         
-                        <div style="flex: 1; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;">
-                            <!-- Datum Header -->
-                            <div style="font-size: 0.85rem; font-weight: bold; color: var(--accent); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
-                                ${dayData.displayDate}
+                        <!-- Datum Header -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
+                            <div style="font-size: 0.82rem; font-weight: bold; color: ${isToday ? 'var(--accent)' : 'var(--text)'}; display: flex; align-items: center; gap: 6px;" title="${longFormattedDate}">
+                                📅 ${dayData.displayDate || formattedDate}
                             </div>
-                            
-                            <!-- Events list -->
-                            <div style="display: flex; flex-direction: column; gap: 8px;">
-                `;
-                
-                dayData.events.forEach(ev => {
-                    if (ev.isTask) {
-                        const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
-                        const escNotes = escapeHtml(ev.description || '').replace(/'/g, "\\'");
-                        const escListTitle = escapeHtml(ev.listTitle || '').replace(/'/g, "\\'");
-                        const recurrenceVal = ev.recurrence || 'none';
-                        const isRecurring = ev.recurring || false;
-                        const repeatBadge = isRecurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrend: ${ev.recurrence}">🔄</span>` : '';
-                        
-                        let personsHtml = "";
-                        if (ev.persons && ev.persons.length > 0) {
-                            ev.persons.forEach(p => {
-                                personsHtml += `
-                                    <span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.color='var(--accent)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.color='rgba(255,255,255,0.7)'">
-                                      👤 ${escapeHtml(p.name)}
-                                    </span>
-                                `;
-                            });
-                        }
+                            ${dayBadge}
+                        </div>
+            `;
 
-                        const rawTaskId = ev.id.replace('task-', '');
-                        const checkedAttr = ev.completed ? 'checked' : '';
-                        const textStyle = ev.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
-
+            if (!hasEntries && !hasEvents && !hasCompletedTasks) {
+                html += `<p style="font-size: 0.72rem; opacity: 0.35; margin: 2px 0; font-style: italic;">Keine Termine oder Einträge.</p>`;
+            } else {
+                // 1. Tagebucheinträge (falls vorhanden)
+                if (hasEntries) {
+                    html += `
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <div style="font-size: 0.7rem; font-weight: bold; color: #fab387; text-transform: uppercase; letter-spacing: 0.5px;">📝 Tagebucheinträge</div>
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                    `;
+                    dayData.diaryEntries.forEach(e => {
+                        const timeStr = new Date(e.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                        const escTitle = escapeHtml(e.title || "Tagebucheintrag").replace(/'/g, "\\'");
                         html += `
-                            <div class="task-item" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); transition: all 0.2s; margin-bottom: 4px; width: 100%;">
-                                <div style="display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 0;">
-                                    <input type="checkbox" class="task-checkbox" data-task-id="${rawTaskId}" data-tasklist-id="${ev.listTitle || 'Standard'}" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 3px;">
-                                    <span style="line-height: 1.4; color: var(--text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word; flex: 1; ${textStyle}">
-                                        <strong>[Aufgabe]</strong> ${escapeHtml(ev.title)}
-                                        ${repeatBadge}
-                                        ${personsHtml}
-                                        ${ev.description ? `<div style="font-size: 0.75rem; opacity: 0.6; margin-top: 4px; white-space: pre-wrap; word-break: break-word; display: block; text-decoration: none !important; line-height: 1.2;">${escapeHtml(ev.description)}</div>` : ''}
-                                    </span>
+                            <div style="background: rgba(250, 179, 135, 0.06); border: 1px solid rgba(250, 179, 135, 0.2); padding: 6px 8px; border-radius: 6px; font-size: 0.78rem; display: flex; flex-direction: column; gap: 2px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <strong style="color: #fab387; font-size: 0.78rem;">${escapeHtml(e.title || "Tagebucheintrag")}</strong>
+                                    <div style="display: flex; align-items: center; gap: 4px;">
+                                        <span style="font-size: 0.65rem; opacity: 0.5;">${timeStr} Uhr</span>
+                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'journal', ${e.id})" style="background: transparent; border: none; color: #fab387; cursor: pointer; font-size: 0.75rem;" title="In Chat verlinken">🔗</button>
+                                        <button onclick="deleteJournalEntry(${e.id}, '${dateStr}')" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem;" title="Löschen">✖</button>
+                                    </div>
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
-                                    <button onclick="insertEntityLinkIntoChat('${escTitle}', 'task', ${rawTaskId})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="In Chat verlinken">🔗</button>
-                                    <button onclick="editTask(${rawTaskId}, '${escTitle}', '${escNotes}', '${ev.time || ''}', '${escListTitle}', '${recurrenceVal}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Bearbeiten">✏️</button>
-                                    <button onclick="deleteTask(${rawTaskId})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Löschen">✖</button>
-                                </div>
+                                <div style="white-space: pre-wrap; word-break: break-word; line-height: 1.25;">${escapeHtml(e.content)}</div>
                             </div>
                         `;
-                    } else {
-                        const isRec = ev.recurring || ev.isRecurring;
-                        const repeatBadge = isRec ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
-                        const rescheduleBadge = ev.originalStart ? ` <span style="background: rgba(249, 226, 175, 0.15); color: #f9e2af; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase;" title="Dieser Termin wurde verschoben">verschoben</span>` : '';
-                        const targetDate = ev.occurrenceDate || ev.time.split('T')[0];
-                        
-                        const cancelStyle = ev.isCancelled ? 'color: var(--off); text-decoration: line-through;' : '';
-                        const titleCancelStyle = ev.isCancelled ? 'color: var(--off); font-weight: 500;' : 'font-weight: 500;';
-                        const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
-                        
-                        const rescheduleBorder = ev.originalStart ? 'border-left: 3px solid #f9e2af; padding-left: 6px;' : '';
-                        const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
-                        
-                        const timeBadgeHtml = getEventTimeBadge(ev);
-                        
-                        let personsHtml = "";
-                        if (ev.persons && ev.persons.length > 0) {
-                            ev.persons.forEach(p => {
-                                personsHtml += `
-                                    <span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.color='var(--accent)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.color='rgba(255,255,255,0.7)'">
-                                      👤 ${escapeHtml(p.name)}
-                                    </span>
-                                `;
-                            });
-                        }
-
-                        let birthdayStyle = "border-bottom: 1px solid rgba(255,255,255,0.02); padding: 4px 0;";
-                        if (ev.isBirthday) {
-                            birthdayStyle = "background: rgba(245, 194, 231, 0.08); border: 1px solid rgba(245, 194, 231, 0.2); border-left: 3px solid #f5c2e7; padding: 6px 8px; border-radius: 6px; margin: 2px 0;";
-                        }
-
-                        const originalTimeText = ev.originalStart ? ` <span style="font-size: 0.7rem; opacity: 0.65; color: #f9e2af;">(ursprünglich: ${new Date(ev.originalStart).toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit'})} ${new Date(ev.originalStart).toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'})})</span>` : '';
-
-                        html += `
-                            <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; ${birthdayStyle} ${rescheduleBorder} ${cancelStyle}">
-                                <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
-                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                        <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
-                                        ${repeatBadge}
-                                        ${rescheduleBadge}
-                                        ${originalTimeText}
-                                        ${reasonHtml}
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px;">
-                                        ${timeBadgeHtml}
-                                        ${personsHtml}
-                                    </div>
-                                    ${ev.description ? `<div style="font-size: 0.75rem; opacity: 0.6; margin-top: 4px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(ev.description)}</div>` : ''}
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 4px; align-self: center; margin-left: 8px;">
-                                    ${ev.isBirthday ? `
-                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'person', ${ev.persons[0].id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="Person in Chat verlinken">🔗</button>
-                                    ` : `
-                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'event', ${ev.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
-                                        <button onclick="deleteCalendarEvent('${ev.id}', '${targetDate}', ${isRec})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Termin löschen">✖</button>
-                                    `}
-                                </div>
-                            </div>
-                        `;
-                    }
-                });
-                
-                html += `
+                    });
+                    html += `
                             </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                }
+
+                // 2. Kalender-Events & Aufgaben mit Fälligkeit
+                if (hasEvents) {
+                    html += `
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                    `;
+                    dayData.events.forEach(ev => {
+                        if (ev.isTask) {
+                            const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
+                            const escNotes = escapeHtml(ev.description || '').replace(/'/g, "\\'");
+                            const escListTitle = escapeHtml(ev.listTitle || '').replace(/'/g, "\\'");
+                            const recurrenceVal = ev.recurrence || 'none';
+                            const isRecurring = ev.recurring || false;
+                            const repeatBadge = isRecurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrend: ${ev.recurrence}">🔄</span>` : '';
+                            
+                            let personsHtml = "";
+                            if (ev.persons && ev.persons.length > 0) {
+                                ev.persons.forEach(p => {
+                                    personsHtml += `
+                                        <span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; transition: all 0.2s;">
+                                          👤 ${escapeHtml(p.name)}
+                                        </span>
+                                    `;
+                                });
+                            }
+
+                            const rawTaskId = ev.id.replace('task-', '');
+                            const checkedAttr = ev.completed ? 'checked' : '';
+                            const textStyle = ev.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
+
+                            html += `
+                                <div class="task-item" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 5px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); transition: all 0.2s; width: 100%;">
+                                    <div style="display: flex; align-items: flex-start; gap: 6px; flex: 1; min-width: 0;">
+                                        <input type="checkbox" class="task-checkbox" data-task-id="${rawTaskId}" data-tasklist-id="${ev.listTitle || 'Standard'}" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 3px;">
+                                        <span style="line-height: 1.3; color: var(--text); overflow: hidden; text-overflow: ellipsis; word-break: break-word; flex: 1; ${textStyle}">
+                                            <strong>[Aufgabe]</strong> ${escapeHtml(ev.title)}
+                                            ${repeatBadge}
+                                            ${personsHtml}
+                                            ${ev.description ? `<div style="font-size: 0.72rem; opacity: 0.6; margin-top: 2px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(ev.description)}</div>` : ''}
+                                        </span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
+                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'task', ${rawTaskId})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="In Chat verlinken">🔗</button>
+                                        <button onclick="editTask(${rawTaskId}, '${escTitle}', '${escNotes}', '${ev.time || ''}', '${escListTitle}', '${recurrenceVal}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Bearbeiten">✏️</button>
+                                        <button onclick="deleteTask(${rawTaskId})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Löschen">✖</button>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            const isRec = ev.recurring || ev.isRecurring;
+                            const repeatBadge = isRec ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
+                            const rescheduleBadge = ev.originalStart ? ` <span style="background: rgba(249, 226, 175, 0.15); color: #f9e2af; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase;" title="Dieser Termin wurde verschoben">verschoben</span>` : '';
+                            const targetDate = ev.occurrenceDate || (ev.time ? ev.time.split('T')[0] : dateStr);
+                            
+                            const cancelStyle = ev.isCancelled ? 'color: var(--off); text-decoration: line-through;' : '';
+                            const titleCancelStyle = ev.isCancelled ? 'color: var(--off); font-weight: 500;' : 'font-weight: 500;';
+                            const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
+                            
+                            const rescheduleBorder = ev.originalStart ? 'border-left: 3px solid #f9e2af; padding-left: 6px;' : '';
+                            const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
+                            
+                            const timeBadgeHtml = getEventTimeBadge(ev);
+                            
+                            let personsHtml = "";
+                            if (ev.persons && ev.persons.length > 0) {
+                                ev.persons.forEach(p => {
+                                    personsHtml += `
+                                        <span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; transition: all 0.2s;">
+                                          👤 ${escapeHtml(p.name)}
+                                        </span>
+                                    `;
+                                });
+                            }
+
+                            let birthdayStyle = "border-bottom: 1px solid rgba(255,255,255,0.02); padding: 4px 0;";
+                            if (ev.isBirthday) {
+                                birthdayStyle = "background: rgba(245, 194, 231, 0.08); border: 1px solid rgba(245, 194, 231, 0.2); border-left: 3px solid #f5c2e7; padding: 5px 8px; border-radius: 6px; margin: 2px 0;";
+                            }
+
+                            const originalTimeText = ev.originalStart ? ` <span style="font-size: 0.7rem; opacity: 0.65; color: #f9e2af;">(ursprünglich: ${new Date(ev.originalStart).toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit'})} ${new Date(ev.originalStart).toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'})})</span>` : '';
+
+                            html += `
+                                <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; ${birthdayStyle} ${rescheduleBorder} ${cancelStyle}">
+                                    <div style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
+                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                            <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
+                                            ${repeatBadge}
+                                            ${rescheduleBadge}
+                                            ${originalTimeText}
+                                            ${reasonHtml}
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px;">
+                                            ${timeBadgeHtml}
+                                            ${personsHtml}
+                                        </div>
+                                        ${ev.description ? `<div style="font-size: 0.72rem; opacity: 0.6; margin-top: 2px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(ev.description)}</div>` : ''}
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 3px; align-self: center; margin-left: 6px;">
+                                        ${ev.isBirthday ? `
+                                            <button onclick="insertEntityLinkIntoChat('${escTitle}', 'person', ${ev.persons[0].id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.8rem; padding: 2px;" title="Person in Chat verlinken">🔗</button>
+                                        ` : `
+                                            <button onclick="insertEntityLinkIntoChat('${escTitle}', 'event', ${ev.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.8rem; padding: 2px;" title="In Chat verlinken">🔗</button>
+                                            <button onclick="deleteCalendarEvent('${ev.id}', '${targetDate}', ${isRec})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.8rem; padding: 2px;" title="Termin löschen">✖</button>
+                                        `}
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    });
+                    html += `</div>`;
+                }
+
+                // 3. Erledigte Aufgaben
+                if (hasCompletedTasks) {
+                    html += `
+                        <div style="display: flex; flex-direction: column; gap: 3px; margin-top: 2px;">
+                            <div style="font-size: 0.7rem; font-weight: bold; color: #89b4fa; text-transform: uppercase; letter-spacing: 0.5px;">✅ Erledigte Aufgaben</div>
+                            <div style="display: flex; flex-direction: column; gap: 3px;">
+                    `;
+                    dayData.completedTasks.forEach(t => {
+                        const doneTime = t.completedAt ? new Date(t.completedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+                        html += `
+                            <div style="background: rgba(137, 180, 250, 0.05); border: 1px solid rgba(137, 180, 250, 0.2); padding: 4px 6px; border-radius: 6px; font-size: 0.74rem; display: flex; justify-content: space-between; align-items: center;">
+                                <span style="color: var(--text);">✔️ ${escapeHtml(t.title)}</span>
+                                <span style="font-size: 0.65rem; color: #89b4fa;">${doneTime ? 'um ' + doneTime + ' Uhr' : 'erledigt'}</span>
+                            </div>
+                        `;
+                    });
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                }
             }
+
+            html += `
+                    </div>
+                </div>
+            `;
             return html;
         }
 
-        async function loadMoreCalendarEvents() {
-            if (isCalendarLoadingMore || !calendarLoadedUntil) return;
-            isCalendarLoadingMore = true;
+        async function renderTimelineWidget(data, containerDiv) {
+            let days = [];
+            if (data && data.timeline) {
+                days = data.timeline;
+            } else if (Array.isArray(data)) {
+                days = data;
+            } else if (data && data.days) {
+                days = data.days;
+            }
 
-            const loadingIndicator = document.getElementById('calendar-loading-more');
+            if (!days || days.length === 0) {
+                const todayStr = getLocalDateString();
+                days = [{ date: todayStr, displayDate: 'Heute', events: [], diaryEntries: [], completedTasks: [] }];
+            }
+
+            days.sort((a, b) => a.date.localeCompare(b.date)); // Chronological ascending: past at top, future at bottom
+            timelineOldestLoadedDateStr = days[0].date;
+            timelineNewestLoadedDateStr = days[days.length - 1].date;
+            timelineCanScrollPast = true;
+            timelineCanScrollFuture = true;
+
+            const todayStr = getLocalDateString();
+
+            let html = `
+                <div style="text-align: left; padding: 5px 0 15px 0; display: flex; flex-direction: column; gap: 10px;">
+                    
+                    <!-- Sticky Datum-Eingabe, Aufgaben-Button & Schnell-Sprung Header -->
+                    <div style="position: sticky; top: 0; z-index: 10; background: #11111b; padding: 6px 0 8px 0; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; gap: 6px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                            <div style="font-size: 0.85rem; font-weight: bold; color: var(--accent); display: flex; align-items: center; gap: 6px;">
+                                📅 Kalender & Tagebuch
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <input type="date" id="timeline-jump-date-input" value="${todayStr}" onchange="jumpToTimelineDate(this.value)" style="background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 3px 6px; font-size: 0.8rem; color-scheme: dark;">
+                                <button onclick="jumpToTimelineDate('today')" class="nav-btn" style="padding: 3px 8px; font-size: 0.75rem; font-weight: bold;" title="Zu heute springen">Heute</button>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 6px;">
+                            <button onclick="openTaskModal()" class="nav-btn" style="flex: 1; font-size: 0.75rem; padding: 4px 8px;">➕ Neue Aufgabe</button>
+                        </div>
+                    </div>
+
+                    <!-- Überfällige Aufgaben (falls vorhanden) -->
+            `;
+
+            if (data && data.overdueTasks && data.overdueTasks.length > 0) {
+                html += `
+                    <div style="font-weight: 600; font-size: 0.7rem; color: var(--off); text-transform: uppercase; letter-spacing: 0.5px;">⚠️ Überfällige Aufgaben</div>
+                    <div style="display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-radius: 8px; background: rgba(243, 139, 168, 0.04); border: 1px solid rgba(243, 139, 168, 0.15); margin-bottom: 6px;">
+                `;
+                data.overdueTasks.forEach(t => {
+                    html += renderSingleTaskHtml(t, true);
+                });
+                html += `</div>`;
+            }
+
+            html += `
+                    <div id="timeline-loading-past" style="display: none; text-align: center; padding: 6px; font-size: 0.72rem; color: #fab387; opacity: 0.85;">⬆️ Lade vergangene Tage...</div>
+                    
+                    <!-- Scrollbare Tage-Liste (Oben: Vergangenheit, Unten: Zukunft) -->
+                    <div id="timeline-days-list" style="display: flex; flex-direction: column;">
+            `;
+
+            days.forEach(d => {
+                html += renderTimelineDayHtml(d);
+            });
+
+            html += `
+                    </div>
+                    
+                    <div id="timeline-loading-future" style="display: none; text-align: center; padding: 6px; font-size: 0.72rem; color: #2ecc71; opacity: 0.85;">⬇️ Lade zukünftige Tage...</div>
+                </div>
+            `;
+
+            containerDiv.innerHTML = html;
+
+            // Nach dem Rendern automatisch sanft zu "Heute" scrollen
+            setTimeout(() => {
+                const todayEl = document.getElementById(`timeline-day-${todayStr}`);
+                if (todayEl) {
+                    todayEl.scrollIntoView({ behavior: 'auto', block: 'center' });
+                }
+            }, 60);
+        }
+
+        async function loadMorePastTimelineDays() {
+            if (isTimelineLoadingPast || !timelineOldestLoadedDateStr || !timelineCanScrollPast) return;
+            isTimelineLoadingPast = true;
+
+            const loadingIndicator = document.getElementById('timeline-loading-past');
             if (loadingIndicator) loadingIndicator.style.display = 'block';
 
-            try {
-                const start = new Date(calendarLoadedUntil.getTime() + 1);
-                const end = new Date(calendarLoadedUntil);
-                end.setDate(end.getDate() + 14); // load next 14 days
-                end.setHours(23, 59, 59, 999);
+            const topPanel = document.querySelector('.top-panel');
+            const prevScrollHeight = topPanel ? topPanel.scrollHeight : 0;
+            const prevScrollTop = topPanel ? topPanel.scrollTop : 0;
 
-                const res = await fetch(getApiUrl(`/api/calendar/events?start=${start.toISOString()}&end=${end.toISOString()}`));
+            try {
+                const oldestParts = timelineOldestLoadedDateStr.split('-').map(Number);
+                const endDate = new Date(oldestParts[0], oldestParts[1] - 1, oldestParts[2] - 1, 12, 0, 0);
+                const startDate = new Date(endDate);
+                startDate.setDate(startDate.getDate() - 6);
+
+                const startStr = getLocalDateString(startDate);
+                const endStr = getLocalDateString(endDate);
+
+                const res = await fetch(getApiUrl(`/api/calendar/timeline?start=${startStr}&end=${endStr}`));
                 if (!res.ok) throw new Error("Fehler beim Laden");
                 const data = await res.json();
-                
-                const events = data.events;
-                const hasMore = data.hasMore;
+                const days = data.days || [];
 
-                if (events.length === 0 && hasMore && calendarJumpsCount < 10) {
-                    calendarJumpsCount++;
-                    calendarLoadedUntil = end;
-                    isCalendarLoadingMore = false;
-                    loadMoreCalendarEvents();
-                    return;
-                }
-
-                calendarJumpsCount = 0; // Reset on success or hard stop
-
-                const eventsListDiv = document.getElementById('calendar-events-list');
-                if (eventsListDiv && events.length > 0) {
-                    const newHtml = renderCalendarEvents(events, true);
-                    if (newHtml) {
-                        const emptyMsg = document.getElementById('calendar-empty-msg');
-                        if (emptyMsg) emptyMsg.remove();
-                        eventsListDiv.insertAdjacentHTML('beforeend', newHtml);
+                const daysListDiv = document.getElementById('timeline-days-list');
+                if (daysListDiv && days.length > 0) {
+                    days.sort((a, b) => a.date.localeCompare(b.date));
+                    let prependHtml = '';
+                    days.forEach(d => {
+                        if (!document.getElementById(`timeline-day-${d.date}`)) {
+                            prependHtml += renderTimelineDayHtml(d);
+                        }
+                    });
+                    if (prependHtml) {
+                        daysListDiv.insertAdjacentHTML('afterbegin', prependHtml);
+                        timelineOldestLoadedDateStr = startStr;
+                        if (topPanel) {
+                            const newScrollHeight = topPanel.scrollHeight;
+                            topPanel.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
+                        }
                     }
-                }
-                
-                calendarLoadedUntil = end;
-
-                if (!hasMore) {
-                    calendarCanScrollLoad = false;
                 } else {
-                    calendarCanScrollLoad = true;
+                    timelineCanScrollPast = false;
                 }
             } catch (e) {
-                console.error("Fehler beim Nachladen der Termine:", e);
+                console.error("Fehler beim Nachladen vergangener Tage:", e);
             } finally {
-                isCalendarLoadingMore = false;
+                isTimelineLoadingPast = false;
                 if (loadingIndicator) loadingIndicator.style.display = 'none';
             }
         }
+
+        async function loadMoreFutureTimelineDays() {
+            if (isTimelineLoadingFuture || !timelineNewestLoadedDateStr || !timelineCanScrollFuture) return;
+            isTimelineLoadingFuture = true;
+
+            const loadingIndicator = document.getElementById('timeline-loading-future');
+            if (loadingIndicator) loadingIndicator.style.display = 'block';
+
+            try {
+                const newestParts = timelineNewestLoadedDateStr.split('-').map(Number);
+                const startDate = new Date(newestParts[0], newestParts[1] - 1, newestParts[2] + 1, 12, 0, 0);
+                const endDate = new Date(startDate);
+                endDate.setDate(endDate.getDate() + 13); // 14 Tage Zukunft
+
+                const startStr = getLocalDateString(startDate);
+                const endStr = getLocalDateString(endDate);
+
+                const res = await fetch(getApiUrl(`/api/calendar/timeline?start=${startStr}&end=${endStr}`));
+                if (!res.ok) throw new Error("Fehler beim Laden");
+                const data = await res.json();
+                const days = data.days || [];
+
+                const daysListDiv = document.getElementById('timeline-days-list');
+                if (daysListDiv && days.length > 0) {
+                    days.sort((a, b) => a.date.localeCompare(b.date));
+                    days.forEach(d => {
+                        if (!document.getElementById(`timeline-day-${d.date}`)) {
+                            daysListDiv.insertAdjacentHTML('beforeend', renderTimelineDayHtml(d));
+                        }
+                    });
+                    timelineNewestLoadedDateStr = endStr;
+                } else {
+                    timelineCanScrollFuture = false;
+                }
+            } catch (e) {
+                console.error("Fehler beim Nachladen zukünftiger Tage:", e);
+            } finally {
+                isTimelineLoadingFuture = false;
+                if (loadingIndicator) loadingIndicator.style.display = 'none';
+            }
+        }
+
+        async function jumpToTimelineDate(dateStr) {
+            if (!dateStr) return;
+            if (dateStr === 'today') {
+                dateStr = getLocalDateString();
+            }
+
+            const inputEl = document.getElementById('timeline-jump-date-input');
+            if (inputEl) inputEl.value = dateStr;
+
+            let targetEl = document.getElementById(`timeline-day-${dateStr}`);
+            if (targetEl) {
+                targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                flashTimelineDay(targetEl);
+                return;
+            }
+
+            try {
+                const parts = dateStr.split('-').map(Number);
+                const targetObj = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+                const startObj = new Date(targetObj);
+                startObj.setDate(startObj.getDate() - 6);
+                const endObj = new Date(targetObj);
+                endObj.setDate(endObj.getDate() + 7);
+
+                const startStr = getLocalDateString(startObj);
+                const endStr = getLocalDateString(endObj);
+
+                const res = await fetch(getApiUrl(`/api/calendar/timeline?start=${startStr}&end=${endStr}`));
+                if (res.ok) {
+                    const data = await res.json();
+                    const days = data.days || [];
+                    const daysListDiv = document.getElementById('timeline-days-list');
+                    if (daysListDiv) {
+                        days.sort((a, b) => a.date.localeCompare(b.date));
+                        let newHtml = '';
+                        days.forEach(d => {
+                            newHtml += renderTimelineDayHtml(d);
+                        });
+                        daysListDiv.innerHTML = newHtml;
+                        timelineOldestLoadedDateStr = startStr;
+                        timelineNewestLoadedDateStr = endStr;
+                        timelineCanScrollPast = true;
+                        timelineCanScrollFuture = true;
+
+                        setTimeout(() => {
+                            const newTarget = document.getElementById(`timeline-day-${dateStr}`);
+                            if (newTarget) {
+                                newTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                flashTimelineDay(newTarget);
+                            }
+                        }, 50);
+                    }
+                }
+            } catch (e) {
+                console.error("Fehler beim Laden des Ziel-Datums:", e);
+            }
+        }
+        window.jumpToTimelineDate = jumpToTimelineDate;
+
+        function flashTimelineDay(el) {
+            if (!el) return;
+            el.classList.add('timeline-jump-highlight');
+            setTimeout(() => {
+                el.classList.remove('timeline-jump-highlight');
+            }, 1800);
+        }
+
+        async function deleteCalendarEvent(eventId, occurrenceDate, isRecurring) {
+            const isRec = isRecurring === true || isRecurring === 'true';
+            let deleteType = 'single';
+            
+            if (isRec) {
+                const choice = confirm("Dies ist ein Serientermin.\n\nKlicke 'OK' um NUR DIESEN EINEN Termin am " + occurrenceDate + " zu löschen.\nKlicke 'Abbrechen', wenn du den Löschvorgang abbrechen möchtest.");
+                if (!choice) return;
+                deleteType = 'occurrence';
+            } else {
+                if (!confirm("Möchtest du diesen Termin wirklich löschen?")) return;
+            }
+
+            try {
+                const args = { terminId: eventId };
+                if (deleteType === 'occurrence' && occurrenceDate) {
+                    args.datum = occurrenceDate;
+                }
+                const res = await callTool('loesche_termin', args);
+                loadTopWidgets();
+            } catch (e) {
+                console.error("Fehler beim Löschen des Termins:", e);
+            }
+        }
+        window.deleteCalendarEvent = deleteCalendarEvent;
 
         async function loadTopWidgets() {
             try {
@@ -2675,41 +2933,8 @@
                     }
                     
                     if (widget.type === 'calendar_overview') {
-                        calendarLastRenderedDayKey = null;
-                        calendarCanScrollLoad = true;
-                        calendarJumpsCount = 0; // Reset
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        calendarLoadedUntil = new Date(today);
-                        calendarLoadedUntil.setDate(today.getDate() + 7);
-                        calendarLoadedUntil.setHours(23, 59, 59, 999);
-
-                        let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 8px;">`;
-                        
-                        html += `
-                            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                                <button onclick="openTaskModal()" class="nav-btn" style="flex: 1; font-size: 0.8rem;">➕ Neue Aufgabe</button>
-                            </div>
-                        `;
-
-                        if (widget.data.overdueTasks && widget.data.overdueTasks.length > 0) {
-                            html += `<div style="font-weight: 600; font-size: 0.7rem; color: var(--off); margin: 4px 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px;">⚠️ Überfällige Aufgaben</div>`;
-                            html += `<div style="display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 8px; background: rgba(243, 139, 168, 0.04); border: 1px solid rgba(243, 139, 168, 0.15); margin-bottom: 12px;">`;
-                            widget.data.overdueTasks.forEach(t => {
-                                html += renderSingleTaskHtml(t, true);
-                            });
-                            html += `</div>`;
-                        }
-
-                        html += `<div id="calendar-events-list" style="display: flex; flex-direction: column; gap: 8px;">`;
-                        html += renderCalendarEvents(widget.data.events);
-                        html += `</div>`;
-                        
-                        html += `<div id="calendar-loading-more" style="display: none; text-align: center; padding: 8px; font-size: 0.75rem; color: var(--accent); opacity: 0.8;">Lade weitere Termine...</div>`;
-
-                        setTimeout(checkAndLoadMoreIfNoScrollbar, 200);
-                        html += `</div>`;
-                        widgetDiv.innerHTML = html;
+                        widgetDiv.id = 'widget-calendar';
+                        renderTimelineWidget(widget.data, widgetDiv);
                     } else if (widget.type === 'timer_list') {
                         let html = `<div class="timer-list-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%;">`;
                         if (widget.data.timers.length === 0) {
@@ -2972,9 +3197,6 @@
                             }
                             html += `</div>`;
                             widgetDiv.innerHTML = html;
-                        } else if (widget.data.widgetType === 'journal_widget') {
-                            widgetDiv.id = 'widget-journal';
-                            renderJournalWidget(widget.data.initialDays || widget.data.todaySummary, widgetDiv);
                         } else if (widget.data.widgetType === 'tasks_overview') {
                             let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">`;
                             
@@ -3111,312 +3333,12 @@
             return `${year}-${month}-${day}`;
         }
 
-        let isJournalLoadingMore = false;
-        let journalOldestLoadedDateStr = null;
-        let journalNewestLoadedDateStr = null;
-        let journalCanScrollLoad = true;
-
-        function renderSingleDayJournalHtml(dayData) {
-            const dateStr = dayData.date;
-            const parts = dateStr.split('-').map(Number);
-            const dateObj = (parts.length === 3 && !isNaN(parts[0])) ? new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0) : new Date();
-            const formattedDate = dateObj.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
-            
-            const todayStr = getLocalDateString();
-            const yesterdayDate = new Date();
-            yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-            const yesterdayStr = getLocalDateString(yesterdayDate);
-
-            let dayBadge = '';
-            if (dateStr === todayStr) {
-                dayBadge = `<span style="background: rgba(250, 179, 135, 0.2); color: #fab387; font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; font-weight: bold; border: 1px solid rgba(250, 179, 135, 0.4);">Heute</span>`;
-            } else if (dateStr === yesterdayStr) {
-                dayBadge = `<span style="background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.8); font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; font-weight: 500;">Gestern</span>`;
-            }
-
-            const hasEntries = dayData.diaryEntries && dayData.diaryEntries.length > 0;
-            const hasEvents = dayData.events && dayData.events.length > 0;
-            const hasTasks = dayData.completedTasks && dayData.completedTasks.length > 0;
-
-            let html = `
-                <div class="journal-day-box" id="journal-day-${dateStr}" data-date="${dateStr}" style="display: flex; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); margin-bottom: 12px;">
-                    <!-- Akzentbalken links -->
-                    <div style="width: 5px; background-color: #fab387; flex-shrink: 0;"></div>
-
-                    <div style="flex: 1; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;">
-                        
-                        <!-- Datum Header -->
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px;">
-                            <div style="font-size: 0.85rem; font-weight: bold; color: var(--accent); display: flex; align-items: center; gap: 6px;">
-                                📖 ${formattedDate}
-                            </div>
-                            ${dayBadge}
-                        </div>
-            `;
-
-            if (!hasEntries && !hasEvents && !hasTasks) {
-                html += `<p style="font-size: 0.75rem; opacity: 0.4; margin: 4px 0; font-style: italic;">Keine Einträge oder Aktivitäten für diesen Tag.</p>`;
-            } else {
-                // 1. Tagebucheinträge
-                if (hasEntries) {
-                    html += `
-                        <div style="display: flex; flex-direction: column; gap: 6px;">
-                            <div style="font-size: 0.72rem; font-weight: bold; color: #fab387; text-transform: uppercase; letter-spacing: 0.5px;">📝 Einträge</div>
-                            <div style="display: flex; flex-direction: column; gap: 6px;">
-                    `;
-                    dayData.diaryEntries.forEach(e => {
-                        const timeStr = new Date(e.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                        const escTitle = escapeHtml(e.title || "Tagebucheintrag").replace(/'/g, "\\'");
-                        html += `
-                            <div style="background: rgba(250, 179, 135, 0.06); border: 1px solid rgba(250, 179, 135, 0.2); padding: 8px 10px; border-radius: 6px; font-size: 0.8rem; display: flex; flex-direction: column; gap: 4px;">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <strong style="color: #fab387; font-size: 0.8rem;">${escapeHtml(e.title || "Tagebucheintrag")}</strong>
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <span style="font-size: 0.65rem; opacity: 0.5;">${timeStr} Uhr</span>
-                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'journal', ${e.id})" style="background: transparent; border: none; color: #fab387; cursor: pointer; font-size: 0.75rem;" title="In Chat verlinken">🔗</button>
-                                        <button onclick="deleteJournalEntry(${e.id}, '${dateStr}')" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem;" title="Löschen">✖</button>
-                                    </div>
-                                </div>
-                                <div style="white-space: pre-wrap; word-break: break-word; line-height: 1.3;">${escapeHtml(e.content)}</div>
-                            </div>
-                        `;
-                    });
-                    html += `
-                            </div>
-                        </div>
-                    `;
-                }
-
-                // 2. Kalendertermine
-                if (hasEvents) {
-                    html += `
-                        <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 2px;">
-                            <div style="font-size: 0.72rem; font-weight: bold; color: #a6e3a1; text-transform: uppercase; letter-spacing: 0.5px;">📅 Kalendertermine</div>
-                            <div style="display: flex; flex-direction: column; gap: 4px;">
-                    `;
-                    dayData.events.forEach(ev => {
-                        const eventTime = ev.start || ev.time;
-                        const startStr = eventTime ? new Date(eventTime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
-                        const timeInfo = ev.isAllDay ? 'Ganztägig' : (startStr ? `${startStr} Uhr` : '');
-                        html += `
-                            <div style="background: rgba(166, 227, 161, 0.05); border: 1px solid rgba(166, 227, 161, 0.2); padding: 5px 8px; border-radius: 6px; font-size: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <strong style="color: #a6e3a1;">${escapeHtml(ev.title)}</strong>
-                                    ${ev.description ? `<div style="font-size: 0.7rem; opacity: 0.7;">${escapeHtml(ev.description)}</div>` : ''}
-                                </div>
-                                <span style="font-size: 0.65rem; opacity: 0.6; white-space: nowrap;">${timeInfo}</span>
-                            </div>
-                        `;
-                    });
-                    html += `
-                            </div>
-                        </div>
-                    `;
-                }
-
-                // 3. Erledigte Aufgaben
-                if (hasTasks) {
-                    html += `
-                        <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 2px;">
-                            <div style="font-size: 0.72rem; font-weight: bold; color: #89b4fa; text-transform: uppercase; letter-spacing: 0.5px;">✅ Erledigte Aufgaben</div>
-                            <div style="display: flex; flex-direction: column; gap: 4px;">
-                    `;
-                    dayData.completedTasks.forEach(t => {
-                        const doneTime = t.completedAt ? new Date(t.completedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
-                        html += `
-                            <div style="background: rgba(137, 180, 250, 0.05); border: 1px solid rgba(137, 180, 250, 0.2); padding: 5px 8px; border-radius: 6px; font-size: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
-                                <span style="color: var(--text);">✔️ ${escapeHtml(t.title)}</span>
-                                <span style="font-size: 0.65rem; color: #89b4fa;">${doneTime ? 'erledigt um ' + doneTime + ' Uhr' : 'erledigt'}</span>
-                            </div>
-                        `;
-                    });
-                    html += `
-                            </div>
-                        </div>
-                    `;
-                }
-            }
-
-            html += `
-                    </div>
-                </div>
-            `;
-            return html;
-        }
-
-        async function renderJournalWidget(data, containerDiv) {
-            let days = [];
-            if (Array.isArray(data)) {
-                days = data;
-            } else if (data && data.initialDays) {
-                days = data.initialDays;
-            } else if (data && data.date) {
-                days = [data];
-            }
-
-            if (!days || days.length === 0) {
-                const todayStr = getLocalDateString();
-                days = [{ date: todayStr, diaryEntries: [], events: [], completedTasks: [] }];
-            }
-
-            days.sort((a, b) => b.date.localeCompare(a.date));
-            journalNewestLoadedDateStr = days[0].date;
-            journalOldestLoadedDateStr = days[days.length - 1].date;
-            journalCanScrollLoad = true;
-
-            const todayStr = getLocalDateString();
-
-            let html = `
-                <div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 10px;">
-                    
-                    <!-- Sticky Datum-Eingabe & Schnell-Sprung Header -->
-                    <div style="position: sticky; top: 0; z-index: 10; background: #11111b; padding: 6px 0 10px 0; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                        <div style="font-size: 0.85rem; font-weight: bold; color: var(--accent); display: flex; align-items: center; gap: 6px;">
-                            📖 Tagebuch
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <input type="date" id="journal-jump-date-input" value="${todayStr}" onchange="jumpToJournalDate(this.value)" style="background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 3px 8px; font-size: 0.8rem; color-scheme: dark;">
-                            <button onclick="jumpToJournalDate('today')" class="nav-btn" style="padding: 3px 10px; font-size: 0.75rem; font-weight: bold;" title="Zu heute springen">Heute</button>
-                        </div>
-                    </div>
-
-                    <!-- Scrollbare Tage-Liste -->
-                    <div id="journal-days-list" style="display: flex; flex-direction: column;">
-            `;
-
-            days.forEach(d => {
-                html += renderSingleDayJournalHtml(d);
-            });
-
-            html += `
-                    </div>
-                    <div id="journal-loading-more" style="display: none; text-align: center; padding: 8px; font-size: 0.75rem; color: #fab387; opacity: 0.8;">Lade vergangene Tage...</div>
-                </div>
-            `;
-
-            containerDiv.innerHTML = html;
-        }
-
-        async function loadMoreJournalDays() {
-            if (isJournalLoadingMore || !journalOldestLoadedDateStr || !journalCanScrollLoad) return;
-            isJournalLoadingMore = true;
-
-            const loadingIndicator = document.getElementById('journal-loading-more');
-            if (loadingIndicator) loadingIndicator.style.display = 'block';
-
-            try {
-                const oldestParts = journalOldestLoadedDateStr.split('-').map(Number);
-                const endDate = new Date(oldestParts[0], oldestParts[1] - 1, oldestParts[2] - 1, 12, 0, 0);
-                const startDate = new Date(endDate);
-                startDate.setDate(startDate.getDate() - 6);
-
-                const startStr = getLocalDateString(startDate);
-                const endStr = getLocalDateString(endDate);
-
-                const res = await fetch(getApiUrl(`/api/journal/days?start=${startStr}&end=${endStr}`));
-                if (!res.ok) throw new Error("Fehler beim Laden");
-                const data = await res.json();
-                const days = data.days || [];
-
-                const daysListDiv = document.getElementById('journal-days-list');
-                if (daysListDiv && days.length > 0) {
-                    days.forEach(d => {
-                        if (!document.getElementById(`journal-day-${d.date}`)) {
-                            daysListDiv.insertAdjacentHTML('beforeend', renderSingleDayJournalHtml(d));
-                        }
-                    });
-                    journalOldestLoadedDateStr = startStr;
-                } else {
-                    journalCanScrollLoad = false;
-                }
-            } catch (e) {
-                console.error("Fehler beim Nachladen vergangener Tage:", e);
-            } finally {
-                isJournalLoadingMore = false;
-                if (loadingIndicator) loadingIndicator.style.display = 'none';
-            }
-        }
-
-        async function jumpToJournalDate(dateStr) {
-            if (!dateStr) return;
-            if (dateStr === 'today') {
-                dateStr = getLocalDateString();
-            }
-
-            const inputEl = document.getElementById('journal-jump-date-input');
-            if (inputEl) inputEl.value = dateStr;
-
-            let targetEl = document.getElementById(`journal-day-${dateStr}`);
-            if (targetEl) {
-                targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                flashJournalDay(targetEl);
-                return;
-            }
-
-            try {
-                const parts = dateStr.split('-').map(Number);
-                const targetObj = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
-                const startObj = new Date(targetObj);
-                startObj.setDate(startObj.getDate() - 6);
-
-                const startStr = getLocalDateString(startObj);
-                const endStr = getLocalDateString(targetObj);
-
-                const res = await fetch(getApiUrl(`/api/journal/days?start=${startStr}&end=${endStr}`));
-                if (res.ok) {
-                    const data = await res.json();
-                    const days = data.days || [];
-                    const daysListDiv = document.getElementById('journal-days-list');
-                    if (daysListDiv) {
-                        let newHtml = '';
-                        days.forEach(d => {
-                            newHtml += renderSingleDayJournalHtml(d);
-                        });
-                        daysListDiv.innerHTML = newHtml;
-                        journalNewestLoadedDateStr = endStr;
-                        journalOldestLoadedDateStr = startStr;
-                        journalCanScrollLoad = true;
-
-                        setTimeout(() => {
-                            const newTarget = document.getElementById(`journal-day-${dateStr}`);
-                            if (newTarget) {
-                                newTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                flashJournalDay(newTarget);
-                            }
-                        }, 50);
-                    }
-                }
-            } catch (e) {
-                console.error("Fehler beim Laden des Datums:", e);
-            }
-        }
-        window.jumpToJournalDate = jumpToJournalDate;
-
-        function flashJournalDay(el) {
-            if (!el) return;
-            el.classList.add('journal-jump-highlight');
-            setTimeout(() => {
-                el.classList.remove('journal-jump-highlight');
-            }, 1600);
-        }
-
         async function deleteJournalEntry(id, dateStr) {
             if (!confirm("Möchtest du diesen Tagebucheintrag wirklich löschen?")) return;
             try {
                 const res = await fetch(getApiUrl(`/api/journal/entries/${id}`), { method: 'DELETE' });
                 if (res.ok) {
-                    if (dateStr) {
-                        const dayRes = await fetch(getApiUrl(`/api/journal/day-summary?date=${dateStr}`));
-                        if (dayRes.ok) {
-                            const summary = await dayRes.json();
-                            const dayCard = document.getElementById(`journal-day-${dateStr}`);
-                            if (dayCard) {
-                                dayCard.outerHTML = renderSingleDayJournalHtml(summary);
-                            }
-                        }
-                    } else {
-                        loadTopWidgets();
-                    }
+                    loadTopWidgets();
                 }
             } catch (e) {
                 console.error("Fehler beim Löschen des Tagebucheintrags:", e);
@@ -3924,21 +3846,19 @@
                 console.error("Konnte keine Verbindung zum Server herstellen:", err);
             }
 
-            // Scroll-Listener für Infinite Scroll im Terminkalender und Tagebuch
+            // Scroll-Listener für bidirektionales Infinite Scroll in der Kalender- & Tagebuch-Timeline
             const topPanel = document.querySelector('.top-panel');
             if (topPanel) {
                 topPanel.addEventListener('scroll', () => {
                     const widgetCalendar = document.getElementById('widget-calendar');
-                    if (widgetCalendar && !isCalendarLoadingMore && calendarCanScrollLoad) {
-                        if (topPanel.scrollHeight - topPanel.scrollTop - topPanel.clientHeight < 100) {
-                            loadMoreCalendarEvents();
+                    if (widgetCalendar) {
+                        // Nach oben scrollen -> Vergangenheit laden
+                        if (topPanel.scrollTop < 80 && !isTimelineLoadingPast && timelineCanScrollPast) {
+                            loadMorePastTimelineDays();
                         }
-                    }
-
-                    const widgetJournal = document.getElementById('widget-journal');
-                    if (widgetJournal && !isJournalLoadingMore && journalCanScrollLoad) {
-                        if (topPanel.scrollHeight - topPanel.scrollTop - topPanel.clientHeight < 150) {
-                            loadMoreJournalDays();
+                        // Nach unten scrollen -> Zukunft laden
+                        if (topPanel.scrollHeight - topPanel.scrollTop - topPanel.clientHeight < 120 && !isTimelineLoadingFuture && timelineCanScrollFuture) {
+                            loadMoreFutureTimelineDays();
                         }
                     }
                 });

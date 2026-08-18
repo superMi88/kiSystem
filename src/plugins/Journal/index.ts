@@ -406,32 +406,8 @@ export const journalPlugin: Plugin = {
       }
     }
   ],
-  getTopWidgets: async ({ prisma }) => {
-    try {
-      const today = new Date();
-      today.setHours(12, 0, 0, 0);
-      const pastDays = new Date(today);
-      pastDays.setDate(today.getDate() - 6);
-      pastDays.setHours(12, 0, 0, 0);
-
-      const rangeData = await getRangeSummaryData(pastDays, today, prisma);
-      const summary = rangeData.days.find(d => d.date === today.toISOString().split('T')[0]) || await getDaySummaryData(today, prisma);
-
-      return [
-        {
-          pluginName: "Journal",
-          type: "custom",
-          data: {
-            widgetType: "journal_widget",
-            todaySummary: summary,
-            initialDays: rangeData.days
-          }
-        }
-      ];
-    } catch (e) {
-      console.error("Fehler beim Laden des Journal-Widgets:", e);
-      return [];
-    }
+  getTopWidgets: async () => {
+    return [];
   },
   entityConfig: {
     type: "journal",

@@ -1546,12 +1546,17 @@ body.mobile-mode .top-panel > div:first-child {
     margin-right: 6px;
 }
 
-/* Journal Widget Styles */
-.journal-day-box {
+/* Unified Timeline Widget Styles (Kalender & Tagebuch) */
+.timeline-day-box {
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.journal-day-box.journal-jump-highlight {
-    border-color: #fab387 !important;
-    box-shadow: 0 0 16px rgba(250, 179, 135, 0.45) !important;
+.timeline-day-box.today-box {
+    border-color: rgba(137, 180, 250, 0.35) !important;
+    background: rgba(137, 180, 250, 0.04) !important;
+    box-shadow: 0 4px 12px rgba(137, 180, 250, 0.08) !important;
+}
+.timeline-day-box.timeline-jump-highlight {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 18px rgba(137, 180, 250, 0.5) !important;
     transform: scale(1.01);
 }

@@ -307,6 +307,180 @@ export async function getEventsForRange(start: Date, end: Date, prisma: any): Pr
   return matchPersonsForEvents(allEvents, prisma);
 }
 
+export async function getTimelineRangeData(startDate: Date, endDate: Date, prisma: any) {
+  const sYear = startDate.getFullYear();
+  const sMonth = startDate.getMonth();
+  const sDay = startDate.getDate();
+
+  const eYear = endDate.getFullYear();
+  const eMonth = endDate.getMonth();
+  const eDay = endDate.getDate();
+
+  const localStart = new Date(sYear, sMonth, sDay, 0, 0, 0, 0);
+  const localEnd = new Date(eYear, eMonth, eDay, 23, 59, 59, 999);
+
+  const utcStart = new Date(Date.UTC(sYear, sMonth, sDay, 0, 0, 0, 0));
+  const utcEnd = new Date(Date.UTC(eYear, eMonth, eDay, 23, 59, 59, 999));
+
+  const startOfRange = localStart < utcStart ? localStart : utcStart;
+  const endOfRange = localEnd > utcEnd ? localEnd : utcEnd;
+
+  // 1. All calendar events & occurrences
+  const matchedEvents = await getEventsForRange(startOfRange, endOfRange, prisma);
+
+  // 2. All diary entries
+  let diaryEntries: any[] = [];
+  try {
+    diaryEntries = await prisma.diaryEntry.findMany({
+      where: {
+        isDeleted: false,
+        date: {
+          gte: startOfRange,
+          lte: endOfRange
+        }
+      },
+      orderBy: { createdAt: "asc" }
+    });
+  } catch (e) {
+    console.warn("Fehler beim Laden von Tagebucheinträgen für Timeline:", e);
+  }
+
+  // 3. All completed tasks
+  let completedTasks: any[] = [];
+  try {
+    completedTasks = await prisma.task.findMany({
+      where: {
+        isDeleted: false,
+        completed: true,
+        completedAt: {
+          gte: startOfRange,
+          lte: endOfRange
+        }
+      },
+      orderBy: { completedAt: "asc" }
+    });
+  } catch (e) {
+    console.warn("Fehler beim Laden erledigter Aufgaben für Timeline:", e);
+  }
+
+  // 4. Overdue tasks
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let overdueTasks: any[] = [];
+  try {
+    overdueTasks = await prisma.task.findMany({
+      where: {
+        completed: false,
+        isDeleted: false,
+        due: {
+          lt: today
+        }
+      },
+      orderBy: { due: "asc" }
+    });
+  } catch (e) {
+    console.warn("Fehler beim Laden überfälliger Aufgaben für Timeline:", e);
+  }
+
+  // Days map (ascending chronological order: past at top, future at bottom)
+  const daysMap: { [key: string]: { date: string; displayDate: string; events: any[]; diaryEntries: any[]; completedTasks: any[] } } = {};
+
+  let curr = new Date(startDate);
+  curr.setHours(12, 0, 0, 0);
+  const maxDate = new Date(endDate);
+  maxDate.setHours(12, 0, 0, 0);
+
+  while (curr <= maxDate) {
+    const y = curr.getFullYear();
+    const m = String(curr.getMonth() + 1).padStart(2, '0');
+    const d = String(curr.getDate()).padStart(2, '0');
+    const key = `${y}-${m}-${d}`;
+    const weekday = curr.toLocaleDateString('de-DE', { weekday: 'short' }).replace(/\.$/, '');
+    const dayAndMonth = curr.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+    daysMap[key] = {
+      date: key,
+      displayDate: `${weekday}. ${dayAndMonth}`,
+      events: [],
+      diaryEntries: [],
+      completedTasks: []
+    };
+    curr.setDate(curr.getDate() + 1);
+  }
+
+  // Populate events
+  matchedEvents.forEach((ev: any) => {
+    const eventTime = ev.start || ev.time;
+    if (!eventTime) return;
+    const d = new Date(eventTime);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const key = `${y}-${m}-${day}`;
+    if (!daysMap[key]) {
+      const weekday = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace(/\.$/, '');
+      const dayAndMonth = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      daysMap[key] = { date: key, displayDate: `${weekday}. ${dayAndMonth}`, events: [], diaryEntries: [], completedTasks: [] };
+    }
+    daysMap[key].events.push(ev);
+  });
+
+  // Populate diary entries
+  diaryEntries.forEach((e: any) => {
+    const d = new Date(e.date);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const key = `${y}-${m}-${day}`;
+    if (!daysMap[key]) {
+      const weekday = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace(/\.$/, '');
+      const dayAndMonth = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      daysMap[key] = { date: key, displayDate: `${weekday}. ${dayAndMonth}`, events: [], diaryEntries: [], completedTasks: [] };
+    }
+    daysMap[key].diaryEntries.push({
+      id: e.id,
+      title: e.title || "Tagebucheintrag",
+      content: e.content,
+      createdAt: e.createdAt
+    });
+  });
+
+  // Populate completed tasks
+  completedTasks.forEach((t: any) => {
+    if (!t.completedAt) return;
+    const d = new Date(t.completedAt);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const key = `${y}-${m}-${day}`;
+    if (!daysMap[key]) {
+      const weekday = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace(/\.$/, '');
+      const dayAndMonth = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      daysMap[key] = { date: key, displayDate: `${weekday}. ${dayAndMonth}`, events: [], diaryEntries: [], completedTasks: [] };
+    }
+    daysMap[key].completedTasks.push({
+      id: t.id,
+      title: t.title,
+      notes: t.notes,
+      completedAt: t.completedAt,
+      listTitle: t.listTitle
+    });
+  });
+
+  const sortedKeys = Object.keys(daysMap).sort();
+  return {
+    days: sortedKeys.map(k => daysMap[k]),
+    overdueTasks: overdueTasks.map((t: any) => ({
+      id: String(t.id),
+      title: t.title,
+      notes: t.notes || "",
+      due: t.due ? t.due.toISOString() : null,
+      listTitle: t.listTitle,
+      recurrence: t.recurrence,
+      isTask: true
+    }))
+  };
+}
+
 export const calendarPlugin: Plugin = {
   name: "Calendar",
   description: "Verwaltet Termine und wiederkehrende Muster in der lokalen Datenbank.",
@@ -829,51 +1003,37 @@ export const calendarPlugin: Plugin = {
       }
     }
   ],
-  getTopWidgets: async ({ prisma, calendarDays }: { prisma: any, calendarDays?: number }) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const days = calendarDays || 7;
-    const inDays = new Date();
-    inDays.setDate(today.getDate() + days);
-    inDays.setHours(23, 59, 59, 999);
-
-    const matchedEvents = await getEventsForRange(today, inDays, prisma);
-
-    let overdueTasks: any[] = [];
+  getTopWidgets: async ({ prisma }: { prisma: any }) => {
     try {
-      overdueTasks = await prisma.task.findMany({
-        where: {
-          completed: false,
-          isDeleted: false,
-          due: {
-            lt: today
-          }
-        },
-        orderBy: { due: "asc" }
-      });
-    } catch (e) {
-      console.warn("Fehler beim Laden überfälliger Aufgaben:", e);
-    }
+      const today = new Date();
+      today.setHours(12, 0, 0, 0);
 
-    return [
-      {
-        pluginName: "Calendar",
-        type: "calendar_overview",
-        data: {
-          events: matchedEvents,
-          overdueTasks: overdueTasks.map((t: any) => ({
-            id: String(t.id),
-            title: t.title,
-            notes: t.notes || "",
-            due: t.due ? t.due.toISOString() : null,
-            listTitle: t.listTitle,
-            recurrence: t.recurrence,
-            isTask: true
-          }))
+      const pastDays = new Date(today);
+      pastDays.setDate(today.getDate() - 5);
+      pastDays.setHours(0, 0, 0, 0);
+
+      const futureDays = new Date(today);
+      futureDays.setDate(today.getDate() + 14);
+      futureDays.setHours(23, 59, 59, 999);
+
+      const timelineData = await getTimelineRangeData(pastDays, futureDays, prisma);
+
+      return [
+        {
+          pluginName: "Calendar",
+          type: "calendar_overview",
+          data: {
+            timeline: timelineData.days,
+            overdueTasks: timelineData.overdueTasks,
+            initialPastDate: pastDays.toISOString().split('T')[0],
+            initialFutureDate: futureDays.toISOString().split('T')[0]
+          }
         }
-      }
-    ];
+      ];
+    } catch (e) {
+      console.error("Fehler beim Laden des Kalender-Widgets:", e);
+      return [];
+    }
   },
   entityConfig: {
     type: "event",

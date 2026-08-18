@@ -15,7 +15,7 @@ import os from "os";
 import { PluginManager } from "./plugins/index.js";
 import { getSettings, saveSettings } from "./settings.js";
 import { runAutomaticMigration } from "./migrate.js";
-import { getEventsForRange } from "./plugins/Calendar/index.js";
+import { getEventsForRange, getTimelineRangeData } from "./plugins/Calendar/index.js";
 import { calculateNextDueDate } from "./plugins/Tasks/index.js";
 import { getDaySummaryData, getRangeSummaryData, parseLocalDate } from "./plugins/Journal/index.js";
 
@@ -149,6 +149,23 @@ app.get("/api/calendar/events", async (req, res) => {
     });
   } catch (e: any) {
     console.error("Fehler beim Abrufen der Kalender-Events:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/calendar/timeline", async (req, res) => {
+  try {
+    const startStr = req.query.start as string;
+    const endStr = req.query.end as string;
+    if (!startStr || !endStr) {
+      return res.status(400).json({ error: "start und end Parameter sind erforderlich." });
+    }
+    const startDate = parseLocalDate(startStr);
+    const endDate = parseLocalDate(endStr);
+    const data = await getTimelineRangeData(startDate, endDate, prisma);
+    res.json(data);
+  } catch (e: any) {
+    console.error("Fehler beim Abrufen der Timeline:", e);
     res.status(500).json({ error: e.message });
   }
 });
