@@ -525,13 +525,17 @@
             // If it's a plugin view, we scroll it to top on desktop, or reset scroll on mobile
             if (viewName !== 'chat' && viewName !== 'settings' && viewName !== 'history') {
                 if (viewName === 'calendar') {
-                    setTimeout(() => {
+                    const scrollToToday = (behavior = 'auto') => {
                         const todayStr = getLocalDateString();
                         const todayEl = document.getElementById(`timeline-day-${todayStr}`);
                         if (todayEl) {
-                            scrollElementInsideTopPanel(todayEl, 'center', 'smooth');
+                            scrollElementInsideTopPanel(todayEl, 'center', behavior);
                         }
-                    }, 80);
+                    };
+                    scrollToToday('auto');
+                    requestAnimationFrame(() => scrollToToday('auto'));
+                    setTimeout(() => scrollToToday('auto'), 60);
+                    setTimeout(() => scrollToToday('smooth'), 180);
                 } else if (document.body.classList.contains('mobile-mode')) {
                     const topPanel = document.querySelector('.top-panel');
                     if (topPanel) {
@@ -547,22 +551,11 @@
                 }
             }
 
-            // Force keyboard to close on mobile view switch by temporarily hiding the input area
-            // and blurring the text field, ONLY if the input field was actually focused.
-            // This resolves buggy WebView virtual keyboard states and prevents flickering on normal clicks.
-            const inputArea = document.querySelector('.input-area');
+            // Force keyboard to close on mobile view switch by blurring active inputs
             const inputField = document.getElementById('user-input');
             if (document.body.classList.contains('mobile-mode')) {
-                if (inputField) {
-                    const isFocused = (document.activeElement === inputField);
-                    inputField.blur();
-                    if (isFocused && inputArea) {
-                        const origDisplay = inputArea.style.display;
-                        inputArea.style.display = 'none';
-                        setTimeout(() => {
-                            inputArea.style.display = origDisplay || '';
-                        }, 50);
-                    }
+                if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                    document.activeElement.blur();
                 }
             }
 
@@ -2414,24 +2407,49 @@
             return timeBadge;
         }
 
+        function getElementTopRelativeToParent(element, parent) {
+            let top = 0;
+            let curr = element;
+            while (curr && curr !== parent && curr !== document.body) {
+                top += curr.offsetTop || 0;
+                curr = curr.offsetParent;
+            }
+            return top;
+        }
+
         function scrollElementInsideTopPanel(targetEl, block = 'center', behavior = 'smooth') {
             const topPanel = document.querySelector('.top-panel');
             if (!topPanel || !targetEl) return;
 
+            const panelHeight = topPanel.clientHeight;
+            if (panelHeight === 0) {
+                setTimeout(() => scrollElementInsideTopPanel(targetEl, block, behavior), 60);
+                return;
+            }
+
             const panelRect = topPanel.getBoundingClientRect();
             const targetRect = targetEl.getBoundingClientRect();
 
-            const relativeTop = (targetRect.top - panelRect.top) + topPanel.scrollTop;
+            let relativeTop;
+            if (panelRect.height > 0 && targetRect.height > 0) {
+                relativeTop = (targetRect.top - panelRect.top) + topPanel.scrollTop;
+            } else {
+                relativeTop = getElementTopRelativeToParent(targetEl, topPanel);
+            }
+
+            const targetHeight = targetRect.height || targetEl.offsetHeight || 80;
             let targetScrollTop = relativeTop;
 
             if (block === 'center') {
-                targetScrollTop = relativeTop - (panelRect.height / 2) + (targetRect.height / 2);
+                targetScrollTop = relativeTop - (panelHeight / 2) + (targetHeight / 2);
             } else if (block === 'start') {
-                targetScrollTop = relativeTop - 10;
+                targetScrollTop = relativeTop - 15;
             }
 
+            const finalScrollTop = Math.max(0, targetScrollTop);
+
             topPanel.scrollTo({
-                top: Math.max(0, targetScrollTop),
+                top: finalScrollTop,
                 behavior: behavior
             });
 
@@ -2957,6 +2975,10 @@
             if (!dateStr) return;
             if (dateStr === 'today') {
                 dateStr = getLocalDateString();
+            }
+
+            if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                document.activeElement.blur();
             }
 
             const inputEl = document.getElementById('timeline-jump-date-input');

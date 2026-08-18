@@ -1385,9 +1385,7 @@ body.mobile-mode.view-settings #mobile-top-bar {
     display: none !important;
 }
 
-/* Hide chat input area and attachments preview on mobile when typing in another input field or when a modal is open */
-body.mobile-mode:not(.view-chat) .side-panel-container > :not(.right-column):focus-within ~ .right-column .input-area,
-body.mobile-mode:not(.view-chat) .side-panel-container > :not(.right-column):focus-within ~ .right-column #attachments-bar,
+/* Hide chat input area and attachments preview on mobile only when a modal is open */
 body.mobile-mode.modal-active .input-area,
 body.mobile-mode.modal-active #attachments-bar {
     display: none !important;
