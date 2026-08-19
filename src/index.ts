@@ -930,8 +930,7 @@ app.post("/chat", async (req, res) => {
     const dateString = now.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     const timeString = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 
-    const currentSettings = getSettings();
-    const modelName = currentSettings.aiModel || process.env.GEMINI_MODEL || "gemini-1.5-flash";
+    const modelName = process.env.GEMINI_MODEL || "gemini-3.5-flash";
     const model = genAI.getGenerativeModel({
       model: modelName,
       tools: [{ functionDeclarations: pluginManager.getGeminiTools() } as any],
