@@ -560,12 +560,16 @@ app.post("/api/mail/accounts/test", async (req, res) => {
 app.get("/api/mail/messages", async (req, res) => {
   try {
     const accountId = req.query.accountId ? Number(req.query.accountId) : undefined;
+    const category = req.query.category as string | undefined;
+    const personId = req.query.personId ? Number(req.query.personId) : undefined;
     const query = req.query.q as string | undefined;
     const limit = req.query.limit ? Number(req.query.limit) : 50;
     const offset = req.query.offset ? Number(req.query.offset) : 0;
 
     const result = await MailService.getUnifiedEmails(prisma, {
       accountId,
+      category,
+      personId,
       query,
       limit,
       offset
@@ -591,6 +595,14 @@ app.get("/api/mail/messages/:id", async (req, res) => {
             email: true,
             color: true
           }
+        },
+        person: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            aliases: { select: { name: true, isPrimary: true } }
+          }
         }
       }
     });
@@ -600,16 +612,85 @@ app.get("/api/mail/messages/:id", async (req, res) => {
     }
 
     if (!mail.isRead) {
-      await prisma.cachedEmail.update({
-        where: { id },
-        data: { isRead: true }
-      });
+      await MailService.markEmailReadStatus(prisma, id, true);
       mail.isRead = true;
     }
 
     res.json(mail);
   } catch (e: any) {
     console.error("Fehler beim Laden der E-Mail:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/mail/messages/:id/read", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const isRead = req.body?.isRead !== undefined ? !!req.body.isRead : true;
+    const result = await MailService.markEmailReadStatus(prisma, id, isRead);
+    res.json(result);
+  } catch (e: any) {
+    console.error("Fehler beim Ändern des Gelesen-Status:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/api/mail/messages/:id/category", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { category } = req.body;
+    if (!category) {
+      return res.status(400).json({ error: "Kategorie ist erforderlich." });
+    }
+    const updated = await MailService.updateEmailCategory(prisma, id, category);
+    res.json(updated);
+  } catch (e: any) {
+    console.error("Fehler beim Aktualisieren der Kategorie:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/api/mail/messages/:id/person", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const personId = req.body.personId !== undefined && req.body.personId !== null ? Number(req.body.personId) : null;
+    const updated = await MailService.linkEmailToPerson(prisma, id, personId);
+    res.json(updated);
+  } catch (e: any) {
+    console.error("Fehler beim Verknüpfen der Person:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/api/entities/person/:id/email", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { email, emails } = req.body;
+    const data: any = {};
+    if (email !== undefined) data.email = email ? email.trim() : null;
+    if (emails !== undefined) data.emails = emails ? emails.trim() : null;
+
+    const updated = await prisma.person.update({
+      where: { id },
+      data,
+      include: { aliases: true }
+    });
+
+    // Retroaktiver Abgleich: Verknüpfe alle bisher nicht zugeordneten E-Mails dieser Adresse
+    const addressToMatch = (updated.email || "").toLowerCase().trim();
+    if (addressToMatch) {
+      await prisma.cachedEmail.updateMany({
+        where: {
+          personId: null,
+          from: { contains: addressToMatch, mode: "insensitive" }
+        },
+        data: { personId: updated.id }
+      });
+    }
+
+    res.json(updated);
+  } catch (e: any) {
+    console.error("Fehler beim Speichern der Personen-E-Mail:", e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -643,16 +724,18 @@ app.post("/api/mail/send", async (req, res) => {
 app.post("/api/mail/sync", async (req, res) => {
   try {
     const accountId = req.body?.accountId ? Number(req.body.accountId) : undefined;
+    const fullSync = req.body?.fullSync === true;
+
     if (accountId) {
       const account = await prisma.mailAccount.findUnique({ where: { id: accountId } });
       if (!account || account.isDeleted) {
         return res.status(404).json({ error: "Konto nicht gefunden." });
       }
-      const syncRes = await MailService.syncAccountEmails(account, prisma);
+      const syncRes = await MailService.syncAccountEmails(account, prisma, { fullSync });
       return res.json({ success: true, count: syncRes.count, error: syncRes.error });
     }
 
-    const allSync = await MailService.syncAllAccounts(prisma);
+    const allSync = await MailService.syncAllAccounts(prisma, { fullSync });
     res.json({ success: true, totalSynced: allSync.totalSynced, results: allSync.results });
   } catch (e: any) {
     console.error("Fehler beim Synchronisieren:", e);
@@ -1015,6 +1098,13 @@ app.listen(PORT, async () => {
 
   // Automatische Datenmigration ausführen
   await runAutomaticMigration(prisma);
+
+  // Periodischer Hintergrund-Sync für E-Mails alle 3 Minuten
+  setInterval(() => {
+    MailService.syncAllAccounts(prisma).catch(err => {
+      console.warn("[Mail AutoSync] Hintergrund-Sync fehlgeschlagen:", err?.message || err);
+    });
+  }, 3 * 60 * 1000);
 
   // Output local network IP addresses to let the user know what to enter in the mobile app settings
   const nets = os.networkInterfaces();

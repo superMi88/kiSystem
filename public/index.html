@@ -226,6 +226,15 @@
                     </div>
                 </div>
 
+                <!-- E-Mail-Adressen -->
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">✉️ E-Mail-Adresse(n)</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="person-email-input" placeholder="z.B. max@web.de, max.mustermann@gmail.com" style="flex: 1; padding: 8px; font-size: 0.8rem; height: 32px; border-radius: 6px; background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.1); outline: none;">
+                        <button onclick="savePersonEmail()" class="nav-btn" style="flex: 0; padding: 0 12px; height: 32px; border-radius: 6px; background: var(--accent); color: #11111b; font-weight: bold; border: none; cursor: pointer;">Speichern</button>
+                    </div>
+                </div>
+
                 <!-- Biografie -->
                 <div>
                     <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Biografie / Notizen</label>
@@ -271,14 +280,34 @@
         <div id="mail-read-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 20px; border-radius: 12px; z-index: 300; width: 90%; max-width: 600px; max-height: 85vh; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px); flex-direction: column;">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; margin-bottom: 12px; gap: 10px;">
                 <div style="flex: 1; min-width: 0;">
-                    <div id="mail-read-account-badge" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin-bottom: 6px; background: rgba(137, 180, 250, 0.15); color: var(--accent); border: 1px solid rgba(137, 180, 250, 0.3);">
-                        <!-- Account Badge -->
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px;">
+                        <div id="mail-read-account-badge" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: rgba(137, 180, 250, 0.15); color: var(--accent); border: 1px solid rgba(137, 180, 250, 0.3);">
+                            <!-- Account Badge -->
+                        </div>
+                        <div id="mail-read-person-badge" style="display: inline-flex; align-items: center; gap: 4px;">
+                            <!-- Person Badge -->
+                        </div>
                     </div>
                     <h3 id="mail-read-subject" style="color: white; margin: 0 0 6px 0; font-size: 1.05rem; word-break: break-word; line-height: 1.3;">Betreff</h3>
-                    <div style="font-size: 0.78rem; opacity: 0.75; display: flex; flex-direction: column; gap: 2px;">
+                    <div style="font-size: 0.78rem; opacity: 0.75; display: flex; flex-direction: column; gap: 3px;">
                         <div><strong>Von:</strong> <span id="mail-read-from"></span></div>
                         <div><strong>An:</strong> <span id="mail-read-to"></span></div>
-                        <div><strong>Datum:</strong> <span id="mail-read-date"></span></div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+                            <div><strong>Datum:</strong> <span id="mail-read-date"></span></div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <strong style="color: var(--accent);">🏷️ Kategorie:</strong>
+                                <select id="mail-read-category-select" onchange="changeCurrentMailCategory(this.value)" style="background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 2px 6px; font-size: 0.72rem; outline: none; color-scheme: dark;">
+                                    <option value="Allgemein">Allgemein</option>
+                                    <option value="Arbeit">Arbeit</option>
+                                    <option value="Rechnungen">Rechnungen</option>
+                                    <option value="Privat">Privat</option>
+                                    <option value="Finanzen">Finanzen</option>
+                                    <option value="Wichtig">Wichtig</option>
+                                    <option value="Bestellungen">Bestellungen</option>
+                                    <option value="Sonstiges">Sonstiges</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
@@ -292,9 +321,12 @@
                 <!-- Mail Inhalt -->
             </div>
 
-            <div style="display: flex; gap: 10px; margin-top: 15px;">
-                <button class="cancel" onclick="closeMailReadModal()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Schließen</button>
-                <button id="mail-read-reply-btn" onclick="openReplyFromReadModal()" class="save" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <div style="display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap;">
+                <button class="cancel" onclick="closeMailReadModal()" style="flex: 1; min-width: 80px; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Schließen</button>
+                <button id="mail-read-toggle-read-btn" onclick="toggleCurrentMailReadStatus()" class="nav-btn" style="flex: 1.2; min-width: 130px; padding: 10px; border-radius: 6px; font-size: 0.8rem; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;">
+                    ✉️ Als ungelesen
+                </button>
+                <button id="mail-read-reply-btn" onclick="openReplyFromReadModal()" class="save" style="flex: 1.5; min-width: 120px; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 6px;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 17 4 12 9 7"></polyline><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path></svg>
                     Antworten
                 </button>
@@ -1099,6 +1131,15 @@
                 if (bdayInput) {
                     bdayInput.value = person.birthday ? person.birthday.split('T')[0] : '';
                 }
+
+                // E-Mail-Adressen
+                const emailInput = document.getElementById('person-email-input');
+                if (emailInput) {
+                    const emailsList = [];
+                    if (person.email) emailsList.push(person.email);
+                    if (person.emails) emailsList.push(person.emails);
+                    emailInput.value = emailsList.join(', ');
+                }
                 
                 // Aliase / Namen
                 personProfileNames.innerHTML = '';
@@ -1216,6 +1257,31 @@
                     loadTopWidgets();
                 } else {
                     alert("Fehler: " + (res?.message || "Konnte Geburtstag nicht speichern."));
+                }
+            } catch (err) {
+                alert("Fehler: " + err.message);
+            }
+        };
+
+        window.savePersonEmail = async function() {
+            const id = personProfileId.value;
+            const emailInput = document.getElementById('person-email-input');
+            const emailVal = emailInput ? emailInput.value.trim() : '';
+            if (!id) return;
+
+            try {
+                const res = await fetch(getApiUrl(`/api/entities/person/${id}/email`), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: emailVal })
+                });
+                if (res.ok) {
+                    alert("E-Mail-Adresse wurde gespeichert!");
+                    openPersonProfileModal(id);
+                    loadTopWidgets();
+                } else {
+                    const data = await res.json();
+                    alert("Fehler: " + (data.error || "Konnte E-Mail nicht speichern."));
                 }
             } catch (err) {
                 alert("Fehler: " + err.message);
@@ -3755,14 +3821,22 @@
         // E-Mail System (Web.de & Gmail) Client Logic
         // ==========================================
         let activeMailAccountFilter = null;
+        let activeMailCategoryFilter = null;
         let currentMailSearchQuery = '';
         let currentReadMailId = null;
+        let currentReadMailData = null;
 
         function filterMailByAccount(accountId) {
             activeMailAccountFilter = accountId !== null ? Number(accountId) : null;
             loadTopWidgets();
         }
         window.filterMailByAccount = filterMailByAccount;
+
+        function filterMailByCategory(category) {
+            activeMailCategoryFilter = category && category !== 'all' && category !== 'Alle' ? category : null;
+            loadTopWidgets();
+        }
+        window.filterMailByCategory = filterMailByCategory;
 
         function filterMailBySearch(query) {
             currentMailSearchQuery = query || '';
@@ -3773,20 +3847,28 @@
         function renderMailWidget(data, container) {
             const accounts = data.accounts || [];
             const rawEmails = data.emails || [];
+            const categories = data.categories || ["Alle", "Allgemein", "Arbeit", "Rechnungen", "Privat", "Finanzen", "Wichtig", "Bestellungen", "Sonstiges"];
 
-            // Filter by selected account
+            // 1. Filter nach Konto
             let filteredEmails = rawEmails;
             if (activeMailAccountFilter !== null) {
                 filteredEmails = filteredEmails.filter(e => Number(e.accountId) === Number(activeMailAccountFilter));
             }
 
-            // Filter by search query if any
+            // 2. Filter nach Kategorie
+            if (activeMailCategoryFilter !== null) {
+                filteredEmails = filteredEmails.filter(e => (e.category || 'Allgemein') === activeMailCategoryFilter);
+            }
+
+            // 3. Filter nach Textsuche
             if (currentMailSearchQuery && currentMailSearchQuery.trim()) {
                 const q = currentMailSearchQuery.toLowerCase().trim();
                 filteredEmails = filteredEmails.filter(e => 
                     (e.subject && e.subject.toLowerCase().includes(q)) ||
                     (e.from && e.from.toLowerCase().includes(q)) ||
                     (e.fromName && e.fromName.toLowerCase().includes(q)) ||
+                    (e.personName && e.personName.toLowerCase().includes(q)) ||
+                    (e.category && e.category.toLowerCase().includes(q)) ||
                     (e.snippet && e.snippet.toLowerCase().includes(q)) ||
                     (e.accountEmail && e.accountEmail.toLowerCase().includes(q))
                 );
@@ -3796,13 +3878,16 @@
 
             // 1. Header Toolbar
             html += `
-                <div style="display: flex; gap: 6px; align-items: center; justify-content: space-between;">
-                    <div style="display: flex; gap: 6px; flex: 1;">
-                        <button onclick="openMailComposeModal()" class="nav-btn" style="flex: 1; font-size: 0.75rem; padding: 6px 10px; height: 30px; background: var(--accent); color: #11111b; font-weight: bold; border: none; border-radius: 6px;">
+                <div style="display: flex; gap: 6px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                    <div style="display: flex; gap: 6px; flex: 1; min-width: 200px;">
+                        <button onclick="openMailComposeModal()" class="nav-btn" style="flex: 1; font-size: 0.75rem; padding: 6px 8px; height: 30px; background: var(--accent); color: #11111b; font-weight: bold; border: none; border-radius: 6px;">
                             ✍️ Verfassen
                         </button>
-                        <button id="mail-sync-btn" onclick="syncAllMailsManual()" class="nav-btn" style="flex: 1; font-size: 0.75rem; padding: 6px 10px; height: 30px; border-radius: 6px;" title="Postfächer abrufen">
-                            🔄 Synchronisieren
+                        <button id="mail-sync-btn" onclick="syncAllMailsManual(false)" class="nav-btn" style="flex: 1; font-size: 0.75rem; padding: 6px 8px; height: 30px; border-radius: 6px;" title="Neue Mails abrufen">
+                            🔄 Sync
+                        </button>
+                        <button onclick="syncAllMailsManual(true)" class="nav-btn" style="flex: 0 0 auto; font-size: 0.72rem; padding: 6px 8px; height: 30px; border-radius: 6px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);" title="Vollständigen Posteingang synchronisieren">
+                            ⚡ Voll-Sync
                         </button>
                     </div>
                     <button onclick="openMailAccountsModal()" class="nav-btn" style="flex: 0; padding: 6px 10px; height: 30px; font-size: 0.75rem; border-radius: 6px;" title="Konten verwalten">
@@ -3811,7 +3896,7 @@
                 </div>
             `;
 
-            // 2. If no accounts, show empty state with call to action
+            // 2. Empty State falls keine Konten
             if (accounts.length === 0) {
                 html += `
                     <div style="padding: 20px 15px; text-align: center; background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; margin-top: 5px;">
@@ -3827,30 +3912,40 @@
                 return;
             }
 
-            // 3. Filter Pills Bar (Alle Postfächer, Web.de, Gmail etc.)
-            html += `<div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none;">`;
+            // 3. Postfach-Pills (Konto-Filter)
+            html += `<div style="display: flex; gap: 5px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none;">`;
             const allActiveStyle = activeMailAccountFilter === null ? 'background: var(--accent); color: #11111b; font-weight: bold; border-color: var(--accent);' : 'background: rgba(255,255,255,0.04); color: var(--text); border-color: rgba(255,255,255,0.1);';
-            html += `<button onclick="filterMailByAccount(null)" class="nav-btn" style="flex: 0 0 auto; height: 26px; font-size: 0.7rem; padding: 0 10px; border-radius: 13px; ${allActiveStyle}">Alle (${rawEmails.length})</button>`;
+            html += `<button onclick="filterMailByAccount(null)" class="nav-btn" style="flex: 0 0 auto; height: 25px; font-size: 0.7rem; padding: 0 9px; border-radius: 12px; ${allActiveStyle}">Alle Konten (${rawEmails.length})</button>`;
             
             accounts.forEach(acc => {
                 const isSelected = Number(activeMailAccountFilter) === Number(acc.id);
                 const color = acc.color || '#89b4fa';
                 const pillStyle = isSelected ? `background: ${color}; color: #11111b; font-weight: bold; border-color: ${color};` : `background: rgba(255,255,255,0.04); color: var(--text); border-color: rgba(255,255,255,0.1);`;
                 const icon = acc.email.toLowerCase().includes('web.de') ? '🟠' : (acc.email.toLowerCase().includes('gmail') ? '🔴' : '✉️');
-                html += `<button onclick="filterMailByAccount(${acc.id})" class="nav-btn" style="flex: 0 0 auto; height: 26px; font-size: 0.7rem; padding: 0 10px; border-radius: 13px; ${pillStyle}">${icon} ${escapeHtml(acc.email)}</button>`;
+                html += `<button onclick="filterMailByAccount(${acc.id})" class="nav-btn" style="flex: 0 0 auto; height: 25px; font-size: 0.7rem; padding: 0 9px; border-radius: 12px; ${pillStyle}">${icon} ${escapeHtml(acc.email)}</button>`;
             });
             html += `</div>`;
 
-            // 4. Search Input
+            // 4. Kategorie-Pills (Kategorien-Filter)
+            html += `<div style="display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none;">`;
+            categories.forEach(cat => {
+                const isCatSelected = (cat === "Alle" && activeMailCategoryFilter === null) || (activeMailCategoryFilter === cat);
+                const catStyle = isCatSelected ? 'background: rgba(137, 180, 250, 0.25); color: var(--accent); font-weight: bold; border: 1px solid var(--accent);' : 'background: rgba(255,255,255,0.03); color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.06);';
+                html += `<button onclick="filterMailByCategory('${cat === 'Alle' ? 'all' : cat}')" class="nav-btn" style="flex: 0 0 auto; height: 23px; font-size: 0.68rem; padding: 0 8px; border-radius: 6px; ${catStyle}">🏷️ ${cat}</button>`;
+            });
+            html += `<button onclick="promptCreateNewCategory()" class="nav-btn" style="flex: 0 0 auto; height: 23px; font-size: 0.68rem; padding: 0 8px; border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--accent); border: 1px dashed var(--accent); cursor: pointer;" title="Eigene Kategorie hinzufügen">➕ Kat.</button>`;
+            html += `</div>`;
+
+            // 5. Search Input
             html += `
                 <div style="display: flex; gap: 6px;">
-                    <input type="text" id="mail-search-input" value="${escapeHtml(currentMailSearchQuery)}" placeholder="E-Mails durchsuchen (Absender, Betreff, Text)..." oninput="filterMailBySearch(this.value)" style="width: 100%; height: 32px; padding: 6px 10px; font-size: 0.78rem; border-radius: 6px; background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.1); outline: none;">
+                    <input type="text" id="mail-search-input" value="${escapeHtml(currentMailSearchQuery)}" placeholder="E-Mails durchsuchen (Person, Absender, Betreff, Kategorie)..." oninput="filterMailBySearch(this.value)" style="width: 100%; height: 32px; padding: 6px 10px; font-size: 0.78rem; border-radius: 6px; background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.1); outline: none;">
                 </div>
             `;
 
-            // 5. Emails List
+            // 6. Emails List
             if (filteredEmails.length === 0) {
-                html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 15px 0;">Keine E-Mails vorhanden. Klicke auf 'Synchronisieren' zum Abrufen.</p>`;
+                html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 15px 0;">Keine passenden E-Mails vorhanden.</p>`;
             } else {
                 html += `<div style="display: flex; flex-direction: column; gap: 6px;">`;
                 filteredEmails.forEach(e => {
@@ -3869,19 +3964,35 @@
                     const dateStr = isToday ? dateObj.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr' : dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
 
                     const attachBadge = e.hasAttachments ? ` <span style="font-size: 0.7rem;" title="Mit Anhang">📎</span>` : '';
+                    const mailCategory = e.category || 'Allgemein';
+
+                    // Person Badge oder Zuordnen-Button
+                    let personHtml = '';
+                    if (e.personId && e.personName) {
+                        personHtml = `
+                            <span onclick="event.stopPropagation(); openPersonProfileModal(${e.personId})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.68rem; font-weight: 700; color: #cba6f7; background: rgba(203, 166, 247, 0.12); border: 1px solid rgba(203, 166, 247, 0.3); padding: 1px 6px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(203, 166, 247, 0.25)'" onmouseout="this.style.background='rgba(203, 166, 247, 0.12)'" title="Personenprofil im Gedächtnis öffnen">
+                                👤 ${escapeHtml(e.personName)}
+                            </span>
+                        `;
+                    } else {
+                        personHtml = `
+                            <span onclick="event.stopPropagation(); promptLinkPersonToMail(${e.id})" style="display: inline-flex; align-items: center; gap: 2px; font-size: 0.65rem; opacity: 0.6; color: var(--text); background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.2); padding: 1px 5px; border-radius: 6px; cursor: pointer;" onmouseover="this.style.opacity='1'; this.style.borderColor='var(--accent)'" onmouseout="this.style.opacity='0.6'; this.style.borderColor='rgba(255,255,255,0.2)'" title="Person aus Gedächtnis zuordnen">
+                                👤+ Zuordnen
+                            </span>
+                        `;
+                    }
 
                     html += `
-                        <div class="mail-item-card" onclick="openMailReadModal(${e.id})" style="display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 8px; background: ${unreadBg}; border: 1px solid ${unreadBorder}; border-left: 3.5px solid ${accColor}; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='${unreadBg}'">
+                        <div class="mail-item-card" onclick="openMailReadModal(${e.id})" style="display: flex; flex-direction: column; gap: 5px; padding: 9px 11px; border-radius: 8px; background: ${unreadBg}; border: 1px solid ${unreadBorder}; border-left: 3.5px solid ${accColor}; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='${unreadBg}'">
                             <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
                                 <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
                                     ${unreadBadge}
-                                    <span style="font-size: 0.8rem; font-weight: 600; color: ${subjectColor}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    <span style="font-size: 0.82rem; font-weight: 600; color: ${subjectColor}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                         ${escapeHtml(e.fromName || e.from)}
                                     </span>
                                     ${attachBadge}
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
-                                    <!-- Klares Postfach-Badge mit E-Mail-Adresse -->
                                     <span style="font-size: 0.65rem; font-weight: 700; padding: 1px 6px; border-radius: 10px; background: rgba(255,255,255,0.05); color: ${accColor}; border: 1px solid ${accColor};" title="Empfangen auf: ${escapeHtml(e.accountEmail)}">
                                         ${accIcon} ${escapeHtml(e.accountEmail)}
                                     </span>
@@ -3893,10 +4004,19 @@
                                 <div style="font-size: 0.78rem; font-weight: ${subjectWeight}; color: ${subjectColor}; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
                                     ${escapeHtml(e.subject || '(Kein Betreff)')}
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 2px; flex-shrink: 0;" onclick="event.stopPropagation()">
+                                <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;" onclick="event.stopPropagation()">
+                                    <button onclick="toggleSingleMailReadStatus(${e.id}, ${!e.isRead})" style="background: transparent; border: none; color: ${e.isRead ? 'rgba(255,255,255,0.4)' : 'var(--accent)'}; cursor: pointer; font-size: 0.75rem; padding: 2px;" title="${e.isRead ? 'Als ungelesen markieren' : 'Als gelesen markieren'}">${e.isRead ? '✉️' : '👁️'}</button>
                                     <button onclick="insertEntityLinkIntoChat('${escSubject}', 'mail', ${e.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="In Chat verlinken">🔗</button>
                                     <button onclick="openMailComposeModal(${e.id})" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Antworten">↩️</button>
                                 </div>
+                            </div>
+
+                            <!-- Person & Kategorie Meta Tags -->
+                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                ${personHtml}
+                                <span onclick="event.stopPropagation(); promptChangeMailCategory(${e.id}, '${escapeHtml(mailCategory)}')" style="display: inline-flex; align-items: center; gap: 2px; font-size: 0.65rem; color: var(--accent); background: rgba(137, 180, 250, 0.08); border: 1px solid rgba(137, 180, 250, 0.2); padding: 1px 5px; border-radius: 6px; cursor: pointer;" title="Kategorie ändern">
+                                    🏷️ ${escapeHtml(mailCategory)}
+                                </span>
                             </div>
 
                             ${e.snippet ? `<div style="font-size: 0.72rem; opacity: 0.6; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(e.snippet)}</div>` : ''}
@@ -3910,17 +4030,26 @@
             container.innerHTML = html;
         }
 
-        async function syncAllMailsManual() {
+        function promptCreateNewCategory() {
+            const cat = prompt("Neue Kategorie erstellen (z.B. Steuern, Familie, Vereine, Reisen):");
+            if (cat && cat.trim()) {
+                filterMailByCategory(cat.trim());
+            }
+        }
+        window.promptCreateNewCategory = promptCreateNewCategory;
+
+        async function syncAllMailsManual(fullSync = false) {
             const syncBtn = document.getElementById('mail-sync-btn');
             if (syncBtn) {
-                syncBtn.innerHTML = '⏳ Rufe ab...';
+                syncBtn.innerHTML = fullSync ? '⏳ Voll-Sync...' : '⏳ Rufe ab...';
                 syncBtn.style.opacity = '0.7';
             }
 
             try {
                 const res = await fetch(getApiUrl('/api/mail/sync'), {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fullSync })
                 });
                 const data = await res.json();
                 if (data && data.success) {
@@ -3930,13 +4059,27 @@
                 console.error("[Mail] Sync Fehler:", err);
             } finally {
                 if (syncBtn) {
-                    syncBtn.innerHTML = '🔄 Synchronisieren';
+                    syncBtn.innerHTML = '🔄 Sync';
                     syncBtn.style.opacity = '1';
                 }
                 loadTopWidgets();
             }
         }
         window.syncAllMailsManual = syncAllMailsManual;
+
+        async function toggleSingleMailReadStatus(id, isRead) {
+            try {
+                await fetch(getApiUrl(`/api/mail/messages/${id}/read`), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ isRead })
+                });
+                loadTopWidgets();
+            } catch (e) {
+                console.error("[Mail] Fehler beim Ändern des Gelesen-Status:", e);
+            }
+        }
+        window.toggleSingleMailReadStatus = toggleSingleMailReadStatus;
 
         async function openMailReadModal(id) {
             currentReadMailId = id;
@@ -3947,9 +4090,13 @@
                     return;
                 }
                 const mail = await res.json();
+                currentReadMailData = mail;
 
                 const modal = document.getElementById('mail-read-modal');
                 const badgeEl = document.getElementById('mail-read-account-badge');
+                const personBadgeEl = document.getElementById('mail-read-person-badge');
+                const catSelect = document.getElementById('mail-read-category-select');
+                const readToggleBtn = document.getElementById('mail-read-toggle-read-btn');
                 const subjectEl = document.getElementById('mail-read-subject');
                 const fromEl = document.getElementById('mail-read-from');
                 const toEl = document.getElementById('mail-read-to');
@@ -3967,6 +4114,51 @@
                     badgeEl.style.borderColor = accColor;
                 }
 
+                // Person Badge
+                if (personBadgeEl) {
+                    if (mail.person) {
+                        const pName = mail.person.name || mail.person.aliases?.[0]?.name || 'Person';
+                        personBadgeEl.innerHTML = `
+                            <span onclick="openPersonProfileModal(${mail.person.id}); closeMailReadModal();" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; font-weight: 700; color: #cba6f7; background: rgba(203, 166, 247, 0.15); border: 1px solid rgba(203, 166, 247, 0.3); padding: 2px 8px; border-radius: 10px; cursor: pointer;" title="Profil im Gedächtnis öffnen">
+                                👤 ${escapeHtml(pName)}
+                            </span>
+                            <button onclick="promptLinkPersonToMail(${mail.id})" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.7rem;" title="Andere Person zuordnen">✏️</button>
+                        `;
+                    } else {
+                        personBadgeEl.innerHTML = `
+                            <button onclick="promptLinkPersonToMail(${mail.id})" style="background: rgba(255,255,255,0.05); border: 1px dashed rgba(255,255,255,0.2); color: var(--text); border-radius: 10px; padding: 2px 8px; font-size: 0.7rem; cursor: pointer;" title="Person aus Gedächtnis zuordnen">
+                                👤+ Person zuordnen
+                            </button>
+                        `;
+                    }
+                }
+
+                // Kategorie Dropdown dynamisch befüllen
+                if (catSelect) {
+                    const standardCats = ["Allgemein", "Arbeit", "Rechnungen", "Privat", "Finanzen", "Wichtig", "Bestellungen", "Sonstiges"];
+                    const currentCat = mail.category || 'Allgemein';
+                    const allCatSet = new Set(standardCats);
+                    allCatSet.add(currentCat);
+
+                    catSelect.innerHTML = '';
+                    allCatSet.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c;
+                        opt.textContent = c;
+                        if (c === currentCat) opt.selected = true;
+                        catSelect.appendChild(opt);
+                    });
+                    const customOpt = document.createElement('option');
+                    customOpt.value = '__custom__';
+                    customOpt.textContent = '➕ Neue Kategorie erstellen...';
+                    catSelect.appendChild(customOpt);
+                }
+
+                // Gelesen-Toggle Button
+                if (readToggleBtn) {
+                    readToggleBtn.innerHTML = mail.isRead ? '✉️ Als ungelesen' : '✅ Als gelesen';
+                }
+
                 if (subjectEl) subjectEl.textContent = mail.subject || '(Kein Betreff)';
                 if (fromEl) fromEl.textContent = mail.fromName ? `${mail.fromName} <${mail.from}>` : mail.from;
                 if (toEl) toEl.textContent = mail.to || '';
@@ -3976,7 +4168,7 @@
                     dateEl.textContent = dateObj.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
                 }
 
-                // Sicher bereinigter Inhalt wird gerendert (Safe Sanitized HTML oder Plain Text)
+                // Sicher bereinigter Inhalt
                 if (bodyEl) {
                     if (mail.bodyHtml && mail.bodyHtml.trim()) {
                         bodyEl.innerHTML = mail.bodyHtml;
@@ -4004,6 +4196,132 @@
             }
         }
         window.openMailReadModal = openMailReadModal;
+
+        async function changeCurrentMailCategory(cat) {
+            if (!currentReadMailId || !cat) return;
+
+            if (cat === '__custom__') {
+                const newCat = prompt("Name der neuen Kategorie eingeben (z.B. Steuern, Familie, Verein, Reisen):");
+                const catSelect = document.getElementById('mail-read-category-select');
+                if (!newCat || !newCat.trim()) {
+                    if (catSelect && currentReadMailData) {
+                        catSelect.value = currentReadMailData.category || 'Allgemein';
+                    }
+                    return;
+                }
+                cat = newCat.trim();
+            }
+
+            try {
+                await fetch(getApiUrl(`/api/mail/messages/${currentReadMailId}/category`), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category: cat })
+                });
+                if (currentReadMailData) currentReadMailData.category = cat;
+                loadTopWidgets();
+            } catch (e) {
+                console.error("[Mail] Fehler beim Ändern der Kategorie:", e);
+            }
+        }
+        window.changeCurrentMailCategory = changeCurrentMailCategory;
+
+        async function promptChangeMailCategory(mailId, currentCat) {
+            const newCat = prompt("Kategorie für diese E-Mail wählen oder neue eingeben (z.B. Allgemein, Arbeit, Rechnungen, Privat, Finanzen, Wichtig, Steuern, Reisen):", currentCat || "Allgemein");
+            if (!newCat || newCat.trim() === currentCat) return;
+
+            try {
+                await fetch(getApiUrl(`/api/mail/messages/${mailId}/category`), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category: newCat.trim() })
+                });
+                loadTopWidgets();
+            } catch (e) {
+                alert("Fehler beim Speichern der Kategorie.");
+            }
+        }
+        window.promptChangeMailCategory = promptChangeMailCategory;
+
+        async function toggleCurrentMailReadStatus() {
+            if (!currentReadMailId || !currentReadMailData) return;
+            const newStatus = !currentReadMailData.isRead;
+            await toggleSingleMailReadStatus(currentReadMailId, newStatus);
+            currentReadMailData.isRead = newStatus;
+            const readToggleBtn = document.getElementById('mail-read-toggle-read-btn');
+            if (readToggleBtn) {
+                readToggleBtn.innerHTML = newStatus ? '✉️ Als ungelesen' : '✅ Als gelesen';
+            }
+        }
+        window.toggleCurrentMailReadStatus = toggleCurrentMailReadStatus;
+
+        async function promptLinkPersonToMail(mailId) {
+            try {
+                const widgetRes = await fetch(getApiUrl('/widgets'));
+                let people = [];
+                if (widgetRes.ok) {
+                    const widgets = await widgetRes.json();
+                    const memWidget = widgets.find(w => w.data && w.data.widgetType === 'memory_people_list');
+                    if (memWidget && memWidget.data && memWidget.data.people) {
+                        people = memWidget.data.people;
+                    }
+                }
+
+                if (people.length === 0) {
+                    const personName = prompt("Es sind noch keine Personen im Gedächtnis hinterlegt. Wie heißt die Person, die du anlegen möchtest?");
+                    if (personName && personName.trim()) {
+                        const newP = await callTool('erstelle_person', { name: personName.trim() });
+                        if (newP && newP.personId) {
+                            await fetch(getApiUrl(`/api/mail/messages/${mailId}/person`), {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ personId: newP.personId })
+                            });
+                            alert(`E-Mail erfolgreich mit '${personName}' verknüpft!`);
+                            loadTopWidgets();
+                            if (currentReadMailId === mailId) openMailReadModal(mailId);
+                        }
+                    }
+                    return;
+                }
+
+                let promptText = "Wähle die Nummer der Person aus dem Gedächtnis (oder 0 zum Entfernen):\n";
+                people.forEach((p, idx) => {
+                    promptText += `${idx + 1}: ${p.name}\n`;
+                });
+
+                const choice = prompt(promptText);
+                if (choice === null) return;
+
+                const choiceNum = parseInt(choice.trim());
+                if (choiceNum === 0) {
+                    await fetch(getApiUrl(`/api/mail/messages/${mailId}/person`), {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ personId: null })
+                    });
+                    loadTopWidgets();
+                    if (currentReadMailId === mailId) openMailReadModal(mailId);
+                    return;
+                }
+
+                if (choiceNum > 0 && choiceNum <= people.length) {
+                    const selectedPerson = people[choiceNum - 1];
+                    await fetch(getApiUrl(`/api/mail/messages/${mailId}/person`), {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ personId: selectedPerson.id })
+                    });
+                    alert(`E-Mail mit '${selectedPerson.name}' verknüpft!`);
+                    loadTopWidgets();
+                    if (currentReadMailId === mailId) openMailReadModal(mailId);
+                }
+            } catch (err) {
+                console.error("[Mail] Fehler bei Personenzuordnung:", err);
+                alert("Fehler bei der Personenzuordnung.");
+            }
+        }
+        window.promptLinkPersonToMail = promptLinkPersonToMail;
 
         function closeMailReadModal() {
             const modal = document.getElementById('mail-read-modal');

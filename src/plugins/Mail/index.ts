@@ -4,18 +4,20 @@ import { MailService } from "./service.js";
 
 export const mailPlugin: Plugin = {
   name: "Mail",
-  description: "Verwaltet E-Mail-Postfächer (z.B. Web.de und Gmail), ruft E-Mails sicher ab, ermöglicht das Lesen und Versenden von Antworten.",
+  description: "Verwaltet E-Mail-Postfächer (z.B. Web.de und Gmail), ruft E-Mails sicher ab, ermöglicht das Lesen, Kategorisieren, Zuordnen zu Personen und Versenden von Antworten.",
   tools: [
     {
       definition: {
         name: "hole_mails",
-        description: "Ruft die neuesten E-Mails aus allen oder einem bestimmten Postfach ab. Zeigt für jede Mail an, zu welchem Konto sie gehört.",
+        description: "Ruft E-Mails aus allen oder einem bestimmten Postfach ab. Unterstützt Filterung nach Konto, Kategorie, Person oder Textsuche.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
-            kontoId: { type: SchemaType.INTEGER, description: "Optionale ID des Kontos, um nur Mails dieses Kontos zu laden." },
+            kontoId: { type: SchemaType.INTEGER, description: "Optionale ID des Kontos." },
+            kategorie: { type: SchemaType.STRING, description: "Optionale Kategorie (z.B. 'Arbeit', 'Rechnungen', 'Privat', 'Wichtig')." },
+            personId: { type: SchemaType.INTEGER, description: "Optionale ID einer Person aus dem Gedächtnis." },
             suche: { type: SchemaType.STRING, description: "Optionaler Suchbegriff nach Absender, Betreff oder Text." },
-            limit: { type: SchemaType.INTEGER, description: "Maximale Anzahl an Mails (Standard ist 20)." },
+            limit: { type: SchemaType.INTEGER, description: "Maximale Anzahl an Mails (Standard ist 30)." },
             jetzt_synchronisieren: { type: SchemaType.BOOLEAN, description: "Wenn true, wird vorher ein Live-Abruf der IMAP-Server gestartet." }
           }
         } as any
@@ -29,9 +31,11 @@ export const mailPlugin: Plugin = {
           }
         }
 
-        const limit = args.limit ? Number(args.limit) : 20;
+        const limit = args.limit ? Number(args.limit) : 30;
         const result = await MailService.getUnifiedEmails(prisma, {
           accountId: args.kontoId ? Number(args.kontoId) : undefined,
+          category: args.kategorie,
+          personId: args.personId ? Number(args.personId) : undefined,
           query: args.suche,
           limit
         });
@@ -39,6 +43,7 @@ export const mailPlugin: Plugin = {
         return {
           status: "success",
           gesamt: result.totalCount,
+          ungelesen: result.unreadCount,
           mails: result.emails.map(m => ({
             id: m.id,
             konto: m.account.name,
@@ -50,7 +55,9 @@ export const mailPlugin: Plugin = {
             datum: m.date.toISOString(),
             vorschau: m.snippet,
             gelesen: m.isRead,
-            hatAnhaenge: m.hasAttachments
+            hatAnhaenge: m.hasAttachments,
+            kategorie: m.category || "Allgemein",
+            person: m.person ? { id: m.person.id, name: m.person.name || m.person.aliases[0]?.name || "Person" } : null
           }))
         };
       }
@@ -58,7 +65,7 @@ export const mailPlugin: Plugin = {
     {
       definition: {
         name: "lese_mail",
-        description: "Liest eine bestimmte E-Mail anhand ihrer ID vollständig aus.",
+        description: "Liest eine bestimmte E-Mail anhand ihrer ID vollständig aus und markiert sie als gelesen.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
@@ -79,6 +86,14 @@ export const mailPlugin: Plugin = {
                 email: true,
                 color: true
               }
+            },
+            person: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                aliases: { select: { name: true, isPrimary: true } }
+              }
             }
           }
         });
@@ -87,12 +102,9 @@ export const mailPlugin: Plugin = {
           throw new Error(`E-Mail mit ID ${id} wurde nicht gefunden.`);
         }
 
-        // Als gelesen markieren
+        // Als gelesen markieren & IMAP Server Flag synchronisieren
         if (!mail.isRead) {
-          await prisma.cachedEmail.update({
-            where: { id },
-            data: { isRead: true }
-          });
+          await MailService.markEmailReadStatus(prisma, id, true);
         }
 
         return {
@@ -108,8 +120,60 @@ export const mailPlugin: Plugin = {
             datum: mail.date.toISOString(),
             inhaltText: mail.bodyText,
             inhaltHtml: mail.bodyHtml,
-            hatAnhaenge: mail.hasAttachments
+            hatAnhaenge: mail.hasAttachments,
+            kategorie: mail.category || "Allgemein",
+            person: mail.person ? { id: mail.person.id, name: mail.person.name || mail.person.aliases[0]?.name || "Person" } : null
           }
+        };
+      }
+    },
+    {
+      definition: {
+        name: "kategorisiere_mail",
+        description: "Weist einer E-Mail eine bestimmte Kategorie zu (z.B. 'Arbeit', 'Rechnungen', 'Privat', 'Finanzen', 'Wichtig', 'Bestellungen').",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            mailId: { type: SchemaType.INTEGER, description: "ID der E-Mail." },
+            kategorie: { type: SchemaType.STRING, description: "Name der Kategorie (z.B. 'Arbeit', 'Rechnungen', 'Privat', 'Finanzen', 'Wichtig')." }
+          },
+          required: ["mailId", "kategorie"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const id = Number(args.mailId);
+        const updated = await MailService.updateEmailCategory(prisma, id, args.kategorie);
+        return {
+          status: "success",
+          message: `E-Mail '${updated.subject}' wurde der Kategorie '${updated.category}' zugewiesen.`,
+          mailId: updated.id,
+          kategorie: updated.category
+        };
+      }
+    },
+    {
+      definition: {
+        name: "verknuepfe_mail_person",
+        description: "Verknüpft eine E-Mail mit einer Person aus dem Gedächtnis (Memory) und speichert die E-Mail-Adresse bei der Person für zukünftige Erkennung.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            mailId: { type: SchemaType.INTEGER, description: "ID der E-Mail." },
+            personId: { type: SchemaType.INTEGER, description: "ID der Person aus dem Gedächtnis (oder null zum Entfernen)." }
+          },
+          required: ["mailId"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const mailId = Number(args.mailId);
+        const personId = args.personId !== undefined && args.personId !== null ? Number(args.personId) : null;
+        const updated = await MailService.linkEmailToPerson(prisma, mailId, personId);
+        return {
+          status: "success",
+          message: personId
+            ? `E-Mail wurde erfolgreich mit Person '${updated.person?.name || updated.person?.aliases[0]?.name || personId}' verknüpft.`
+            : `Personen-Verknüpfung für E-Mail '${mailId}' entfernt.`,
+          mail: updated
         };
       }
     },
@@ -205,11 +269,11 @@ export const mailPlugin: Plugin = {
     {
       definition: {
         name: "verwalte_mail_konten",
-        description: "Verwaltet die hinterlegten E-Mail-Konten (z.B. Auflisten, Anlegen, Löschen oder Verbindung testen).",
+        description: "Verwaltet die hinterlegten E-Mail-Konten (z.B. Auflisten, Anlegen, Löschen, Verbindung testen oder Vollsynchronisation anstoßen).",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
-            aktion: { type: SchemaType.STRING, description: "Aktion: 'list', 'test', 'delete' oder 'sync'" },
+            aktion: { type: SchemaType.STRING, description: "Aktion: 'list', 'test', 'delete', 'sync' oder 'full_sync'" },
             kontoId: { type: SchemaType.INTEGER, description: "ID des Kontos für delete/test/sync." }
           },
           required: ["aktion"]
@@ -238,8 +302,9 @@ export const mailPlugin: Plugin = {
           return { status: "success", konten: accounts };
         }
 
-        if (aktion === "sync") {
-          const res = await MailService.syncAllAccounts(prisma);
+        if (aktion === "sync" || aktion === "full_sync") {
+          const fullSync = aktion === "full_sync";
+          const res = await MailService.syncAllAccounts(prisma, { fullSync });
           return { status: "success", synchronisiert: res.totalSynced, ergebnisse: res.results };
         }
 
@@ -277,13 +342,22 @@ export const mailPlugin: Plugin = {
       }
     });
 
-    const recentResult = await MailService.getUnifiedEmails(prisma, { limit: 25 });
-    const unreadCount = await prisma.cachedEmail.count({
-      where: {
-        isRead: false,
-        account: { isDeleted: false }
+    const defaultCategories = ["Alle", "Allgemein", "Arbeit", "Rechnungen", "Privat", "Finanzen", "Wichtig", "Bestellungen", "Sonstiges"];
+    const distinctDbCategories = await prisma.cachedEmail.findMany({
+      where: { account: { isDeleted: false }, category: { not: null } },
+      select: { category: true },
+      distinct: ["category"]
+    });
+
+    const categorySet = new Set(defaultCategories);
+    distinctDbCategories.forEach(d => {
+      if (d.category && d.category.trim()) {
+        categorySet.add(d.category.trim());
       }
     });
+    const categories = Array.from(categorySet);
+
+    const recentResult = await MailService.getUnifiedEmails(prisma, { limit: 50 });
 
     return [
       {
@@ -292,23 +366,33 @@ export const mailPlugin: Plugin = {
         data: {
           widgetType: "mail_overview",
           accounts,
-          emails: recentResult.emails.map(e => ({
-            id: e.id,
-            accountId: e.accountId,
-            accountName: e.account.name,
-            accountEmail: e.account.email,
-            accountColor: e.account.color,
-            subject: e.subject,
-            from: e.from,
-            fromName: e.fromName,
-            to: e.to,
-            date: e.date.toISOString(),
-            snippet: e.snippet,
-            isRead: e.isRead,
-            hasAttachments: e.hasAttachments
-          })),
-          unreadCount,
-          totalCount: recentResult.totalCount
+          emails: recentResult.emails.map(e => {
+            const primaryAlias = e.person?.aliases.find(a => a.isPrimary) || e.person?.aliases[0];
+            const personName = e.person?.name || primaryAlias?.name || null;
+
+            return {
+              id: e.id,
+              accountId: e.accountId,
+              accountName: e.account.name,
+              accountEmail: e.account.email,
+              accountColor: e.account.color,
+              subject: e.subject,
+              from: e.from,
+              fromName: e.fromName,
+              to: e.to,
+              date: e.date.toISOString(),
+              snippet: e.snippet,
+              isRead: e.isRead,
+              hasAttachments: e.hasAttachments,
+              category: e.category || "Allgemein",
+              personId: e.personId,
+              personName: personName,
+              personEmail: e.person?.email || null
+            };
+          }),
+          unreadCount: recentResult.unreadCount,
+          totalCount: recentResult.totalCount,
+          categories
         }
       }
     ];
@@ -333,6 +417,14 @@ export const mailPlugin: Plugin = {
             name: true,
             email: true,
             color: true
+          }
+        },
+        person: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            aliases: { select: { name: true, isPrimary: true } }
           }
         }
       }

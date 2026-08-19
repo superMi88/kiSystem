@@ -44,11 +44,14 @@ model Person {
   name      String?          // Veraltet: Name (wird für automatische Migration beibehalten)
   notes     String?          // Veraltet: Notizen (wird für automatische Migration beibehalten)
   biography String?          // Biografie oder Notizen zur Person (früher 'notes')
+  email     String?          // Primäre E-Mail-Adresse der Person
+  emails    String?          // Weitere E-Mail-Adressen (kommagetrennt für Alias-Erkennung)
   birthday  DateTime?        // Geburtstag der Person
   createdAt DateTime         @default(now()) // Erstellungszeitpunkt des Personenprofils
   aliases   PersonAlias[]    // Alternative Namen/Aliase für die Person
   facts     Fact[]           // Gespeicherte Fakten über diese Person
   memories  SemanticMemory[] // Semantische Erinnerungen/Verweise auf diese Person
+  cachedEmails CachedEmail[] // Verknüpfte E-Mails dieser Person
   isDeleted Boolean          @default(false) // Soft-Delete-Flag (gelöscht ja/nein)
   isOwner   Boolean          @default(false) // Flag, ob dieses Profil das eigene Profil des Benutzers ist ("Ich / Über mich")
 }
@@ -225,6 +228,9 @@ model CachedEmail {
   snippet        String?     // Kurze Textvorschau
   isRead         Boolean     @default(false) // Gelesen-Status
   hasAttachments Boolean     @default(false) // Enthält Anhänge
+  category       String?     @default("Allgemein") // Kategorie (z.B. "Arbeit", "Rechnungen", "Privat", "Finanzen", "Wichtig")
+  personId       Int?        // Optionale ID der zugeordneten Person aus dem Gedächtnis
+  person         Person?     @relation(fields: [personId], references: [id], onDelete: SetNull) // Relation zur Person
   createdAt      DateTime    @default(now()) // Abrufzeitpunkt
 
   @@unique([accountId, uid])

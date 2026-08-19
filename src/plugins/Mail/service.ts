@@ -74,6 +74,18 @@ export interface MailAccountInput {
 
 export class MailService {
   /**
+   * Extrahiert die reine E-Mail-Adresse aus Strings wie 'Max Mustermann <max@web.de>' oder 'max@web.de'.
+   */
+  static extractEmailAddress(str: string): string {
+    if (!str) return "";
+    const angleMatch = str.match(/<([^>]+)>/);
+    if (angleMatch) return angleMatch[1].toLowerCase().trim();
+    const regexMatch = str.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+    if (regexMatch) return regexMatch[0].toLowerCase().trim();
+    return str.toLowerCase().trim();
+  }
+
+  /**
    * Testet die IMAP-Verbindung für ein gegebenes Konto.
    */
   static async testConnection(account: {
@@ -118,12 +130,13 @@ export class MailService {
   }
 
   /**
-   * Synchronisiert die neuesten E-Mails eines bestimmten Kontos via IMAP in die CachedEmail-Tabelle.
+   * Synchronisiert E-Mails eines bestimmten Kontos via IMAP in die CachedEmail-Tabelle.
+   * Unterstützt Vollabruf (alle vorhandenen E-Mails) sowie automatischen Personen-Abgleich.
    */
   static async syncAccountEmails(
     account: MailAccount,
     prisma: PrismaClient,
-    limit: number = 30
+    options?: { fullSync?: boolean; batchLimit?: number }
   ): Promise<{ count: number; error?: string }> {
     console.log(`[MailService] Starte Synchronisierung für Konto: ${account.name} (${account.email})...`);
 
@@ -151,9 +164,55 @@ export class MailService {
           return { count: 0 };
         }
 
-        // Berechne den Sequenzbereich für die neuesten 'limit' E-Mails
+        // Lade alle Personen für automatische Absendererkennung
+        const allPersons = await prisma.person.findMany({
+          where: { isDeleted: false },
+          select: {
+            id: true,
+            email: true,
+            emails: true,
+            aliases: { select: { name: true } }
+          }
+        });
+
+        const findMatchingPersonId = (fromRaw: string, fromName?: string): number | null => {
+          const cleanEmail = MailService.extractEmailAddress(fromRaw);
+          if (!cleanEmail) return null;
+
+          for (const p of allPersons) {
+            if (p.email && p.email.toLowerCase().trim() === cleanEmail) {
+              return p.id;
+            }
+            if (p.emails) {
+              const list = p.emails.split(",").map(e => e.toLowerCase().trim());
+              if (list.includes(cleanEmail)) {
+                return p.id;
+              }
+            }
+            if (fromName && fromName.trim()) {
+              const nameLower = fromName.toLowerCase().trim();
+              for (const a of p.aliases) {
+                if (a.name && a.name.toLowerCase().trim() === nameLower) {
+                  return p.id;
+                }
+              }
+            }
+          }
+          return null;
+        };
+
+        // Lade bereits gecachte UIDs und deren Status
+        const existingCached = await prisma.cachedEmail.findMany({
+          where: { accountId: account.id },
+          select: { id: true, uid: true, isRead: true, category: true, personId: true }
+        });
+        const cachedMap = new Map<number, { id: number; uid: number; isRead: boolean; category: string | null; personId: number | null }>();
+        existingCached.forEach(item => cachedMap.set(item.uid, item));
+
         const total = mailbox.exists;
-        const startSeq = Math.max(1, total - limit + 1);
+        // Bei Vollsync oder initialem Sync alle Mails abrufen; sonst z. B. letzte 250
+        const batchLimit = options?.batchLimit || (options?.fullSync ? total : Math.min(total, 350));
+        const startSeq = Math.max(1, total - batchLimit + 1);
         const seqRange = `${startSeq}:${total}`;
 
         let processedCount = 0;
@@ -165,6 +224,43 @@ export class MailService {
           source: true
         })) {
           try {
+            const uidNum = Number(message.uid);
+            const isSeenOnServer = message.flags ? message.flags.has("\\Seen") : false;
+            const existing = cachedMap.get(uidNum);
+
+            // Falls bereits vollständig gecacht, synchronisiere nur Flags & Personen-Zuweisung falls nötig
+            if (existing) {
+              // Behalte lokalen Gelesen-Status bei (oder setze auf gelesen, wenn auf Server gelesen)
+              const finalIsRead = existing.isRead || isSeenOnServer;
+              let shouldUpdate = false;
+              const updateData: any = {};
+
+              if (existing.isRead !== finalIsRead) {
+                updateData.isRead = finalIsRead;
+                shouldUpdate = true;
+              }
+
+              // Falls bisher keine Person zugeordnet war, prüfe ob jetzt eine passt
+              if (!existing.personId && message.envelope?.from?.[0]?.address) {
+                const matchedPerson = findMatchingPersonId(message.envelope.from[0].address, message.envelope.from[0].name);
+                if (matchedPerson) {
+                  updateData.personId = matchedPerson;
+                  shouldUpdate = true;
+                }
+              }
+
+              if (shouldUpdate) {
+                await prisma.cachedEmail.update({
+                  where: { id: existing.id },
+                  data: updateData
+                });
+              }
+
+              processedCount++;
+              continue;
+            }
+
+            // Neue E-Mail parsen
             if (!message.source) continue;
 
             const parsed: ParsedMail = await simpleParser(message.source);
@@ -186,30 +282,12 @@ export class MailService {
             const rawHtml = parsed.html || parsed.textAsHtml || "";
             const cleanHtml = sanitizeEmailHtml(rawHtml);
             const snippet = rawBodyText.replace(/\s+/g, " ").trim().slice(0, 160);
-            const isRead = message.flags ? message.flags.has("\\Seen") : false;
+            const isRead = isSeenOnServer;
             const hasAttachments = !!(parsed.attachments && parsed.attachments.length > 0);
-            const uidNum = Number(message.uid);
+            const matchedPersonId = findMatchingPersonId(rawFrom, fromName);
 
-            await prisma.cachedEmail.upsert({
-              where: {
-                accountId_uid: {
-                  accountId: account.id,
-                  uid: uidNum
-                }
-              },
-              update: {
-                subject: rawSubject,
-                from: rawFrom,
-                fromName: fromName,
-                to: toStr,
-                date: mailDate,
-                bodyText: rawBodyText,
-                bodyHtml: cleanHtml,
-                snippet: snippet,
-                isRead: isRead,
-                hasAttachments: hasAttachments
-              },
-              create: {
+            await prisma.cachedEmail.create({
+              data: {
                 accountId: account.id,
                 uid: uidNum,
                 messageId: parsed.messageId || null,
@@ -222,7 +300,9 @@ export class MailService {
                 bodyHtml: cleanHtml,
                 snippet: snippet,
                 isRead: isRead,
-                hasAttachments: hasAttachments
+                hasAttachments: hasAttachments,
+                category: "Allgemein",
+                personId: matchedPersonId
               }
             });
 
@@ -247,7 +327,10 @@ export class MailService {
   /**
    * Synchronisiert alle aktiven Mail-Konten parallel.
    */
-  static async syncAllAccounts(prisma: PrismaClient): Promise<{
+  static async syncAllAccounts(
+    prisma: PrismaClient,
+    options?: { fullSync?: boolean }
+  ): Promise<{
     totalSynced: number;
     results: { accountId: number; name: string; email: string; count: number; error?: string }[];
   }> {
@@ -260,7 +343,7 @@ export class MailService {
     }
 
     const promises = accounts.map(async account => {
-      const res = await this.syncAccountEmails(account, prisma);
+      const res = await this.syncAccountEmails(account, prisma, options);
       return {
         accountId: account.id,
         name: account.name,
@@ -290,6 +373,129 @@ export class MailService {
   }
 
   /**
+   * Ändert den Gelesen-Status einer E-Mail in der Datenbank und synchronisiert das \Seen Flag mit dem IMAP-Server.
+   */
+  static async markEmailReadStatus(
+    prisma: PrismaClient,
+    emailId: number,
+    isRead: boolean
+  ): Promise<{ success: boolean; error?: string }> {
+    const email = await prisma.cachedEmail.findUnique({
+      where: { id: emailId },
+      include: { account: true }
+    });
+    if (!email) return { success: false, error: "E-Mail nicht gefunden." };
+
+    // 1. Lokale DB aktualisieren
+    await prisma.cachedEmail.update({
+      where: { id: emailId },
+      data: { isRead }
+    });
+
+    // 2. IMAP Server Flag \Seen setzen/entfernen
+    if (email.account && !email.account.isDeleted) {
+      (async () => {
+        try {
+          const client = new ImapFlow({
+            host: email.account.imapHost,
+            port: email.account.imapPort,
+            secure: email.account.imapTls,
+            auth: {
+              user: email.account.email,
+              pass: email.account.password
+            },
+            logger: false
+          });
+
+          await client.connect();
+          const lock = await client.getMailboxLock("INBOX");
+          try {
+            if (isRead) {
+              await client.messageFlagsAdd({ uid: email.uid }, ["\\Seen"]);
+            } else {
+              await client.messageFlagsRemove({ uid: email.uid }, ["\\Seen"]);
+            }
+          } finally {
+            lock.release();
+            await client.logout();
+          }
+        } catch (err: any) {
+          console.warn(`[MailService] Konnte IMAP-Flag für UID ${email.uid} auf ${email.account.email} nicht aktualisieren:`, err.message);
+        }
+      })().catch(() => {});
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Ändert die Kategorie einer E-Mail.
+   */
+  static async updateEmailCategory(
+    prisma: PrismaClient,
+    emailId: number,
+    category: string
+  ) {
+    return await prisma.cachedEmail.update({
+      where: { id: emailId },
+      data: { category: category.trim() || "Allgemein" },
+      include: {
+        account: { select: { id: true, name: true, email: true, color: true } },
+        person: { select: { id: true, name: true, email: true } }
+      }
+    });
+  }
+
+  /**
+   * Verknüpft eine Person aus dem Gedächtnis mit einer E-Mail und speichert die Adresse optional bei der Person.
+   */
+  static async linkEmailToPerson(
+    prisma: PrismaClient,
+    emailId: number,
+    personId: number | null
+  ) {
+    const email = await prisma.cachedEmail.findUnique({ where: { id: emailId } });
+    if (!email) throw new Error("E-Mail nicht gefunden.");
+
+    const updated = await prisma.cachedEmail.update({
+      where: { id: emailId },
+      data: { personId },
+      include: {
+        account: { select: { id: true, name: true, email: true, color: true } },
+        person: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            aliases: { select: { name: true, isPrimary: true } }
+          }
+        }
+      }
+    });
+
+    // Falls eine Person verknüpft wurde und deren E-Mail-Feld leer ist, E-Mail-Adresse automatisch hinterlegen
+    if (personId) {
+      const cleanEmail = MailService.extractEmailAddress(email.from);
+      if (cleanEmail) {
+        const person = await prisma.person.findUnique({ where: { id: personId } });
+        if (person) {
+          if (!person.email) {
+            await prisma.person.update({ where: { id: personId }, data: { email: cleanEmail } });
+          } else if (!person.email.toLowerCase().includes(cleanEmail.toLowerCase())) {
+            const existingEmails = person.emails ? person.emails.split(",").map(e => e.trim()) : [];
+            if (!existingEmails.map(e => e.toLowerCase()).includes(cleanEmail.toLowerCase())) {
+              existingEmails.push(cleanEmail);
+              await prisma.person.update({ where: { id: personId }, data: { emails: existingEmails.join(", ") } });
+            }
+          }
+        }
+      }
+    }
+
+    return updated;
+  }
+
+  /**
    * Sendet eine E-Mail via SMTP über das angegebene Konto.
    */
   static async sendEmail(
@@ -311,11 +517,10 @@ export class MailService {
       throw new Error(`Mail-Konto mit ID ${accountId} wurde nicht gefunden oder ist gelöscht.`);
     }
 
-    // SMTP Transporter aufbauen
     const transporter = nodemailer.createTransport({
       host: account.smtpHost,
       port: account.smtpPort,
-      secure: account.smtpPort === 465, // true für 465 SSL, false für 587 STARTTLS
+      secure: account.smtpPort === 465,
       auth: {
         user: account.email,
         pass: account.password
@@ -346,10 +551,18 @@ export class MailService {
 
   /**
    * Liefert eine zusammengeführte E-Mail-Liste aller aktiven Konten chronologisch sortiert.
+   * Unterstützt Filterung nach Konto, Kategorie, Person und Suchbegriff.
    */
   static async getUnifiedEmails(
     prisma: PrismaClient,
-    options?: { accountId?: number; query?: string; limit?: number; offset?: number }
+    options?: {
+      accountId?: number;
+      category?: string;
+      personId?: number;
+      query?: string;
+      limit?: number;
+      offset?: number;
+    }
   ) {
     const limit = options?.limit || 50;
     const offset = options?.offset || 0;
@@ -362,6 +575,14 @@ export class MailService {
       where.accountId = Number(options.accountId);
     }
 
+    if (options?.category && options.category !== "all" && options.category !== "Alle") {
+      where.category = options.category;
+    }
+
+    if (options?.personId) {
+      where.personId = Number(options.personId);
+    }
+
     if (options?.query && options.query.trim()) {
       const q = options.query.trim();
       where.OR = [
@@ -369,11 +590,12 @@ export class MailService {
         { from: { contains: q, mode: "insensitive" } },
         { fromName: { contains: q, mode: "insensitive" } },
         { to: { contains: q, mode: "insensitive" } },
-        { snippet: { contains: q, mode: "insensitive" } }
+        { snippet: { contains: q, mode: "insensitive" } },
+        { category: { contains: q, mode: "insensitive" } }
       ];
     }
 
-    const [emails, totalCount] = await Promise.all([
+    const [emails, totalCount, unreadCount] = await Promise.all([
       prisma.cachedEmail.findMany({
         where,
         orderBy: { date: "desc" },
@@ -387,12 +609,21 @@ export class MailService {
               email: true,
               color: true
             }
+          },
+          person: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              aliases: { select: { name: true, isPrimary: true } }
+            }
           }
         }
       }),
-      prisma.cachedEmail.count({ where })
+      prisma.cachedEmail.count({ where }),
+      prisma.cachedEmail.count({ where: { ...where, isRead: false } })
     ]);
 
-    return { emails, totalCount };
+    return { emails, totalCount, unreadCount };
   }
 }
