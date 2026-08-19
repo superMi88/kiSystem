@@ -62,7 +62,7 @@
         </div>
     </div>
 
-    <!-- Mobile Top Bar -->
+    <!-- Dynamic Top Header Bar -->
     <div id="mobile-top-bar" class="mobile-only">
         <button id="mobile-burger-btn" class="burger-btn" onclick="toggleMobileDrawer()" title="Menü">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -71,7 +71,114 @@
                 <line x1="3" y1="18" x2="21" y2="18"></line>
             </svg>
         </button>
-        <span style="font-size: 0.95rem; font-weight: 700; color: var(--accent); letter-spacing: 0.5px;">kiSystem</span>
+        <div id="header-context-container" class="header-context-container">
+            <!-- Calendar Context Header -->
+            <div id="header-context-calendar" class="header-context">
+                <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;">
+                    <input type="date" id="header-calendar-date" onchange="jumpToTimelineDate(this.value)" style="background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 5px 8px; font-size: 0.8rem; color-scheme: dark; width: 130px; outline: none;">
+                    <button type="button" onclick="event.preventDefault(); jumpToTimelineDate('today')" class="nav-btn" style="padding: 5px 10px; font-size: 0.75rem; font-weight: bold; flex-shrink: 0; border-radius: 8px; height: 32px;" title="Zu heute springen">Heute</button>
+                </div>
+                <button type="button" onclick="openTaskModal()" class="header-action-btn primary" title="Neue Aufgabe erstellen">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </button>
+            </div>
+
+            <!-- Timer Context Header -->
+            <div id="header-context-timer" class="header-context">
+                <div style="font-size: 0.95rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 6px;">
+                    <span>⏱️ Timer</span>
+                </div>
+                <button type="button" onclick="openTimerModal()" class="header-action-btn primary" title="Neuen Timer erstellen">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </button>
+            </div>
+
+            <!-- Projects Context Header -->
+            <div id="header-context-projects" class="header-context">
+                <div style="font-size: 0.95rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 6px;">
+                    <span>📁 Projekte</span>
+                </div>
+                <button type="button" onclick="openProjectModal()" class="header-action-btn primary" title="Neues Projekt erstellen">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </button>
+            </div>
+
+            <!-- Memory Context Header -->
+            <div id="header-context-memory" class="header-context">
+                <div style="font-size: 0.95rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 6px;">
+                    <span>👤 Personen</span>
+                </div>
+                <button type="button" onclick="openPersonCreateModal()" class="header-action-btn primary" title="Neue Person erstellen">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </button>
+            </div>
+
+            <!-- Mail Context Header -->
+            <div id="header-context-mail" class="header-context">
+                <div id="header-mail-search-bar" style="display: none; flex: 1; align-items: center; gap: 6px; min-width: 0;">
+                    <input type="text" id="header-mail-search-input" placeholder="Mails durchsuchen..." oninput="filterMailBySearch(this.value)" style="flex: 1; height: 32px; padding: 4px 10px; font-size: 0.8rem; border-radius: 8px; background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.15); outline: none;">
+                    <button type="button" onclick="toggleHeaderMailSearch()" class="header-action-btn" title="Suche schließen" style="width: 32px; height: 32px;">✕</button>
+                </div>
+                <div id="header-mail-default-bar" style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 6px;">
+                    <div style="font-size: 0.95rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 6px;">
+                        <span>✉️ Mails</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <button type="button" onclick="toggleHeaderMailSearch()" class="header-action-btn" title="E-Mails durchsuchen">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        </button>
+                        <button type="button" id="header-mail-sync-btn" onclick="syncAllMailsManual(false)" class="header-action-btn" title="Neue E-Mails abrufen">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                        </button>
+                        <button type="button" onclick="openMailSettingsModal()" class="header-action-btn" title="E-Mail-Einstellungen">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                        </button>
+                        <button type="button" onclick="openMailComposeModal()" class="header-action-btn primary" title="Neue E-Mail schreiben">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Context Header -->
+            <div id="header-context-chat" class="header-context">
+                <div style="font-size: 0.95rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 6px;">
+                    <span>💬 Chat</span>
+                </div>
+                <button type="button" onclick="handleDrawerNewChat()" class="header-action-btn" title="Neuen Chat starten" style="padding: 6px 12px; width: auto; border-radius: 8px; gap: 6px; font-size: 0.78rem; font-weight: 700; display: flex; align-items: center;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <span>Neuer Chat</span>
+                </button>
+            </div>
+
+            <!-- History Context Header -->
+            <div id="header-context-history" class="header-context">
+                <div style="font-size: 0.95rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 6px;">
+                    <span>📜 Verlauf</span>
+                </div>
+                <button type="button" onclick="handleDrawerNewChat()" class="header-action-btn" title="Neuen Chat starten" style="padding: 6px 12px; width: auto; border-radius: 8px; gap: 6px; font-size: 0.78rem; font-weight: 700; display: flex; align-items: center;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <span>Neuer Chat</span>
+                </button>
+            </div>
+
+            <!-- Tasks Context Header -->
+            <div id="header-context-tasks" class="header-context">
+                <div style="font-size: 0.95rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 6px;">
+                    <span>☑️ Aufgaben</span>
+                </div>
+                <button type="button" onclick="openTaskModal()" class="header-action-btn primary" title="Neue Aufgabe erstellen">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </button>
+            </div>
+
+            <!-- Journal Context Header -->
+            <div id="header-context-journal" class="header-context">
+                <div style="font-size: 0.95rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 6px;">
+                    <span>📖 Tagebuch</span>
+                </div>
+            </div>
+        </div>
     </div>
     <div class="side-panel-container">
         <!-- Notification Bar -->
@@ -162,6 +269,57 @@
             <div class="modal-btns" style="display: flex; gap: 10px;">
                 <button class="cancel" onclick="closeProjectModal()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Abbrechen</button>
                 <button class="save" onclick="saveProject()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold;">Speichern</button>
+            </div>
+        </div>
+
+        <!-- Timer Modal -->
+        <div id="timer-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 25px; border-radius: 12px; z-index: 300; width: 85%; max-width: 420px; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px);">
+            <h3 style="color: var(--accent); margin-top: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 20px;">⏱️ Timer erstellen</h3>
+            <div class="settings-group" style="text-align: left; margin-bottom: 15px;">
+                <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Bezeichnung (optional)</label>
+                <input type="text" id="timer-title-input" placeholder="Z.B. Nudeln kochen, Meeting..." style="width: 100%;">
+            </div>
+            <div class="settings-group" style="text-align: left; margin-bottom: 15px;">
+                <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Schnellauswahl</label>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px;">
+                    <button type="button" class="nav-btn" onclick="setTimerDuration(1)">1 Min</button>
+                    <button type="button" class="nav-btn" onclick="setTimerDuration(3)">3 Min</button>
+                    <button type="button" class="nav-btn" onclick="setTimerDuration(5)">5 Min</button>
+                    <button type="button" class="nav-btn" onclick="setTimerDuration(10)">10 Min</button>
+                    <button type="button" class="nav-btn" onclick="setTimerDuration(15)">15 Min</button>
+                    <button type="button" class="nav-btn" onclick="setTimerDuration(20)">20 Min</button>
+                    <button type="button" class="nav-btn" onclick="setTimerDuration(30)">30 Min</button>
+                    <button type="button" class="nav-btn" onclick="setTimerDuration(45)">45 Min</button>
+                </div>
+            </div>
+            <div class="settings-group" style="text-align: left; margin-bottom: 20px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Minuten</label>
+                        <input type="number" id="timer-minutes-input" min="0" max="999" value="5" style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Sekunden</label>
+                        <input type="number" id="timer-seconds-input" min="0" max="59" value="0" style="width: 100%;">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-btns" style="display: flex; gap: 10px;">
+                <button class="cancel" onclick="closeTimerModal()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Abbrechen</button>
+                <button class="save" onclick="saveTimerFromModal()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold;">Starten</button>
+            </div>
+        </div>
+
+        <!-- Person Create Modal -->
+        <div id="person-create-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 25px; border-radius: 12px; z-index: 300; width: 85%; max-width: 420px; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px);">
+            <h3 style="color: var(--accent); margin-top: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 20px;">👤 Neue Person erstellen</h3>
+            <div class="settings-group" style="text-align: left; margin-bottom: 20px;">
+                <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Name / Vollständiger Name</label>
+                <input type="text" id="person-create-name-input" placeholder="Z.B. Max Mustermann..." style="width: 100%;" onkeydown="if(event.key === 'Enter') savePersonCreateFromModal()">
+            </div>
+            <div class="modal-btns" style="display: flex; gap: 10px;">
+                <button class="cancel" onclick="closePersonCreateModal()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Abbrechen</button>
+                <button class="save" onclick="savePersonCreateFromModal()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold;">Erstellen & Bearbeiten</button>
             </div>
         </div>
 
@@ -722,6 +880,162 @@
         let entityConfigs = {};
         let lastActiveView = 'chat';
 
+        function updateContextualHeader(viewName) {
+            const contexts = document.querySelectorAll('.header-context');
+            contexts.forEach(el => el.style.display = 'none');
+            
+            let targetId = 'header-context-' + (viewName || 'chat');
+            let targetEl = document.getElementById(targetId);
+            if (!targetEl) {
+                targetEl = document.getElementById('header-context-chat');
+            }
+            if (targetEl) {
+                targetEl.style.display = 'flex';
+            }
+
+            // Calendar Header setup
+            if (viewName === 'calendar') {
+                const dateInput = document.getElementById('header-calendar-date');
+                if (dateInput && !dateInput.value) {
+                    dateInput.value = typeof getLocalDateString === 'function' ? getLocalDateString() : new Date().toISOString().split('T')[0];
+                }
+            } else if (viewName === 'mail') {
+                const searchBar = document.getElementById('header-mail-search-bar');
+                const defaultBar = document.getElementById('header-mail-default-bar');
+                if (searchBar && defaultBar && !currentMailSearchQuery) {
+                    searchBar.style.display = 'none';
+                    defaultBar.style.display = 'flex';
+                }
+            }
+        }
+        window.updateContextualHeader = updateContextualHeader;
+
+        function toggleHeaderMailSearch() {
+            const searchBar = document.getElementById('header-mail-search-bar');
+            const defaultBar = document.getElementById('header-mail-default-bar');
+            const searchInput = document.getElementById('header-mail-search-input');
+            if (!searchBar || !defaultBar) return;
+
+            if (searchBar.style.display === 'none' || searchBar.style.display === '') {
+                searchBar.style.display = 'flex';
+                defaultBar.style.display = 'none';
+                if (searchInput) {
+                    searchInput.value = currentMailSearchQuery || '';
+                    searchInput.focus();
+                }
+            } else {
+                searchBar.style.display = 'none';
+                defaultBar.style.display = 'flex';
+                if (searchInput) {
+                    searchInput.value = '';
+                    filterMailBySearch('');
+                }
+            }
+        }
+        window.toggleHeaderMailSearch = toggleHeaderMailSearch;
+
+        // Timer Modal Handlers
+        function openTimerModal() {
+            const titleInput = document.getElementById('timer-title-input');
+            const minInput = document.getElementById('timer-minutes-input');
+            const secInput = document.getElementById('timer-seconds-input');
+            if (titleInput) titleInput.value = '';
+            if (minInput) minInput.value = '5';
+            if (secInput) secInput.value = '0';
+            const modal = document.getElementById('timer-modal');
+            if (modal) modal.style.display = 'block';
+            document.body.classList.add('modal-active');
+            setTimeout(() => { if (titleInput) titleInput.focus(); }, 50);
+        }
+        window.openTimerModal = openTimerModal;
+
+        function closeTimerModal() {
+            const modal = document.getElementById('timer-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.classList.remove('modal-active');
+        }
+        window.closeTimerModal = closeTimerModal;
+
+        function setTimerDuration(mins) {
+            const minInput = document.getElementById('timer-minutes-input');
+            const secInput = document.getElementById('timer-seconds-input');
+            if (minInput) minInput.value = mins;
+            if (secInput) secInput.value = '0';
+        }
+        window.setTimerDuration = setTimerDuration;
+
+        async function saveTimerFromModal() {
+            const titleInput = document.getElementById('timer-title-input');
+            const minInput = document.getElementById('timer-minutes-input');
+            const secInput = document.getElementById('timer-seconds-input');
+            const title = (titleInput && titleInput.value.trim()) || 'Timer';
+            const minutes = (minInput && parseInt(minInput.value)) || 0;
+            const seconds = (secInput && parseInt(secInput.value)) || 0;
+            const totalSecs = (minutes * 60) + seconds;
+            if (totalSecs <= 0) {
+                alert("Bitte eine Dauer größer als 0 Sekunden angeben.");
+                return;
+            }
+            closeTimerModal();
+            try {
+                await callTool('erstelle_timer', { titel: title, sekunden: totalSecs });
+                loadTopWidgets();
+            } catch (e) {
+                console.error("Fehler beim Erstellen des Timers:", e);
+                alert("Fehler beim Starten des Timers.");
+            }
+        }
+        window.saveTimerFromModal = saveTimerFromModal;
+
+        // Person Create Modal Handlers
+        function openPersonCreateModal() {
+            const nameInput = document.getElementById('person-create-name-input');
+            if (nameInput) nameInput.value = '';
+            const modal = document.getElementById('person-create-modal');
+            if (modal) modal.style.display = 'block';
+            document.body.classList.add('modal-active');
+            setTimeout(() => { if (nameInput) nameInput.focus(); }, 50);
+        }
+        window.openPersonCreateModal = openPersonCreateModal;
+
+        function closePersonCreateModal() {
+            const modal = document.getElementById('person-create-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.classList.remove('modal-active');
+        }
+        window.closePersonCreateModal = closePersonCreateModal;
+
+        async function savePersonCreateFromModal() {
+            const nameInput = document.getElementById('person-create-name-input');
+            const name = nameInput ? nameInput.value.trim() : '';
+            if (!name) {
+                alert("Bitte einen Namen für die Person eingeben.");
+                return;
+            }
+            closePersonCreateModal();
+            try {
+                const res = await callTool('aktualisiere_person_biografie', { name: name, biografie: '' });
+                await loadTopWidgets();
+                if (res && res.personId) {
+                    openPersonProfileModal(res.personId);
+                } else {
+                    const widgetRes = await fetch(getApiUrl('/widgets'));
+                    if (widgetRes.ok) {
+                        const widgets = await widgetRes.json();
+                        const mem = widgets.find(w => w.data && w.data.widgetType === 'memory_people_list');
+                        if (mem && mem.data && mem.data.people) {
+                            const created = mem.data.people.find(p => p.name === name);
+                            if (created) openPersonProfileModal(created.id);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Fehler beim Erstellen der Person:", e);
+                alert("Fehler beim Erstellen der Person.");
+            }
+        }
+        window.savePersonCreateFromModal = savePersonCreateFromModal;
+
         function switchMobileView(viewName) {
             if (viewName !== 'settings') {
                 lastActiveView = viewName;
@@ -738,6 +1052,9 @@
             
             // Set active nav styling
             setActiveNav(viewName);
+            
+            // Update contextual header
+            updateContextualHeader(viewName);
             
             // Update the title in top-panel header dynamically
             const titleEl = document.getElementById('plugin-view-title');
@@ -897,6 +1214,167 @@
 
         const escapeHtml = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+        // =========================================================================
+        // Swipe-to-Link Touch & Drag Engine
+        // =========================================================================
+        let activeSwipeItem = null;
+        let activeSwipeWrapper = null;
+        let activeSwipeBg = null;
+        let swipeStartX = 0;
+        let swipeStartY = 0;
+        let swipeCurrentX = 0;
+        let swipeCurrentY = 0;
+        let isSwipeGestureActive = false;
+        let isScrollLockedOut = false;
+        let swipeThresholdCrossed = false;
+        const SWIPE_LINK_THRESHOLD = 60; // px threshold to trigger linking
+        const SWIPE_MAX_OFFSET = 110; // maximum visual pull distance
+
+        function handleSwipeStart(e) {
+            if (e.type === 'mousedown' && e.button !== 0) return;
+            
+            const touch = e.touches ? e.touches[0] : e;
+            const target = e.target;
+
+            // Don't initiate swipe when interacting directly with buttons, checkboxes, inputs, etc.
+            if (target.closest('button, input, select, textarea, a, .clickable-tag, [onclick*="Modal"], [onclick*="delete"], [onclick*="edit"]')) {
+                return;
+            }
+
+            const item = target.closest('.swipe-link-item');
+            if (!item) return;
+
+            activeSwipeItem = item;
+            activeSwipeWrapper = item.closest('.swipe-link-wrapper');
+            activeSwipeBg = activeSwipeWrapper ? activeSwipeWrapper.querySelector('.swipe-link-bg') : null;
+            
+            swipeStartX = touch.clientX;
+            swipeStartY = touch.clientY;
+            swipeCurrentX = touch.clientX;
+            swipeCurrentY = touch.clientY;
+            isSwipeGestureActive = false;
+            isScrollLockedOut = false;
+            swipeThresholdCrossed = false;
+
+            if (e.type === 'mousedown') {
+                document.addEventListener('mousemove', handleSwipeMove, { passive: false });
+                document.addEventListener('mouseup', handleSwipeEnd);
+            }
+        }
+
+        function handleSwipeMove(e) {
+            if (!activeSwipeItem) return;
+            const touch = e.touches ? e.touches[0] : e;
+            swipeCurrentX = touch.clientX;
+            swipeCurrentY = touch.clientY;
+
+            const deltaX = swipeCurrentX - swipeStartX;
+            const deltaY = swipeCurrentY - swipeStartY;
+
+            // Determine if gesture is horizontal swipe or vertical scroll
+            if (!isSwipeGestureActive && !isScrollLockedOut) {
+                if (Math.abs(deltaY) > 8 && Math.abs(deltaY) >= Math.abs(deltaX)) {
+                    isScrollLockedOut = true;
+                    return;
+                } else if (deltaX < -8 && Math.abs(deltaX) > Math.abs(deltaY)) {
+                    isSwipeGestureActive = true;
+                    activeSwipeItem.classList.add('swiping');
+                }
+            }
+
+            if (isSwipeGestureActive) {
+                if (e.cancelable) e.preventDefault();
+
+                const clampedOffset = Math.min(0, Math.max(-SWIPE_MAX_OFFSET, deltaX));
+                activeSwipeItem.style.transform = `translateX(${clampedOffset}px)`;
+
+                const absOffset = Math.abs(clampedOffset);
+                const progress = Math.min(1, absOffset / SWIPE_LINK_THRESHOLD);
+
+                if (activeSwipeBg) {
+                    activeSwipeBg.style.opacity = progress;
+                    if (absOffset >= SWIPE_LINK_THRESHOLD) {
+                        if (!swipeThresholdCrossed) {
+                            swipeThresholdCrossed = true;
+                            if (navigator.vibrate) navigator.vibrate(20);
+                        }
+                        activeSwipeBg.classList.add('active');
+                    } else {
+                        swipeThresholdCrossed = false;
+                        activeSwipeBg.classList.remove('active');
+                    }
+                }
+            }
+        }
+
+        function handleSwipeEnd(e) {
+            if (e.type === 'mouseup') {
+                document.removeEventListener('mousemove', handleSwipeMove);
+                document.removeEventListener('mouseup', handleSwipeEnd);
+            }
+
+            if (!activeSwipeItem) return;
+
+            const item = activeSwipeItem;
+            const wrapper = activeSwipeWrapper;
+            const bg = activeSwipeBg;
+            const wasSwiping = isSwipeGestureActive;
+            const triggered = swipeThresholdCrossed;
+
+            item.classList.remove('swiping');
+            item.style.transform = 'translateX(0px)';
+
+            if (wasSwiping && triggered) {
+                const label = item.dataset.linkLabel || '';
+                const type = item.dataset.linkType || 'item';
+                const id = item.dataset.linkId || '';
+                
+                if (label && id) {
+                    insertEntityLinkIntoChat(label, type, id);
+                    if (wrapper) {
+                        wrapper.classList.add('swipe-linked-flash');
+                        setTimeout(() => wrapper.classList.remove('swipe-linked-flash'), 600);
+                    }
+                }
+            }
+
+            if (bg) {
+                setTimeout(() => {
+                    bg.style.opacity = '0';
+                    bg.classList.remove('active');
+                }, 200);
+            }
+
+            activeSwipeItem = null;
+            activeSwipeWrapper = null;
+            activeSwipeBg = null;
+            isSwipeGestureActive = false;
+            isScrollLockedOut = false;
+            swipeThresholdCrossed = false;
+        }
+
+        window.addEventListener('touchstart', handleSwipeStart, { passive: true });
+        window.addEventListener('touchmove', handleSwipeMove, { passive: false });
+        window.addEventListener('touchend', handleSwipeEnd, { passive: true });
+        window.addEventListener('touchcancel', handleSwipeEnd, { passive: true });
+        window.addEventListener('mousedown', handleSwipeStart);
+
+        function renderSwipeLinkWrapper(innerHtml, label, type, id, extraClasses = '', extraStyles = '', wrapperStyles = '') {
+            const escLabel = escapeHtml(label || '').replace(/"/g, '&quot;');
+            return `
+                <div class="swipe-link-wrapper" style="${wrapperStyles}">
+                    <div class="swipe-link-bg">
+                        <span class="swipe-link-icon">🔗</span>
+                        <span class="swipe-link-text">Link</span>
+                    </div>
+                    <div class="swipe-link-item ${extraClasses}" data-swipe-link="true" data-link-label="${escLabel}" data-link-type="${type}" data-link-id="${id}" style="${extraStyles}">
+                        ${innerHtml}
+                    </div>
+                </div>
+            `;
+        }
+        window.renderSwipeLinkWrapper = renderSwipeLinkWrapper;
+
         const recLabels = { daily: 'täglich', weekly: 'wöchentlich', monthly: 'monatlich', yearly: 'jährlich' };
         function renderSingleTaskHtml(t, isOverdue) {
             const isRecurring = t.recurrence && t.recurrence !== 'none';
@@ -920,8 +1398,8 @@
             const bg = isOverdue ? 'rgba(243, 139, 168, 0.06)' : 'rgba(255,255,255,0.03)';
             const border = isOverdue ? '1px solid rgba(243, 139, 168, 0.25)' : '1px solid rgba(255,255,255,0.06)';
 
-            return `
-                 <div class="task-item ${isOverdue ? 'overdue' : ''}" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; background: ${bg}; border: ${border}; transition: all 0.2s; margin-bottom: 4px; width: 100%;">
+            const taskContent = `
+                 <div class="task-item ${isOverdue ? 'overdue' : ''}" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; background: ${bg}; border: ${border}; width: 100%;">
                      <div style="display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 0;">
                          <input type="checkbox" class="task-checkbox" data-task-id="${t.id}" data-tasklist-id="${t.tasklistId || t.listTitle || 'Standard'}" onchange="completeTask(this)" style="margin-top: 3px;">
                          <span style="line-height: 1.4; color: var(--text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word; flex: 1;">
@@ -931,11 +1409,11 @@
                          </span>
                      </div>
                      <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
-                         <button onclick="insertEntityLinkIntoChat('${escTitle}', 'task', ${t.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="In Chat verlinken">🔗</button>
                          <button onclick="editTask(${t.id}, '${escTitle}', '${escNotes}', '${t.due || ''}', '${escListTitle}', '${recurrenceVal}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Bearbeiten">✏️</button>
                          <button onclick="deleteTask(${t.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Löschen">✖</button>
                      </div>
                  </div>`;
+            return renderSwipeLinkWrapper(taskContent, t.title, 'task', t.id);
         }
 
         function getServerUrl() {
@@ -2456,8 +2934,8 @@
                             const checkedAttr = ev.completed ? 'checked' : '';
                             const textStyle = ev.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
 
-                            html += `
-                                <div class="task-item" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); transition: all 0.2s; margin-bottom: 4px; width: 100%;">
+                            const taskContent = `
+                                <div class="task-item" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); width: 100%;">
                                     <div style="display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 0;">
                                         <input type="checkbox" class="task-checkbox" data-task-id="${rawTaskId}" data-tasklist-id="${ev.listTitle || 'Standard'}" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 3px;">
                                         <span style="line-height: 1.4; color: var(--text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word; flex: 1; ${textStyle}">
@@ -2468,12 +2946,12 @@
                                         </span>
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
-                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'task', ${rawTaskId})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="In Chat verlinken">🔗</button>
                                         <button onclick="editTask(${rawTaskId}, '${escTitle}', '${escNotes}', '${ev.time || ''}', '${escListTitle}', '${recurrenceVal}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Bearbeiten">✏️</button>
                                         <button onclick="deleteTask(${rawTaskId})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Löschen">✖</button>
                                     </div>
                                 </div>
                             `;
+                            html += renderSwipeLinkWrapper(taskContent, ev.title, 'task', rawTaskId);
                         } else {
                             const isRec = ev.recurring || ev.isRecurring;
                             const repeatBadge = isRec ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
@@ -2504,8 +2982,8 @@
                                 birthdayStyle = "background: rgba(245, 194, 231, 0.08); border: 1px solid rgba(245, 194, 231, 0.2); border-left: 3px solid #f5c2e7; padding: 6px 8px; border-radius: 6px; margin: 2px 0;";
                             }
 
-                            html += `
-                                <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; ${birthdayStyle} ${cancelStyle}">
+                            const eventContent = `
+                                <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; width: 100%; ${birthdayStyle} ${cancelStyle}">
                                     <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
                                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                                             <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
@@ -2521,15 +2999,15 @@
                                         ${ev.description ? `<div style="font-size: 0.75rem; opacity: 0.6; margin-top: 4px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(ev.description)}</div>` : ''}
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 4px; align-self: center; margin-left: 8px;">
-                                        ${ev.isBirthday ? `
-                                            <button onclick="insertEntityLinkIntoChat('${escTitle}', 'person', ${ev.persons[0].id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="Person in Chat verlinken">🔗</button>
-                                        ` : `
-                                            <button onclick="insertEntityLinkIntoChat('${escTitle}', 'event', ${ev.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
+                                        ${!ev.isBirthday ? `
                                             <button onclick="deleteCalendarEvent('${ev.id}', '${targetDate}', ${isRec})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Termin löschen">✖</button>
-                                        `}
+                                        ` : ''}
                                     </div>
                                 </div>
                             `;
+                            const linkType = ev.isBirthday && ev.persons && ev.persons.length > 0 ? 'person' : 'event';
+                            const linkId = ev.isBirthday && ev.persons && ev.persons.length > 0 ? ev.persons[0].id : ev.id;
+                            html += renderSwipeLinkWrapper(eventContent, ev.title, linkType, linkId);
                         }
                     });
                     html += `</div>`;
@@ -2840,19 +3318,19 @@
                     dayData.diaryEntries.forEach(e => {
                         const timeStr = new Date(e.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
                         const escTitle = escapeHtml(e.title || "Tagebucheintrag").replace(/'/g, "\\'");
-                        html += `
-                            <div style="background: rgba(250, 179, 135, 0.06); border: 1px solid rgba(250, 179, 135, 0.2); padding: 6px 8px; border-radius: 6px; font-size: 0.78rem; display: flex; flex-direction: column; gap: 2px;">
+                        const entryContent = `
+                            <div style="background: rgba(250, 179, 135, 0.06); border: 1px solid rgba(250, 179, 135, 0.2); padding: 6px 8px; border-radius: 6px; font-size: 0.78rem; display: flex; flex-direction: column; gap: 2px; width: 100%;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <strong style="color: #fab387; font-size: 0.78rem;">${escapeHtml(e.title || "Tagebucheintrag")}</strong>
                                     <div style="display: flex; align-items: center; gap: 4px;">
                                         <span style="font-size: 0.65rem; opacity: 0.5;">${timeStr} Uhr</span>
-                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'journal', ${e.id})" style="background: transparent; border: none; color: #fab387; cursor: pointer; font-size: 0.75rem;" title="In Chat verlinken">🔗</button>
                                         <button onclick="deleteJournalEntry(${e.id}, '${dateStr}')" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem;" title="Löschen">✖</button>
                                     </div>
                                 </div>
                                 <div style="white-space: pre-wrap; word-break: break-word; line-height: 1.25;">${escapeHtml(e.content)}</div>
                             </div>
                         `;
+                        html += renderSwipeLinkWrapper(entryContent, e.title || "Tagebucheintrag", 'journal', e.id);
                     });
                     html += `
                             </div>
@@ -2889,8 +3367,8 @@
                             const checkedAttr = ev.completed ? 'checked' : '';
                             const textStyle = ev.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
 
-                            html += `
-                                <div class="task-item" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 5px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); transition: all 0.2s; width: 100%;">
+                            const taskContent = `
+                                <div class="task-item" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 5px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); width: 100%;">
                                     <div style="display: flex; align-items: flex-start; gap: 6px; flex: 1; min-width: 0;">
                                         <input type="checkbox" class="task-checkbox" data-task-id="${rawTaskId}" data-tasklist-id="${ev.listTitle || 'Standard'}" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 3px;">
                                         <span style="line-height: 1.3; color: var(--text); overflow: hidden; text-overflow: ellipsis; word-break: break-word; flex: 1; ${textStyle}">
@@ -2901,12 +3379,12 @@
                                         </span>
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
-                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'task', ${rawTaskId})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="In Chat verlinken">🔗</button>
                                         <button onclick="editTask(${rawTaskId}, '${escTitle}', '${escNotes}', '${ev.time || ''}', '${escListTitle}', '${recurrenceVal}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Bearbeiten">✏️</button>
                                         <button onclick="deleteTask(${rawTaskId})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Löschen">✖</button>
                                     </div>
                                 </div>
                             `;
+                            html += renderSwipeLinkWrapper(taskContent, ev.title, 'task', rawTaskId);
                         } else {
                             const isRec = ev.recurring || ev.isRecurring;
                             const repeatBadge = isRec ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
@@ -2940,8 +3418,8 @@
 
                             const originalTimeText = ev.originalStart ? ` <span style="font-size: 0.7rem; opacity: 0.65; color: #f9e2af;">(ursprünglich: ${new Date(ev.originalStart).toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit'})} ${new Date(ev.originalStart).toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'})})</span>` : '';
 
-                            html += `
-                                <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; ${birthdayStyle} ${rescheduleBorder} ${cancelStyle}">
+                            const eventContent = `
+                                <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; width: 100%; ${birthdayStyle} ${rescheduleBorder} ${cancelStyle}">
                                     <div style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
                                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                                             <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
@@ -2957,15 +3435,15 @@
                                         ${ev.description ? `<div style="font-size: 0.72rem; opacity: 0.6; margin-top: 2px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(ev.description)}</div>` : ''}
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 3px; align-self: center; margin-left: 6px;">
-                                        ${ev.isBirthday ? `
-                                            <button onclick="insertEntityLinkIntoChat('${escTitle}', 'person', ${ev.persons[0].id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.8rem; padding: 2px;" title="Person in Chat verlinken">🔗</button>
-                                        ` : `
-                                            <button onclick="insertEntityLinkIntoChat('${escTitle}', 'event', ${ev.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.8rem; padding: 2px;" title="In Chat verlinken">🔗</button>
+                                        ${!ev.isBirthday ? `
                                             <button onclick="deleteCalendarEvent('${ev.id}', '${targetDate}', ${isRec})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.8rem; padding: 2px;" title="Termin löschen">✖</button>
-                                        `}
+                                        ` : ''}
                                     </div>
                                 </div>
                             `;
+                            const linkType = ev.isBirthday && ev.persons && ev.persons.length > 0 ? 'person' : 'event';
+                            const linkId = ev.isBirthday && ev.persons && ev.persons.length > 0 ? ev.persons[0].id : ev.id;
+                            html += renderSwipeLinkWrapper(eventContent, ev.title, linkType, linkId);
                         }
                     });
                     html += `</div>`;
@@ -3051,25 +3529,14 @@
 
             visibleDays.sort((a, b) => a.date.localeCompare(b.date)); // Chronological ascending
 
-            let html = `
-                <div style="text-align: left; padding: 5px 0 15px 0; display: flex; flex-direction: column; gap: 10px;">
-                    
-                    <!-- Sticky Datum-Eingabe, Aufgaben-Button & Schnell-Sprung Header -->
-                    <div style="position: sticky; top: 0; z-index: 10; background: #11111b; padding: 6px 0 8px 0; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; gap: 6px;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                            <div style="font-size: 0.85rem; font-weight: bold; color: var(--accent); display: flex; align-items: center; gap: 6px;">
-                                📅 Kalender & Tagebuch
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                <input type="date" id="timeline-jump-date-input" value="${forceIncludeDateStr || todayStr}" onchange="jumpToTimelineDate(this.value)" style="background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 3px 6px; font-size: 0.8rem; color-scheme: dark;">
-                                <button type="button" onclick="event.preventDefault(); jumpToTimelineDate('today')" class="nav-btn" style="padding: 3px 8px; font-size: 0.75rem; font-weight: bold;" title="Zu heute springen">Heute</button>
-                            </div>
-                        </div>
-                        <div style="display: flex; gap: 6px;">
-                            <button type="button" onclick="openTaskModal()" class="nav-btn" style="flex: 1; font-size: 0.75rem; padding: 4px 8px;">➕ Neue Aufgabe</button>
-                        </div>
-                    </div>
+            // Keep header date input updated
+            const headerDateInput = document.getElementById('header-calendar-date');
+            if (headerDateInput) {
+                headerDateInput.value = forceIncludeDateStr || todayStr;
+            }
 
+            let html = `
+                <div style="text-align: left; padding: 0 0 15px 0; display: flex; flex-direction: column; gap: 10px;">
                     <!-- Überfällige Aufgaben (falls vorhanden) -->
             `;
 
@@ -3277,6 +3744,8 @@
 
             const inputEl = document.getElementById('timeline-jump-date-input');
             if (inputEl) inputEl.value = dateStr;
+            const headerDateInput = document.getElementById('header-calendar-date');
+            if (headerDateInput) headerDateInput.value = dateStr;
 
             let targetEl = document.getElementById(`timeline-day-${dateStr}`);
             if (targetEl) {
@@ -3371,12 +3840,11 @@
                         } else {
                             widget.data.timers.forEach(t => {
                                 const escTitle = escapeHtml(t.title).replace(/'/g, "\\'");
-                                html += `
-                                    <div class="timer-card" id="timer-card-${t.id}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" style="padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); transition: all 0.3s; position: relative;">
+                                const timerContent = `
+                                    <div class="timer-card" id="timer-card-${t.id}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" style="padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); width: 100%; position: relative;">
                                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
                                             <span style="font-size: 0.85rem; font-weight: bold; color: var(--text);">${escapeHtml(t.title)}</span>
                                             <div style="display: flex; align-items: center; gap: 4px;">
-                                                <button onclick="insertEntityLinkIntoChat('${escTitle}', 'timer', ${t.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; padding: 2px 4px;" title="In Chat verlinken">🔗</button>
                                                 <button onclick="stopAlarmSound(); cancelScheduledTimerAlarm(${t.id}); callTool('loesche_timer', {id: ${t.id}})" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Timer löschen">✖</button>
                                             </div>
                                         </div>
@@ -3387,19 +3855,14 @@
                                         <div style="font-size: 0.65rem; opacity: 0.4;">Bis: ${new Date(t.expiresAt).toLocaleTimeString('de-DE', {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</div>
                                     </div>
                                 `;
+                                html += renderSwipeLinkWrapper(timerContent, t.title, 'timer', t.id);
                             });
                         }
                         html += `</div>`;
                         widgetDiv.innerHTML = html;
                     } else if (widget.type === 'custom') {
                         if (widget.data.widgetType === 'projects_list') {
-                            let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 10px;">`;
-                            
-                            html += `
-                                <div style="display: flex; gap: 8px; margin-bottom: 5px;">
-                                    <button onclick="openProjectModal()" class="nav-btn" style="flex: 1; font-size: 0.8rem;">📁 Neues Projekt</button>
-                                </div>
-                            `;
+                            let html = `<div style="text-align: left; padding: 0 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 10px;">`;
                             
                             const projects = widget.data.projects || [];
                             const unassignedTasks = widget.data.unassignedTasks || [];
@@ -3428,24 +3891,27 @@
                                         });
                                     }
 
-                                    html += `
-                                        <div class="project-card" id="project-card-${p.id}" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; overflow: hidden; margin-bottom: 6px; transition: all 0.3s;">
-                                            <div onclick="toggleProjectCollapse(${p.id})" style="padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: rgba(255,255,255,0.02);" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'">
-                                                <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;">
-                                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                                        <span class="project-arrow" id="project-arrow-${p.id}" style="font-size: 0.7rem; transition: transform 0.2s; transform: ${arrowRotate};">▶</span>
-                                                        <strong style="font-size: 0.85rem; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(p.name)}</strong>
-                                                    </div>
-                                                    <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-left: 14px;">
-                                                        ${personsHtml}
-                                                    </div>
+                                    const projectHeaderContent = `
+                                        <div onclick="toggleProjectCollapse(${p.id})" style="padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: rgba(255,255,255,0.02); width: 100%;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'">
+                                            <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;">
+                                                <div style="display: flex; align-items: center; gap: 6px;">
+                                                    <span class="project-arrow" id="project-arrow-${p.id}" style="font-size: 0.7rem; transition: transform 0.2s; transform: ${arrowRotate};">▶</span>
+                                                    <strong style="font-size: 0.85rem; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(p.name)}</strong>
                                                 </div>
-                                                <div style="display: flex; gap: 6px; align-items: center;" onclick="event.stopPropagation()">
-                                                    <button onclick="insertEntityLinkIntoChat('${escProjName}', 'project', ${p.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="In Chat verlinken">🔗</button>
-                                                    <button onclick="openProjectModal(${p.id}, '${escProjName}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Bearbeiten">✏️</button>
-                                                    <button onclick="deleteProject(${p.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Löschen">✖</button>
+                                                <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-left: 14px;">
+                                                    ${personsHtml}
                                                 </div>
                                             </div>
+                                            <div style="display: flex; gap: 6px; align-items: center;" onclick="event.stopPropagation()">
+                                                <button onclick="openProjectModal(${p.id}, '${escProjName}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Bearbeiten">✏️</button>
+                                                <button onclick="deleteProject(${p.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Löschen">✖</button>
+                                            </div>
+                                        </div>
+                                    `;
+
+                                    html += `
+                                        <div class="project-card" id="project-card-${p.id}" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; overflow: hidden; margin-bottom: 6px; transition: all 0.3s;">
+                                            ${renderSwipeLinkWrapper(projectHeaderContent, p.name, 'project', p.id, '', '', 'margin-bottom: 0; border-radius: 0;')}
                                             
                                             <div class="project-body" id="project-body-${p.id}" style="display: ${displayStyle}; padding: 10px 12px; border-top: 1px solid rgba(255,255,255,0.04); flex-direction: column; gap: 8px; background: rgba(0,0,0,0.15);">
                                                 <div style="display: flex; gap: 6px; margin-bottom: 4px;">
@@ -3464,30 +3930,29 @@
                                             const escN = escapeHtml(t.notes || '').replace(/'/g, "\\'");
                                             const checkedAttr = t.completed ? 'checked' : '';
                                             const textStyle = t.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
-                                            html += `
-                                                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); font-size: 0.75rem;">
+                                            const taskContent = `
+                                                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); font-size: 0.75rem; width: 100%;">
                                                     <div style="display: flex; align-items: flex-start; gap: 6px; min-width: 0; flex: 1;">
                                                         <input type="checkbox" class="task-checkbox" data-task-id="${t.id}" data-tasklist-id="Standard" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 2px;">
                                                         <span style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; word-break: break-word; line-height: 1.4; flex: 1; ${textStyle}">${escapeHtml(t.title)}</span>
                                                     </div>
                                                     <div style="display: flex; align-items: center; gap: 2px;">
-                                                        <button onclick="insertEntityLinkIntoChat('${escT}', 'task', ${t.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.7rem;" title="In Chat verlinken">🔗</button>
                                                         <button onclick="editTask(${t.id}, '${escT}', '${escN}', '', '', 'none', ${p.id})" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.7rem;" title="Bearbeiten">✏️</button>
                                                         <button onclick="deleteTask(${t.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.7rem;" title="Löschen">✖</button>
                                                     </div>
                                                 </div>
                                             `;
+                                            html += renderSwipeLinkWrapper(taskContent, t.title, 'task', t.id);
                                         });
 
                                         p.notes.forEach(n => {
                                             const escTitle = escapeHtml(n.title).replace(/'/g, "\\'");
                                             const escContent = escapeHtml(n.content).replace(/'/g, "\\'").replace(/\n/g, "\\n");
-                                            html += `
-                                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 6px; font-size: 0.75rem; display: flex; flex-direction: column; gap: 4px;">
+                                            const noteContent = `
+                                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 6px; font-size: 0.75rem; display: flex; flex-direction: column; gap: 4px; width: 100%;">
                                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                                         <strong style="color: var(--accent); font-size: 0.75rem;">${escapeHtml(n.title)}</strong>
                                                         <div style="display: flex; gap: 4px;">
-                                                            <button onclick="insertEntityLinkIntoChat('${escTitle}', 'note', ${n.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.7rem;" title="In Chat verlinken">🔗</button>
                                                             <button onclick="openNoteModal(${n.id}, '${escTitle}', '${escContent}', ${p.id})" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.7rem;" title="Bearbeiten">✏️</button>
                                                             <button onclick="deleteNote(${n.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.7rem;" title="Löschen">✖</button>
                                                         </div>
@@ -3495,6 +3960,7 @@
                                                     <div style="opacity: 0.8; white-space: pre-wrap; word-break: break-all; line-height: 1.3;">${escapeHtml(n.content)}</div>
                                                 </div>
                                             `;
+                                            html += renderSwipeLinkWrapper(noteContent, n.title, 'note', n.id);
                                         });
                                     }
 
@@ -3536,19 +4002,19 @@
                                         const escN = escapeHtml(t.notes || '').replace(/'/g, "\\'");
                                         const checkedAttr = t.completed ? 'checked' : '';
                                         const textStyle = t.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
-                                        html += `
-                                            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); font-size: 0.75rem;">
+                                        const taskContent = `
+                                            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); font-size: 0.75rem; width: 100%;">
                                                 <div style="display: flex; align-items: flex-start; gap: 6px; min-width: 0; flex: 1;">
                                                     <input type="checkbox" class="task-checkbox" data-task-id="${t.id}" data-tasklist-id="Standard" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 2px;">
                                                     <span style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; word-break: break-word; line-height: 1.4; flex: 1; ${textStyle}">${escapeHtml(t.title)}</span>
                                                 </div>
                                                 <div style="display: flex; align-items: center; gap: 2px;">
-                                                    <button onclick="insertEntityLinkIntoChat('${escT}', 'task', ${t.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.7rem;" title="In Chat verlinken">🔗</button>
                                                     <button onclick="editTask(${t.id}, '${escT}', '${escN}', '', '', 'none', null)" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.7rem;" title="Bearbeiten">✏️</button>
                                                     <button onclick="deleteTask(${t.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.7rem;" title="Löschen">✖</button>
                                                 </div>
                                             </div>
                                         `;
+                                        html += renderSwipeLinkWrapper(taskContent, t.title, 'task', t.id);
                                     });
 
                                     unassignedNotes.forEach(n => {
@@ -3566,12 +4032,11 @@
                                             });
                                         }
 
-                                        html += `
-                                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 6px; font-size: 0.75rem; display: flex; flex-direction: column; gap: 4px;">
+                                        const noteContent = `
+                                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 6px; font-size: 0.75rem; display: flex; flex-direction: column; gap: 4px; width: 100%;">
                                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                                     <strong style="color: var(--accent); font-size: 0.75rem;">${escapeHtml(n.title)}</strong>
                                                     <div style="display: flex; gap: 4px;">
-                                                        <button onclick="insertEntityLinkIntoChat('${escTitle}', 'note', ${n.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.7rem;" title="In Chat verlinken">🔗</button>
                                                         <button onclick="openNoteModal(${n.id}, '${escTitle}', '${escContent}', null)" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.7rem;" title="Bearbeiten">✏️</button>
                                                         <button onclick="deleteNote(${n.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.7rem;" title="Löschen">✖</button>
                                                     </div>
@@ -3580,6 +4045,7 @@
                                                 <div style="display: flex; flex-wrap: wrap; gap: 4px;">${notePersonsHtml}</div>
                                             </div>
                                         `;
+                                        html += renderSwipeLinkWrapper(noteContent, n.title, 'note', n.id);
                                     });
 
                                     html += `
@@ -3599,28 +4065,28 @@
                                 widget.data.people.forEach(p => {
                                     const escName = escapeHtml(p.name).replace(/'/g, "\\'");
                                     if (p.isOwner) {
-                                        html += `
-                                            <div onclick="openPersonProfileModal(${p.id})" style="background: rgba(203, 166, 247, 0.12); border: 1.5px solid #cba6f7; padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s; box-shadow: 0 0 15px rgba(203, 166, 247, 0.1);" onmouseover="this.style.background='rgba(203, 166, 247, 0.2)'" onmouseout="this.style.background='rgba(203, 166, 247, 0.12)'">
+                                        const personContent = `
+                                            <div onclick="openPersonProfileModal(${p.id})" style="background: rgba(203, 166, 247, 0.12); border: 1.5px solid #cba6f7; padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s; box-shadow: 0 0 15px rgba(203, 166, 247, 0.1); width: 100%;" onmouseover="this.style.background='rgba(203, 166, 247, 0.2)'" onmouseout="this.style.background='rgba(203, 166, 247, 0.12)'">
                                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                                     <div style="display: flex; align-items: center; gap: 6px;">
                                                         <span style="font-size: 0.85rem;">⭐</span>
                                                         <strong style="font-size: 0.9rem; color: #cba6f7;">Mein Profil (${escapeHtml(p.name)})</strong>
                                                     </div>
-                                                    <button onclick="event.stopPropagation(); insertEntityLinkIntoChat('${escName}', 'person', ${p.id})" style="background: rgba(203, 166, 247, 0.2); border: 1px solid #cba6f7; color: white; cursor: pointer; border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; font-weight: bold;" title="In Chat verlinken">🔗 Link</button>
                                                 </div>
                                                 <div style="font-size: 0.75rem; opacity: 0.9; color: #cdd6f4; white-space: pre-wrap; word-break: break-word; line-height: 1.3; margin-top: 4px;">${escapeHtml(p.notes)}</div>
                                             </div>
                                         `;
+                                        html += renderSwipeLinkWrapper(personContent, p.name, 'person', p.id);
                                     } else {
-                                        html += `
-                                            <div onclick="openPersonProfileModal(${p.id})" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+                                        const personContent = `
+                                            <div onclick="openPersonProfileModal(${p.id})" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: all 0.2s; width: 100%;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
                                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                                     <strong style="font-size: 0.85rem; color: var(--accent);">${escapeHtml(p.name)}</strong>
-                                                    <button onclick="event.stopPropagation(); insertEntityLinkIntoChat('${escName}', 'person', ${p.id})" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--accent); cursor: pointer; border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'" title="In Chat verlinken">🔗 Link</button>
                                                 </div>
                                                 <div style="font-size: 0.75rem; opacity: 0.8; white-space: pre-wrap; word-break: break-word; line-height: 1.3; margin-top: 4px;">${escapeHtml(p.notes)}</div>
                                             </div>
                                         `;
+                                        html += renderSwipeLinkWrapper(personContent, p.name, 'person', p.id);
                                     }
                                 });
                             }
@@ -3919,26 +4385,9 @@
                 );
             }
 
-            let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 10px;">`;
+            let html = `<div style="text-align: left; padding: 0 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 10px;">`;
 
-            // 1. Header Toolbar
-            html += `
-                <div style="display: flex; gap: 6px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
-                    <div style="display: flex; gap: 6px; flex: 1; min-width: 180px;">
-                        <button onclick="openMailComposeModal()" class="nav-btn" style="flex: 1; font-size: 0.75rem; padding: 6px 8px; height: 30px; background: var(--accent); color: #11111b; font-weight: bold; border: none; border-radius: 6px;">
-                            ✍️ Verfassen
-                        </button>
-                        <button id="mail-sync-btn" onclick="syncAllMailsManual(false)" class="nav-btn" style="flex: 1; font-size: 0.75rem; padding: 6px 8px; height: 30px; border-radius: 6px;" title="Neue Mails abrufen">
-                            🔄 Sync
-                        </button>
-                    </div>
-                    <button onclick="openMailSettingsModal()" class="nav-btn" style="flex: 0 0 auto; padding: 6px 10px; height: 30px; font-size: 0.75rem; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12);" title="Mail-Einstellungen (Voll-Sync, Kategorien, Konten)">
-                        ⚙️ Einstellungen
-                    </button>
-                </div>
-            `;
-
-            // 2. Empty State falls keine Konten
+            // 1. Empty State falls keine Konten
             if (accounts.length === 0) {
                 html += `
                     <div style="padding: 20px 15px; text-align: center; background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; margin-top: 5px;">
@@ -3954,7 +4403,7 @@
                 return;
             }
 
-            // 3. Postfach-Pills (Konto-Filter)
+            // 2. Postfach-Pills (Konto-Filter)
             html += `<div style="display: flex; gap: 5px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none;">`;
             const allActiveStyle = activeMailAccountFilter === null ? 'background: var(--accent); color: #11111b; font-weight: bold; border-color: var(--accent);' : 'background: rgba(255,255,255,0.04); color: var(--text); border-color: rgba(255,255,255,0.1);';
             html += `<button onclick="filterMailByAccount(null)" class="nav-btn" style="flex: 0 0 auto; height: 25px; font-size: 0.7rem; padding: 0 9px; border-radius: 12px; ${allActiveStyle}">Alle Konten (${rawEmails.length})</button>`;
@@ -3968,7 +4417,7 @@
             });
             html += `</div>`;
 
-            // 4. Kategorie-Pills (nur anzeigen wenn benutzerdefinierte Kategorien existieren)
+            // 3. Kategorie-Pills (nur anzeigen wenn benutzerdefinierte Kategorien existieren)
             if (categories && categories.length > 0) {
                 html += `<div style="display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none;">`;
                 const isAllCatSelected = activeMailCategoryFilter === null;
@@ -3985,14 +4434,7 @@
                 html += `</div>`;
             }
 
-            // 5. Search Input
-            html += `
-                <div style="display: flex; gap: 6px;">
-                    <input type="text" id="mail-search-input" value="${escapeHtml(currentMailSearchQuery)}" placeholder="E-Mails durchsuchen (Person, Absender, Betreff, Kategorie)..." oninput="filterMailBySearch(this.value)" style="width: 100%; height: 32px; padding: 6px 10px; font-size: 0.78rem; border-radius: 6px; background: var(--input); color: white; border: 1px solid rgba(255,255,255,0.1); outline: none;">
-                </div>
-            `;
-
-            // 6. Emails List
+            // 4. Emails List
             if (filteredEmails.length === 0) {
                 html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 15px 0;">Keine passenden E-Mails vorhanden.</p>`;
             } else {
@@ -4048,8 +4490,8 @@
                         `;
                     }
 
-                    html += `
-                        <div class="mail-item-card" onclick="openMailReadModal(${e.id})" style="display: flex; flex-direction: column; gap: 5px; padding: 9px 11px; border-radius: 8px; background: ${unreadBg}; border: 1px solid ${unreadBorder}; border-left: 3.5px solid ${accColor}; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='${unreadBg}'">
+                    const mailContent = `
+                        <div class="mail-item-card" onclick="openMailReadModal(${e.id})" style="display: flex; flex-direction: column; gap: 5px; padding: 9px 11px; border-radius: 8px; background: ${unreadBg}; border: 1px solid ${unreadBorder}; border-left: 3.5px solid ${accColor}; cursor: pointer; width: 100%; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='${unreadBg}'">
                             <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
                                 <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
                                     ${unreadBadge}
@@ -4071,7 +4513,6 @@
                                     ${escapeHtml(e.subject || '(Kein Betreff)')}
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;" onclick="event.stopPropagation()">
-                                    <button onclick="insertEntityLinkIntoChat('${escSubject}', 'mail', ${e.id})" style="background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="In Chat verlinken">🔗</button>
                                     <button onclick="openMailComposeModal(${e.id})" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Antworten">↩️</button>
                                 </div>
                             </div>
@@ -4085,6 +4526,7 @@
                             ${e.snippet ? `<div style="font-size: 0.72rem; opacity: 0.6; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(e.snippet)}</div>` : ''}
                         </div>
                     `;
+                    html += renderSwipeLinkWrapper(mailContent, e.subject || '(Kein Betreff)', 'mail', e.id);
                 });
                 html += `</div>`;
             }
@@ -4095,8 +4537,12 @@
 
         async function syncAllMailsManual(fullSync = false) {
             const syncBtn = document.getElementById('mail-sync-btn');
+            const headerSyncBtn = document.getElementById('header-mail-sync-btn');
             const fullSyncBtn = document.getElementById('mail-settings-fullsync-btn');
             
+            if (headerSyncBtn) {
+                headerSyncBtn.classList.add('spin-anim');
+            }
             if (fullSync) {
                 if (fullSyncBtn) {
                     fullSyncBtn.disabled = true;
@@ -4128,6 +4574,9 @@
                     alert(`Fehler beim Voll-Sync: ${err.message}`);
                 }
             } finally {
+                if (headerSyncBtn) {
+                    headerSyncBtn.classList.remove('spin-anim');
+                }
                 if (syncBtn) {
                     syncBtn.innerHTML = '🔄 Sync';
                     syncBtn.style.opacity = '1';
