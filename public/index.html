@@ -1217,6 +1217,9 @@
         // =========================================================================
         // Swipe-to-Link Touch & Drag Engine
         // =========================================================================
+        // =========================================================================
+        // Long-Press Context Menu & Swipe-to-Link Engine
+        // =========================================================================
         let activeSwipeItem = null;
         let activeSwipeWrapper = null;
         let activeSwipeBg = null;
@@ -1227,8 +1230,362 @@
         let isSwipeGestureActive = false;
         let isScrollLockedOut = false;
         let swipeThresholdCrossed = false;
+        let lastSwipeTime = 0;
+        let longPressTimer = null;
+        let activeLongPressTarget = null;
+        let activeContextMenuEl = null;
+        let activeContextMenuBackdrop = null;
+        let isLongPressActive = false;
+
         const SWIPE_LINK_THRESHOLD = 60; // px threshold to trigger linking
         const SWIPE_MAX_OFFSET = 110; // maximum visual pull distance
+        const LONG_PRESS_DURATION = 380; // ms to trigger context menu
+
+        function closeContextMenu() {
+            if (activeContextMenuEl) {
+                activeContextMenuEl.remove();
+                activeContextMenuEl = null;
+            }
+            if (activeContextMenuBackdrop) {
+                activeContextMenuBackdrop.remove();
+                activeContextMenuBackdrop = null;
+            }
+            if (activeLongPressTarget) {
+                activeLongPressTarget.classList.remove('long-press-active');
+                activeLongPressTarget = null;
+            }
+            isLongPressActive = false;
+        }
+        window.closeContextMenu = closeContextMenu;
+
+        function openContextMenuForElement(itemEl, clickX, clickY) {
+            closeContextMenu();
+            if (!itemEl) return;
+
+            const contextData = itemEl.dataset;
+            const type = contextData.contextType || contextData.linkType;
+            if (!type) return;
+
+            // Trigger haptic feedback
+            if (navigator.vibrate) navigator.vibrate(35);
+            itemEl.classList.add('long-press-active');
+            activeLongPressTarget = itemEl;
+            isLongPressActive = true;
+
+            // Create Backdrop
+            const backdrop = document.createElement('div');
+            backdrop.className = 'context-menu-backdrop';
+            backdrop.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                closeContextMenu();
+            });
+            backdrop.addEventListener('touchstart', (e) => {
+                e.stopPropagation();
+                closeContextMenu();
+            }, { passive: true });
+            document.body.appendChild(backdrop);
+            activeContextMenuBackdrop = backdrop;
+
+            // Create Menu container
+            const menu = document.createElement('div');
+            menu.className = 'entity-context-menu';
+
+            // Populate actions by type
+            let actions = [];
+
+            if (type === 'task') {
+                const taskId = contextData.taskId || contextData.linkId;
+                const taskTitle = contextData.taskTitle || contextData.linkLabel || '';
+                const taskNotes = contextData.taskNotes || '';
+                const taskDue = contextData.taskDue || '';
+                const taskList = contextData.taskList || 'Standard';
+                const taskRec = contextData.taskRecurrence || 'none';
+                const taskProj = contextData.taskProjectId ? Number(contextData.taskProjectId) : (contextData.projectId ? Number(contextData.projectId) : null);
+
+                actions = [
+                    {
+                        icon: '✏️',
+                        label: 'Bearbeiten',
+                        onClick: () => {
+                            editTask(taskId, taskTitle, taskNotes, taskDue, taskList, taskRec, taskProj);
+                        }
+                    },
+                    {
+                        icon: '🔗',
+                        label: 'In Chat verlinken',
+                        className: 'accent',
+                        onClick: () => {
+                            insertEntityLinkIntoChat(taskTitle, 'task', taskId);
+                        }
+                    },
+                    {
+                        icon: '✖️',
+                        label: 'Aufgabe löschen',
+                        className: 'danger',
+                        onClick: () => {
+                            deleteTask(taskId);
+                        }
+                    }
+                ];
+            } else if (type === 'event') {
+                const eventId = contextData.eventId || contextData.linkId;
+                const eventTitle = contextData.eventTitle || contextData.linkLabel || '';
+                const eventDate = contextData.eventDate || '';
+                const isRec = contextData.eventIsRec === 'true';
+                const isBirthday = contextData.eventIsBirthday === 'true';
+                const personId = contextData.personId;
+
+                actions = [
+                    {
+                        icon: '🔗',
+                        label: isBirthday ? 'Person in Chat verlinken' : 'In Chat verlinken',
+                        className: 'accent',
+                        onClick: () => {
+                            if (isBirthday && personId) {
+                                insertEntityLinkIntoChat(eventTitle, 'person', personId);
+                            } else {
+                                insertEntityLinkIntoChat(eventTitle, 'event', eventId);
+                            }
+                        }
+                    }
+                ];
+
+                if (!isBirthday) {
+                    actions.push({
+                        icon: '✖️',
+                        label: 'Termin löschen',
+                        className: 'danger',
+                        onClick: () => {
+                            deleteCalendarEvent(eventId, eventDate, isRec);
+                        }
+                    });
+                }
+            } else if (type === 'journal') {
+                const jId = contextData.journalId || contextData.linkId;
+                const jTitle = contextData.journalTitle || contextData.linkLabel || 'Tagebucheintrag';
+                const jDate = contextData.journalDate || '';
+
+                actions = [
+                    {
+                        icon: '🔗',
+                        label: 'In Chat verlinken',
+                        className: 'accent',
+                        onClick: () => {
+                            insertEntityLinkIntoChat(jTitle, 'journal', jId);
+                        }
+                    },
+                    {
+                        icon: '✖️',
+                        label: 'Eintrag löschen',
+                        className: 'danger',
+                        onClick: () => {
+                            deleteJournalEntry(jId, jDate);
+                        }
+                    }
+                ];
+            } else if (type === 'timer') {
+                const timerId = Number(contextData.timerId || contextData.linkId);
+                const timerTitle = contextData.timerTitle || contextData.linkLabel || 'Timer';
+
+                actions = [
+                    {
+                        icon: '🔗',
+                        label: 'In Chat verlinken',
+                        className: 'accent',
+                        onClick: () => {
+                            insertEntityLinkIntoChat(timerTitle, 'timer', timerId);
+                        }
+                    },
+                    {
+                        icon: '⏹️',
+                        label: 'Timer löschen',
+                        className: 'danger',
+                        onClick: () => {
+                            stopAlarmSound();
+                            cancelScheduledTimerAlarm(timerId);
+                            callTool('loesche_timer', { id: timerId });
+                        }
+                    }
+                ];
+            } else if (type === 'project') {
+                const projId = Number(contextData.projectId || contextData.linkId);
+                const projName = contextData.projectName || contextData.linkLabel || 'Projekt';
+
+                actions = [
+                    {
+                        icon: '✏️',
+                        label: 'Projekt bearbeiten',
+                        onClick: () => {
+                            openProjectModal(projId, projName);
+                        }
+                    },
+                    {
+                        icon: '➕',
+                        label: 'Neue Aufgabe',
+                        onClick: () => {
+                            openTaskModal(null, '', '', '', '', 'none', projId);
+                        }
+                    },
+                    {
+                        icon: '📝',
+                        label: 'Neue Notiz',
+                        onClick: () => {
+                            openNoteModal(null, '', '', projId);
+                        }
+                    },
+                    {
+                        icon: '🔗',
+                        label: 'In Chat verlinken',
+                        className: 'accent',
+                        onClick: () => {
+                            insertEntityLinkIntoChat(projName, 'project', projId);
+                        }
+                    },
+                    {
+                        icon: '✖️',
+                        label: 'Projekt löschen',
+                        className: 'danger',
+                        onClick: () => {
+                            deleteProject(projId);
+                        }
+                    }
+                ];
+            } else if (type === 'note') {
+                const noteId = Number(contextData.noteId || contextData.linkId);
+                const noteTitle = contextData.noteTitle || contextData.linkLabel || 'Notiz';
+                const noteContent = contextData.noteContent || '';
+                const noteProj = contextData.projectId ? Number(contextData.projectId) : null;
+
+                actions = [
+                    {
+                        icon: '✏️',
+                        label: 'Bearbeiten',
+                        onClick: () => {
+                            openNoteModal(noteId, noteTitle, noteContent, noteProj);
+                        }
+                    },
+                    {
+                        icon: '🔗',
+                        label: 'In Chat verlinken',
+                        className: 'accent',
+                        onClick: () => {
+                            insertEntityLinkIntoChat(noteTitle, 'note', noteId);
+                        }
+                    },
+                    {
+                        icon: '✖️',
+                        label: 'Löschen',
+                        className: 'danger',
+                        onClick: () => {
+                            deleteNote(noteId);
+                        }
+                    }
+                ];
+            } else if (type === 'person') {
+                const personId = Number(contextData.personId || contextData.linkId);
+                const personName = contextData.personName || contextData.linkLabel || 'Person';
+
+                actions = [
+                    {
+                        icon: '👤',
+                        label: 'Profil öffnen / bearbeiten',
+                        onClick: () => {
+                            openPersonProfileModal(personId);
+                        }
+                    },
+                    {
+                        icon: '🔗',
+                        label: 'In Chat verlinken',
+                        className: 'accent',
+                        onClick: () => {
+                            insertEntityLinkIntoChat(personName, 'person', personId);
+                        }
+                    }
+                ];
+            } else if (type === 'mail') {
+                const mailId = Number(contextData.mailId || contextData.linkId);
+                const mailSubject = contextData.mailSubject || contextData.linkLabel || '(Kein Betreff)';
+                const isRead = contextData.mailIsRead === 'true';
+
+                actions = [
+                    {
+                        icon: '↩️',
+                        label: 'Antworten',
+                        className: 'accent',
+                        onClick: () => {
+                            openMailComposeModal(mailId);
+                        }
+                    },
+                    {
+                        icon: '👁️',
+                        label: 'Öffnen / Lesen',
+                        onClick: () => {
+                            openMailReadModal(mailId);
+                        }
+                    },
+                    {
+                        icon: isRead ? '✉️' : '📩',
+                        label: isRead ? 'Als ungelesen markieren' : 'Als gelesen markieren',
+                        onClick: () => {
+                            toggleSingleMailReadStatus(mailId, !isRead);
+                        }
+                    },
+                    {
+                        icon: '🔗',
+                        label: 'In Chat verlinken',
+                        className: 'accent',
+                        onClick: () => {
+                            insertEntityLinkIntoChat(mailSubject, 'mail', mailId);
+                        }
+                    }
+                ];
+            }
+
+            if (actions.length === 0) {
+                closeContextMenu();
+                return;
+            }
+
+            actions.forEach(act => {
+                const btn = document.createElement('button');
+                btn.className = `context-menu-item ${act.className || ''}`;
+                btn.innerHTML = `<span class="menu-item-icon">${act.icon}</span> <span>${escapeHtml(act.label)}</span>`;
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    closeContextMenu();
+                    lastSwipeTime = Date.now();
+                    act.onClick();
+                });
+                menu.appendChild(btn);
+            });
+
+            document.body.appendChild(menu);
+            activeContextMenuEl = menu;
+
+            // Positioning: Calculate coordinates relative to item or click
+            const rect = itemEl.getBoundingClientRect();
+            const menuWidth = 190;
+            const menuHeight = actions.length * 36 + 20;
+            const vpWidth = window.innerWidth;
+            const vpHeight = window.innerHeight;
+
+            let left = clickX ? (clickX - 30) : (rect.left + 20);
+            let top = rect.bottom + 6;
+
+            // Boundary checks
+            if (left < 10) left = 10;
+            if (left + menuWidth > vpWidth - 10) left = Math.max(10, vpWidth - menuWidth - 10);
+
+            if (top + menuHeight > vpHeight - 15) {
+                // Open above the card instead
+                top = Math.max(10, rect.top - menuHeight - 6);
+            }
+
+            menu.style.left = `${left}px`;
+            menu.style.top = `${top}px`;
+        }
 
         function handleSwipeStart(e) {
             if (e.type === 'mousedown' && e.button !== 0) return;
@@ -1236,8 +1593,8 @@
             const touch = e.touches ? e.touches[0] : e;
             const target = e.target;
 
-            // Don't initiate swipe when interacting directly with buttons, checkboxes, inputs, etc.
-            if (target.closest('button, input, select, textarea, a, .clickable-tag, [onclick*="Modal"], [onclick*="delete"], [onclick*="edit"]')) {
+            // Only ignore when interacting directly with explicit form elements or clickable tags
+            if (target.closest('button, input, select, textarea, a, .clickable-tag')) {
                 return;
             }
 
@@ -1256,6 +1613,14 @@
             isScrollLockedOut = false;
             swipeThresholdCrossed = false;
 
+            // Start Long-Press detection
+            if (longPressTimer) clearTimeout(longPressTimer);
+            longPressTimer = setTimeout(() => {
+                if (!isSwipeGestureActive && !isScrollLockedOut && activeSwipeItem) {
+                    openContextMenuForElement(activeSwipeItem, swipeStartX, swipeStartY);
+                }
+            }, LONG_PRESS_DURATION);
+
             if (e.type === 'mousedown') {
                 document.addEventListener('mousemove', handleSwipeMove, { passive: false });
                 document.addEventListener('mouseup', handleSwipeEnd);
@@ -1270,6 +1635,17 @@
 
             const deltaX = swipeCurrentX - swipeStartX;
             const deltaY = swipeCurrentY - swipeStartY;
+
+            // If user moves beyond 8px, cancel long-press
+            if (Math.hypot(deltaX, deltaY) > 8) {
+                if (longPressTimer) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+            }
+
+            // If context menu is already open, do not swipe
+            if (isLongPressActive) return;
 
             // Determine if gesture is horizontal swipe or vertical scroll
             if (!isSwipeGestureActive && !isScrollLockedOut) {
@@ -1308,6 +1684,11 @@
         }
 
         function handleSwipeEnd(e) {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+
             if (e.type === 'mouseup') {
                 document.removeEventListener('mousemove', handleSwipeMove);
                 document.removeEventListener('mouseup', handleSwipeEnd);
@@ -1323,6 +1704,10 @@
 
             item.classList.remove('swiping');
             item.style.transform = 'translateX(0px)';
+
+            if (wasSwiping || isLongPressActive) {
+                lastSwipeTime = Date.now();
+            }
 
             if (wasSwiping && triggered) {
                 const label = item.dataset.linkLabel || '';
@@ -1353,13 +1738,24 @@
             swipeThresholdCrossed = false;
         }
 
+        // Suppress click events if a swipe gesture or long-press was just completed
+        window.addEventListener('click', (e) => {
+            if (Date.now() - lastSwipeTime < 350) {
+                e.stopPropagation();
+                e.preventDefault();
+            }
+        }, true);
+
+        // Close context menu on scroll
+        window.addEventListener('scroll', () => closeContextMenu(), true);
+
         window.addEventListener('touchstart', handleSwipeStart, { passive: true });
         window.addEventListener('touchmove', handleSwipeMove, { passive: false });
         window.addEventListener('touchend', handleSwipeEnd, { passive: true });
         window.addEventListener('touchcancel', handleSwipeEnd, { passive: true });
         window.addEventListener('mousedown', handleSwipeStart);
 
-        function renderSwipeLinkWrapper(innerHtml, label, type, id, extraClasses = '', extraStyles = '', wrapperStyles = '') {
+        function renderSwipeLinkWrapper(innerHtml, label, type, id, extraClasses = '', extraStyles = '', wrapperStyles = '', extraDataAttrs = '') {
             const escLabel = escapeHtml(label || '').replace(/"/g, '&quot;');
             return `
                 <div class="swipe-link-wrapper" style="${wrapperStyles}">
@@ -1367,7 +1763,7 @@
                         <span class="swipe-link-icon">🔗</span>
                         <span class="swipe-link-text">Link</span>
                     </div>
-                    <div class="swipe-link-item ${extraClasses}" data-swipe-link="true" data-link-label="${escLabel}" data-link-type="${type}" data-link-id="${id}" style="${extraStyles}">
+                    <div class="swipe-link-item ${extraClasses}" data-swipe-link="true" data-context-type="${type}" data-link-label="${escLabel}" data-link-type="${type}" data-link-id="${id}" ${extraDataAttrs} style="${extraStyles}">
                         ${innerHtml}
                     </div>
                 </div>
@@ -1390,16 +1786,16 @@
                 dueBadge = ` <span style="font-size: 0.7rem; color: ${color}; font-weight: ${weight}; margin-left: 6px; display: inline-flex; align-items: center; gap: 3px;" title="${isOverdue ? 'Überfällig!' : 'Fällig am'} ${dateObj.toLocaleDateString('de-DE')}">📅 ${dateStr}</span>`;
             }
 
-            const escTitle = escapeHtml(t.title).replace(/'/g, "\\'");
-            const escNotes = escapeHtml(t.notes || '').replace(/'/g, "\\'");
-            const escListTitle = escapeHtml(t.listTitle || '').replace(/'/g, "\\'");
+            const escTitle = escapeHtml(t.title).replace(/"/g, '&quot;');
+            const escNotes = escapeHtml(t.notes || '').replace(/"/g, '&quot;');
+            const escListTitle = escapeHtml(t.listTitle || '').replace(/"/g, '&quot;');
             const recurrenceVal = t.recurrence || 'none';
 
             const bg = isOverdue ? 'rgba(243, 139, 168, 0.06)' : 'rgba(255,255,255,0.03)';
             const border = isOverdue ? '1px solid rgba(243, 139, 168, 0.25)' : '1px solid rgba(255,255,255,0.06)';
 
             const taskContent = `
-                 <div class="task-item ${isOverdue ? 'overdue' : ''}" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; background: ${bg}; border: ${border}; width: 100%;">
+                 <div class="task-item ${isOverdue ? 'overdue' : ''}" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 7px 10px; border-radius: 6px; background: ${bg}; border: ${border}; width: 100%;">
                      <div style="display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 0;">
                          <input type="checkbox" class="task-checkbox" data-task-id="${t.id}" data-tasklist-id="${t.tasklistId || t.listTitle || 'Standard'}" onchange="completeTask(this)" style="margin-top: 3px;">
                          <span style="line-height: 1.4; color: var(--text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word; flex: 1;">
@@ -1408,12 +1804,9 @@
                             ${dueBadge}
                          </span>
                      </div>
-                     <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
-                         <button onclick="editTask(${t.id}, '${escTitle}', '${escNotes}', '${t.due || ''}', '${escListTitle}', '${recurrenceVal}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Bearbeiten">✏️</button>
-                         <button onclick="deleteTask(${t.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; display: inline-flex; align-items: center; justify-content: center;" title="Löschen">✖</button>
-                     </div>
                  </div>`;
-            return renderSwipeLinkWrapper(taskContent, t.title, 'task', t.id);
+            const extraData = `data-task-id="${t.id}" data-task-title="${escTitle}" data-task-notes="${escNotes}" data-task-due="${t.due || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}"`;
+            return renderSwipeLinkWrapper(taskContent, t.title, 'task', t.id, '', '', '', extraData);
         }
 
         function getServerUrl() {
@@ -3317,20 +3710,18 @@
                     `;
                     dayData.diaryEntries.forEach(e => {
                         const timeStr = new Date(e.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                        const escTitle = escapeHtml(e.title || "Tagebucheintrag").replace(/'/g, "\\'");
+                        const escTitle = escapeHtml(e.title || "Tagebucheintrag").replace(/"/g, '&quot;');
                         const entryContent = `
-                            <div style="background: rgba(250, 179, 135, 0.06); border: 1px solid rgba(250, 179, 135, 0.2); padding: 6px 8px; border-radius: 6px; font-size: 0.78rem; display: flex; flex-direction: column; gap: 2px; width: 100%;">
+                            <div style="background: rgba(250, 179, 135, 0.06); border: 1px solid rgba(250, 179, 135, 0.2); padding: 7px 10px; border-radius: 6px; font-size: 0.78rem; display: flex; flex-direction: column; gap: 2px; width: 100%;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <strong style="color: #fab387; font-size: 0.78rem;">${escapeHtml(e.title || "Tagebucheintrag")}</strong>
-                                    <div style="display: flex; align-items: center; gap: 4px;">
-                                        <span style="font-size: 0.65rem; opacity: 0.5;">${timeStr} Uhr</span>
-                                        <button onclick="deleteJournalEntry(${e.id}, '${dateStr}')" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem;" title="Löschen">✖</button>
-                                    </div>
+                                    <span style="font-size: 0.65rem; opacity: 0.5;">${timeStr} Uhr</span>
                                 </div>
                                 <div style="white-space: pre-wrap; word-break: break-word; line-height: 1.25;">${escapeHtml(e.content)}</div>
                             </div>
                         `;
-                        html += renderSwipeLinkWrapper(entryContent, e.title || "Tagebucheintrag", 'journal', e.id);
+                        const extraJournalData = `data-journal-id="${e.id}" data-journal-title="${escTitle}" data-journal-date="${dateStr}"`;
+                        html += renderSwipeLinkWrapper(entryContent, e.title || "Tagebucheintrag", 'journal', e.id, '', '', '', extraJournalData);
                     });
                     html += `
                             </div>
@@ -3345,9 +3736,9 @@
                     `;
                     dayData.events.forEach(ev => {
                         if (ev.isTask) {
-                            const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
-                            const escNotes = escapeHtml(ev.description || '').replace(/'/g, "\\'");
-                            const escListTitle = escapeHtml(ev.listTitle || '').replace(/'/g, "\\'");
+                            const escTitle = escapeHtml(ev.title).replace(/"/g, '&quot;');
+                            const escNotes = escapeHtml(ev.description || '').replace(/"/g, '&quot;');
+                            const escListTitle = escapeHtml(ev.listTitle || '').replace(/"/g, '&quot;');
                             const recurrenceVal = ev.recurrence || 'none';
                             const isRecurring = ev.recurring || false;
                             const repeatBadge = isRecurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrend: ${ev.recurrence}">🔄</span>` : '';
@@ -3368,7 +3759,7 @@
                             const textStyle = ev.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
 
                             const taskContent = `
-                                <div class="task-item" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 5px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); width: 100%;">
+                                <div class="task-item" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); width: 100%;">
                                     <div style="display: flex; align-items: flex-start; gap: 6px; flex: 1; min-width: 0;">
                                         <input type="checkbox" class="task-checkbox" data-task-id="${rawTaskId}" data-tasklist-id="${ev.listTitle || 'Standard'}" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 3px;">
                                         <span style="line-height: 1.3; color: var(--text); overflow: hidden; text-overflow: ellipsis; word-break: break-word; flex: 1; ${textStyle}">
@@ -3378,13 +3769,10 @@
                                             ${ev.description ? `<div style="font-size: 0.72rem; opacity: 0.6; margin-top: 2px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(ev.description)}</div>` : ''}
                                         </span>
                                     </div>
-                                    <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
-                                        <button onclick="editTask(${rawTaskId}, '${escTitle}', '${escNotes}', '${ev.time || ''}', '${escListTitle}', '${recurrenceVal}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Bearbeiten">✏️</button>
-                                        <button onclick="deleteTask(${rawTaskId})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Löschen">✖</button>
-                                    </div>
                                 </div>
                             `;
-                            html += renderSwipeLinkWrapper(taskContent, ev.title, 'task', rawTaskId);
+                            const extraDayTaskData = `data-task-id="${rawTaskId}" data-task-title="${escTitle}" data-task-notes="${escNotes}" data-task-due="${ev.time || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}"`;
+                            html += renderSwipeLinkWrapper(taskContent, ev.title, 'task', rawTaskId, '', '', '', extraDayTaskData);
                         } else {
                             const isRec = ev.recurring || ev.isRecurring;
                             const repeatBadge = isRec ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
@@ -3396,7 +3784,7 @@
                             const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
                             
                             const rescheduleBorder = ev.originalStart ? 'border-left: 3px solid #f9e2af; padding-left: 6px;' : '';
-                            const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
+                            const escTitle = escapeHtml(ev.title).replace(/"/g, '&quot;');
                             
                             const timeBadgeHtml = getEventTimeBadge(ev);
                             
@@ -3434,16 +3822,12 @@
                                         </div>
                                         ${ev.description ? `<div style="font-size: 0.72rem; opacity: 0.6; margin-top: 2px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(ev.description)}</div>` : ''}
                                     </div>
-                                    <div style="display: flex; align-items: center; gap: 3px; align-self: center; margin-left: 6px;">
-                                        ${!ev.isBirthday ? `
-                                            <button onclick="deleteCalendarEvent('${ev.id}', '${targetDate}', ${isRec})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.8rem; padding: 2px;" title="Termin löschen">✖</button>
-                                        ` : ''}
-                                    </div>
                                 </div>
                             `;
                             const linkType = ev.isBirthday && ev.persons && ev.persons.length > 0 ? 'person' : 'event';
                             const linkId = ev.isBirthday && ev.persons && ev.persons.length > 0 ? ev.persons[0].id : ev.id;
-                            html += renderSwipeLinkWrapper(eventContent, ev.title, linkType, linkId);
+                            const extraTimelineEventData = `data-event-id="${ev.id}" data-event-title="${escTitle}" data-event-date="${targetDate}" data-event-is-rec="${isRec}" data-event-is-birthday="${!!ev.isBirthday}" data-person-id="${ev.persons && ev.persons.length > 0 ? ev.persons[0].id : ''}"`;
+                            html += renderSwipeLinkWrapper(eventContent, ev.title, linkType, linkId, '', '', '', extraTimelineEventData);
                         }
                     });
                     html += `</div>`;
@@ -3839,14 +4223,11 @@
                             html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 0; padding: 10px; text-align: center; background: rgba(0,0,0,0.15); border-radius: 8px;">Keine aktiven Timer.</p>`;
                         } else {
                             widget.data.timers.forEach(t => {
-                                const escTitle = escapeHtml(t.title).replace(/'/g, "\\'");
+                                const escTitle = escapeHtml(t.title).replace(/"/g, '&quot;');
                                 const timerContent = `
                                     <div class="timer-card" id="timer-card-${t.id}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" style="padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); width: 100%; position: relative;">
                                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
                                             <span style="font-size: 0.85rem; font-weight: bold; color: var(--text);">${escapeHtml(t.title)}</span>
-                                            <div style="display: flex; align-items: center; gap: 4px;">
-                                                <button onclick="stopAlarmSound(); cancelScheduledTimerAlarm(${t.id}); callTool('loesche_timer', {id: ${t.id}})" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Timer löschen">✖</button>
-                                            </div>
                                         </div>
                                         <div class="timer-countdown" style="font-family: monospace; font-size: 1.1rem; font-weight: bold; color: var(--accent); margin-bottom: 6px;">--:--:--</div>
                                         <div class="timer-progress-bg" style="width: 100%; height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; margin-bottom: 4px;">
@@ -3855,7 +4236,8 @@
                                         <div style="font-size: 0.65rem; opacity: 0.4;">Bis: ${new Date(t.expiresAt).toLocaleTimeString('de-DE', {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</div>
                                     </div>
                                 `;
-                                html += renderSwipeLinkWrapper(timerContent, t.title, 'timer', t.id);
+                                const extraTimerData = `data-timer-id="${t.id}" data-timer-title="${escTitle}"`;
+                                html += renderSwipeLinkWrapper(timerContent, t.title, 'timer', t.id, '', '', '', extraTimerData);
                             });
                         }
                         html += `</div>`;
@@ -3875,7 +4257,7 @@
 
                                 // 1. Render Projects
                                 projects.forEach(p => {
-                                    const escProjName = escapeHtml(p.name).replace(/'/g, "\\'").replace(/"/g, "&quot;");
+                                    const escProjName = escapeHtml(p.name).replace(/"/g, '&quot;');
                                     const isCollapsed = collapsedStates[p.id] !== false;
                                     const displayStyle = isCollapsed ? 'none' : 'flex';
                                     const arrowRotate = isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)';
@@ -3902,23 +4284,16 @@
                                                     ${personsHtml}
                                                 </div>
                                             </div>
-                                            <div style="display: flex; gap: 6px; align-items: center;" onclick="event.stopPropagation()">
-                                                <button onclick="openProjectModal(${p.id}, '${escProjName}')" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Bearbeiten">✏️</button>
-                                                <button onclick="deleteProject(${p.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Löschen">✖</button>
-                                            </div>
                                         </div>
                                     `;
 
+                                    const extraProjectData = `data-project-id="${p.id}" data-project-name="${escProjName}"`;
+
                                     html += `
                                         <div class="project-card" id="project-card-${p.id}" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; overflow: hidden; margin-bottom: 6px; transition: all 0.3s;">
-                                            ${renderSwipeLinkWrapper(projectHeaderContent, p.name, 'project', p.id, '', '', 'margin-bottom: 0; border-radius: 0;')}
+                                            ${renderSwipeLinkWrapper(projectHeaderContent, p.name, 'project', p.id, '', '', 'margin-bottom: 0; border-radius: 0;', extraProjectData)}
                                             
                                             <div class="project-body" id="project-body-${p.id}" style="display: ${displayStyle}; padding: 10px 12px; border-top: 1px solid rgba(255,255,255,0.04); flex-direction: column; gap: 8px; background: rgba(0,0,0,0.15);">
-                                                <div style="display: flex; gap: 6px; margin-bottom: 4px;">
-                                                    <button onclick="openTaskModal(null, '', '', '', '', 'none', ${p.id})" class="nav-btn" style="flex: 1; font-size: 0.7rem; padding: 4px 8px; height: 26px;">➕ Aufgabe</button>
-                                                    <button onclick="openNoteModal(null, '', '', ${p.id})" class="nav-btn" style="flex: 1; font-size: 0.7rem; padding: 4px 8px; height: 26px;">➕ Notiz</button>
-                                                </div>
-                                                
                                                 <div style="display: flex; flex-direction: column; gap: 6px;">
                                     `;
                                     
@@ -3926,8 +4301,8 @@
                                         html += `<p style="font-size: 0.75rem; opacity: 0.5; text-align: center; margin: 5px 0;">Projekt ist leer.</p>`;
                                     } else {
                                         p.tasks.forEach(t => {
-                                            const escT = escapeHtml(t.title).replace(/'/g, "\\'");
-                                            const escN = escapeHtml(t.notes || '').replace(/'/g, "\\'");
+                                            const escT = escapeHtml(t.title).replace(/"/g, '&quot;');
+                                            const escN = escapeHtml(t.notes || '').replace(/"/g, '&quot;');
                                             const checkedAttr = t.completed ? 'checked' : '';
                                             const textStyle = t.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
                                             const taskContent = `
@@ -3936,31 +4311,23 @@
                                                         <input type="checkbox" class="task-checkbox" data-task-id="${t.id}" data-tasklist-id="Standard" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 2px;">
                                                         <span style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; word-break: break-word; line-height: 1.4; flex: 1; ${textStyle}">${escapeHtml(t.title)}</span>
                                                     </div>
-                                                    <div style="display: flex; align-items: center; gap: 2px;">
-                                                        <button onclick="editTask(${t.id}, '${escT}', '${escN}', '', '', 'none', ${p.id})" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.7rem;" title="Bearbeiten">✏️</button>
-                                                        <button onclick="deleteTask(${t.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.7rem;" title="Löschen">✖</button>
-                                                    </div>
                                                 </div>
                                             `;
-                                            html += renderSwipeLinkWrapper(taskContent, t.title, 'task', t.id);
+                                            const extraTaskData = `data-task-id="${t.id}" data-task-title="${escT}" data-task-notes="${escN}" data-task-project="${p.id}"`;
+                                            html += renderSwipeLinkWrapper(taskContent, t.title, 'task', t.id, '', '', '', extraTaskData);
                                         });
 
                                         p.notes.forEach(n => {
-                                            const escTitle = escapeHtml(n.title).replace(/'/g, "\\'");
-                                            const escContent = escapeHtml(n.content).replace(/'/g, "\\'").replace(/\n/g, "\\n");
+                                            const escTitle = escapeHtml(n.title).replace(/"/g, '&quot;');
+                                            const escContent = escapeHtml(n.content).replace(/"/g, '&quot;');
                                             const noteContent = `
                                                 <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 6px; font-size: 0.75rem; display: flex; flex-direction: column; gap: 4px; width: 100%;">
-                                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                                        <strong style="color: var(--accent); font-size: 0.75rem;">${escapeHtml(n.title)}</strong>
-                                                        <div style="display: flex; gap: 4px;">
-                                                            <button onclick="openNoteModal(${n.id}, '${escTitle}', '${escContent}', ${p.id})" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.7rem;" title="Bearbeiten">✏️</button>
-                                                            <button onclick="deleteNote(${n.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.7rem;" title="Löschen">✖</button>
-                                                        </div>
-                                                    </div>
+                                                    <strong style="color: var(--accent); font-size: 0.75rem;">${escapeHtml(n.title)}</strong>
                                                     <div style="opacity: 0.8; white-space: pre-wrap; word-break: break-all; line-height: 1.3;">${escapeHtml(n.content)}</div>
                                                 </div>
                                             `;
-                                            html += renderSwipeLinkWrapper(noteContent, n.title, 'note', n.id);
+                                            const extraNoteData = `data-note-id="${n.id}" data-note-title="${escTitle}" data-note-content="${escContent}" data-project-id="${p.id}"`;
+                                            html += renderSwipeLinkWrapper(noteContent, n.title, 'note', n.id, '', '', '', extraNoteData);
                                         });
                                     }
 
@@ -3990,16 +4357,12 @@
                                             </div>
                                             
                                             <div class="project-body" id="project-body-unassigned" style="display: ${displayStyle}; padding: 10px 12px; border-top: 1px solid rgba(255,255,255,0.04); flex-direction: column; gap: 8px; background: rgba(0,0,0,0.15);">
-                                                <div style="display: flex; gap: 6px; margin-bottom: 4px;">
-                                                    <button onclick="openTaskModal(null, '', '', '', '', 'none', null)" class="nav-btn" style="flex: 1; font-size: 0.7rem; padding: 4px 8px; height: 26px;">➕ Aufgabe</button>
-                                                    <button onclick="openNoteModal(null, '', '', null)" class="nav-btn" style="flex: 1; font-size: 0.7rem; padding: 4px 8px; height: 26px;">➕ Notiz</button>
-                                                </div>
                                                 <div style="display: flex; flex-direction: column; gap: 6px;">
                                     `;
                                     
                                     unassignedTasks.forEach(t => {
-                                        const escT = escapeHtml(t.title).replace(/'/g, "\\'");
-                                        const escN = escapeHtml(t.notes || '').replace(/'/g, "\\'");
+                                        const escT = escapeHtml(t.title).replace(/"/g, '&quot;');
+                                        const escN = escapeHtml(t.notes || '').replace(/"/g, '&quot;');
                                         const checkedAttr = t.completed ? 'checked' : '';
                                         const textStyle = t.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
                                         const taskContent = `
@@ -4008,18 +4371,15 @@
                                                     <input type="checkbox" class="task-checkbox" data-task-id="${t.id}" data-tasklist-id="Standard" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 2px;">
                                                     <span style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; word-break: break-word; line-height: 1.4; flex: 1; ${textStyle}">${escapeHtml(t.title)}</span>
                                                 </div>
-                                                <div style="display: flex; align-items: center; gap: 2px;">
-                                                    <button onclick="editTask(${t.id}, '${escT}', '${escN}', '', '', 'none', null)" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.7rem;" title="Bearbeiten">✏️</button>
-                                                    <button onclick="deleteTask(${t.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.7rem;" title="Löschen">✖</button>
-                                                </div>
                                             </div>
                                         `;
-                                        html += renderSwipeLinkWrapper(taskContent, t.title, 'task', t.id);
+                                        const extraTaskData = `data-task-id="${t.id}" data-task-title="${escT}" data-task-notes="${escN}"`;
+                                        html += renderSwipeLinkWrapper(taskContent, t.title, 'task', t.id, '', '', '', extraTaskData);
                                     });
 
                                     unassignedNotes.forEach(n => {
-                                        const escTitle = escapeHtml(n.title).replace(/'/g, "\\'");
-                                        const escContent = escapeHtml(n.content).replace(/'/g, "\\'").replace(/\n/g, "\\n");
+                                        const escTitle = escapeHtml(n.title).replace(/"/g, '&quot;');
+                                        const escContent = escapeHtml(n.content).replace(/"/g, '&quot;');
                                         
                                         let notePersonsHtml = "";
                                         if (n.persons && n.persons.length > 0) {
@@ -4034,18 +4394,13 @@
 
                                         const noteContent = `
                                             <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 6px; font-size: 0.75rem; display: flex; flex-direction: column; gap: 4px; width: 100%;">
-                                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                                    <strong style="color: var(--accent); font-size: 0.75rem;">${escapeHtml(n.title)}</strong>
-                                                    <div style="display: flex; gap: 4px;">
-                                                        <button onclick="openNoteModal(${n.id}, '${escTitle}', '${escContent}', null)" style="background: transparent; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 0.7rem;" title="Bearbeiten">✏️</button>
-                                                        <button onclick="deleteNote(${n.id})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.7rem;" title="Löschen">✖</button>
-                                                    </div>
-                                                </div>
+                                                <strong style="color: var(--accent); font-size: 0.75rem;">${escapeHtml(n.title)}</strong>
                                                 <div style="opacity: 0.8; white-space: pre-wrap; word-break: break-all; line-height: 1.3;">${escapeHtml(n.content)}</div>
                                                 <div style="display: flex; flex-wrap: wrap; gap: 4px;">${notePersonsHtml}</div>
                                             </div>
                                         `;
-                                        html += renderSwipeLinkWrapper(noteContent, n.title, 'note', n.id);
+                                        const extraNoteData = `data-note-id="${n.id}" data-note-title="${escTitle}" data-note-content="${escContent}"`;
+                                        html += renderSwipeLinkWrapper(noteContent, n.title, 'note', n.id, '', '', '', extraNoteData);
                                     });
 
                                     html += `
@@ -4063,7 +4418,7 @@
                                 html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine Personen im Gedächtnis.</p>`;
                             } else {
                                 widget.data.people.forEach(p => {
-                                    const escName = escapeHtml(p.name).replace(/'/g, "\\'");
+                                    const escName = escapeHtml(p.name).replace(/"/g, '&quot;');
                                     if (p.isOwner) {
                                         const personContent = `
                                             <div onclick="openPersonProfileModal(${p.id})" style="background: rgba(203, 166, 247, 0.12); border: 1.5px solid #cba6f7; padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s; box-shadow: 0 0 15px rgba(203, 166, 247, 0.1); width: 100%;" onmouseover="this.style.background='rgba(203, 166, 247, 0.2)'" onmouseout="this.style.background='rgba(203, 166, 247, 0.12)'">
@@ -4076,7 +4431,8 @@
                                                 <div style="font-size: 0.75rem; opacity: 0.9; color: #cdd6f4; white-space: pre-wrap; word-break: break-word; line-height: 1.3; margin-top: 4px;">${escapeHtml(p.notes)}</div>
                                             </div>
                                         `;
-                                        html += renderSwipeLinkWrapper(personContent, p.name, 'person', p.id);
+                                        const extraPersonData = `data-person-id="${p.id}" data-person-name="${escName}"`;
+                                        html += renderSwipeLinkWrapper(personContent, p.name, 'person', p.id, '', '', '', extraPersonData);
                                     } else {
                                         const personContent = `
                                             <div onclick="openPersonProfileModal(${p.id})" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: all 0.2s; width: 100%;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
@@ -4086,7 +4442,8 @@
                                                 <div style="font-size: 0.75rem; opacity: 0.8; white-space: pre-wrap; word-break: break-word; line-height: 1.3; margin-top: 4px;">${escapeHtml(p.notes)}</div>
                                             </div>
                                         `;
-                                        html += renderSwipeLinkWrapper(personContent, p.name, 'person', p.id);
+                                        const extraPersonData = `data-person-id="${p.id}" data-person-name="${escName}"`;
+                                        html += renderSwipeLinkWrapper(personContent, p.name, 'person', p.id, '', '', '', extraPersonData);
                                     }
                                 });
                             }
@@ -4508,13 +4865,8 @@
                                 </div>
                             </div>
 
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px;">
-                                <div style="font-size: 0.78rem; font-weight: ${subjectWeight}; color: ${subjectColor}; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
-                                    ${escapeHtml(e.subject || '(Kein Betreff)')}
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;" onclick="event.stopPropagation()">
-                                    <button onclick="openMailComposeModal(${e.id})" style="background: transparent; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.75rem; padding: 2px;" title="Antworten">↩️</button>
-                                </div>
+                            <div style="font-size: 0.78rem; font-weight: ${subjectWeight}; color: ${subjectColor}; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%;">
+                                ${escapeHtml(e.subject || '(Kein Betreff)')}
                             </div>
 
                             <!-- Person & Kategorie Meta Tags -->
@@ -4526,7 +4878,9 @@
                             ${e.snippet ? `<div style="font-size: 0.72rem; opacity: 0.6; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(e.snippet)}</div>` : ''}
                         </div>
                     `;
-                    html += renderSwipeLinkWrapper(mailContent, e.subject || '(Kein Betreff)', 'mail', e.id);
+                    const escMailSubject = escapeHtml(e.subject || '(Kein Betreff)').replace(/"/g, '&quot;');
+                    const extraMailData = `data-mail-id="${e.id}" data-mail-subject="${escMailSubject}" data-mail-is-read="${!!e.isRead}"`;
+                    html += renderSwipeLinkWrapper(mailContent, e.subject || '(Kein Betreff)', 'mail', e.id, '', '', '', extraMailData);
                 });
                 html += `</div>`;
             }
