@@ -7,6 +7,7 @@ export interface Settings {
   hotkey: string;
   disabledPlugins: string[];
   autostart?: boolean;
+  aiModel?: string;
 }
 
 export function getSettings(): Settings {
@@ -22,7 +23,8 @@ export function getSettings(): Settings {
   const defaultSettings: Settings = {
     hotkey: "Ctrl+Shift+Space",
     disabledPlugins: [],
-    autostart: false
+    autostart: false,
+    aiModel: "gemini-1.5-flash"
   };
   
   // Datei erstellen, falls sie nicht existiert

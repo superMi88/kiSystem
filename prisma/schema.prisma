@@ -211,6 +211,15 @@ model MailAccount {
   cachedEmails CachedEmail[] // Gecachte E-Mails dieses Kontos
 }
 
+/// [Mail Plugin] Speichert benutzerdefinierte E-Mail-Kategorien mit Name und Icon.
+model MailCategory {
+  id        Int      @id @default(autoincrement()) // Eindeutige ID der Kategorie
+  name      String   @unique // Name der Kategorie (z.B. "Arbeit", "Rechnungen")
+  icon      String?  @default("🏷️") // Optionales Icon/Emoji
+  createdAt DateTime @default(now()) // Erstellungszeitpunkt
+  updatedAt DateTime @updatedAt // Zeitpunkt der letzten Änderung
+}
+
 /// [Mail Plugin] Speichert abgerufene und bereinigte E-Mails für schnellen Offline-Zugriff und einheitliche Anzeige.
 model CachedEmail {
   id             Int         @id @default(autoincrement()) // Eindeutige interne ID
@@ -228,13 +237,14 @@ model CachedEmail {
   snippet        String?     // Kurze Textvorschau
   isRead         Boolean     @default(false) // Gelesen-Status
   hasAttachments Boolean     @default(false) // Enthält Anhänge
-  category       String?     @default("Allgemein") // Kategorie (z.B. "Arbeit", "Rechnungen", "Privat", "Finanzen", "Wichtig")
+  category       String?     // Optionale Kategorie (vom Benutzer angelegt)
   personId       Int?        // Optionale ID der zugeordneten Person aus dem Gedächtnis
   person         Person?     @relation(fields: [personId], references: [id], onDelete: SetNull) // Relation zur Person
   createdAt      DateTime    @default(now()) // Abrufzeitpunkt
 
   @@unique([accountId, uid])
 }
+
 
 
 

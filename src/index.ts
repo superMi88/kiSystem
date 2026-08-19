@@ -635,13 +635,60 @@ app.post("/api/mail/messages/:id/read", async (req, res) => {
   }
 });
 
+app.get("/api/mail/categories", async (req, res) => {
+  try {
+    const cats = await MailService.getCategories(prisma);
+    res.json(cats);
+  } catch (e: any) {
+    console.error("Fehler beim Abrufen der Kategorien:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/mail/categories", async (req, res) => {
+  try {
+    const { name, icon } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Name der Kategorie ist erforderlich." });
+    }
+    const cat = await MailService.createCategory(prisma, name, icon);
+    res.json(cat);
+  } catch (e: any) {
+    console.error("Fehler beim Erstellen der Kategorie:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/api/mail/categories/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { name, icon } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Name der Kategorie ist erforderlich." });
+    }
+    const cat = await MailService.updateCategory(prisma, id, name, icon);
+    res.json(cat);
+  } catch (e: any) {
+    console.error("Fehler beim Aktualisieren der Kategorie:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/mail/categories/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    await MailService.deleteCategory(prisma, id);
+    res.json({ success: true, message: "Kategorie gelöscht." });
+  } catch (e: any) {
+    console.error("Fehler beim Löschen der Kategorie:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.put("/api/mail/messages/:id/category", async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { category } = req.body;
-    if (!category) {
-      return res.status(400).json({ error: "Kategorie ist erforderlich." });
-    }
     const updated = await MailService.updateEmailCategory(prisma, id, category);
     res.json(updated);
   } catch (e: any) {
@@ -817,12 +864,13 @@ app.get("/settings", (req, res) => {
 });
 
 app.post("/settings", (req, res) => {
-  const { hotkey, disabledPlugins, autostart } = req.body;
+  const { hotkey, disabledPlugins, autostart, aiModel } = req.body;
   const current = getSettings();
   const updated = {
     hotkey: hotkey !== undefined ? hotkey : current.hotkey,
     disabledPlugins: disabledPlugins !== undefined ? disabledPlugins : current.disabledPlugins,
-    autostart: autostart !== undefined ? autostart : current.autostart
+    autostart: autostart !== undefined ? autostart : current.autostart,
+    aiModel: aiModel !== undefined ? aiModel : current.aiModel
   };
   saveSettings(updated);
   res.json(updated);
@@ -882,7 +930,8 @@ app.post("/chat", async (req, res) => {
     const dateString = now.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     const timeString = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 
-    const modelName = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+    const currentSettings = getSettings();
+    const modelName = currentSettings.aiModel || process.env.GEMINI_MODEL || "gemini-1.5-flash";
     const model = genAI.getGenerativeModel({
       model: modelName,
       tools: [{ functionDeclarations: pluginManager.getGeminiTools() } as any],

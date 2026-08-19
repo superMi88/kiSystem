@@ -301,7 +301,7 @@ export class MailService {
                 snippet: snippet,
                 isRead: isRead,
                 hasAttachments: hasAttachments,
-                category: "Allgemein",
+                category: null,
                 personId: matchedPersonId
               }
             });
@@ -343,33 +343,83 @@ export class MailService {
     }
 
     const promises = accounts.map(async account => {
-      const res = await this.syncAccountEmails(account, prisma, options);
-      return {
-        accountId: account.id,
-        name: account.name,
-        email: account.email,
-        count: res.count,
-        error: res.error
-      };
-    });
-
-    const settled = await Promise.allSettled(promises);
-    const results = settled.map((s, idx) => {
-      if (s.status === "fulfilled") {
-        return s.value;
-      } else {
+      try {
+        const res = await this.syncAccountEmails(account, prisma, options);
         return {
-          accountId: accounts[idx].id,
-          name: accounts[idx].name,
-          email: accounts[idx].email,
+          accountId: account.id,
+          name: account.name,
+          email: account.email,
+          count: res.count,
+          error: res.error
+        };
+      } catch (err: any) {
+        return {
+          accountId: account.id,
+          name: account.name,
+          email: account.email,
           count: 0,
-          error: (s.reason as Error)?.message || "Unbekannter Sync-Fehler"
+          error: err.message || "Unbekannter Sync-Fehler"
         };
       }
     });
 
+    const results = await Promise.all(promises);
     const totalSynced = results.reduce((acc, curr) => acc + curr.count, 0);
     return { totalSynced, results };
+  }
+
+  /**
+   * Gibt alle benutzerdefinierten Mail-Kategorien zurück.
+   */
+  static async getCategories(prisma: PrismaClient) {
+    return await prisma.mailCategory.findMany({
+      orderBy: { name: "asc" }
+    });
+  }
+
+  /**
+   * Erstellt eine neue benutzerdefinierte Mail-Kategorie mit Name und Icon.
+   */
+  static async createCategory(prisma: PrismaClient, name: string, icon?: string) {
+    const trimmedName = name.trim();
+    if (!trimmedName) throw new Error("Kategoriename darf nicht leer sein.");
+    return await prisma.mailCategory.create({
+      data: {
+        name: trimmedName,
+        icon: icon?.trim() || "🏷️"
+      }
+    });
+  }
+
+  /**
+   * Aktualisiert eine benutzerdefinierte Mail-Kategorie.
+   */
+  static async updateCategory(prisma: PrismaClient, id: number, name: string, icon?: string) {
+    const trimmedName = name.trim();
+    if (!trimmedName) throw new Error("Kategoriename darf nicht leer sein.");
+    return await prisma.mailCategory.update({
+      where: { id },
+      data: {
+        name: trimmedName,
+        icon: icon?.trim() || "🏷️"
+      }
+    });
+  }
+
+  /**
+   * Löscht eine benutzerdefinierte Mail-Kategorie.
+   */
+  static async deleteCategory(prisma: PrismaClient, id: number) {
+    const cat = await prisma.mailCategory.findUnique({ where: { id } });
+    if (cat) {
+      await prisma.cachedEmail.updateMany({
+        where: { category: cat.name },
+        data: { category: null }
+      });
+    }
+    return await prisma.mailCategory.delete({
+      where: { id }
+    });
   }
 
   /**
@@ -434,11 +484,12 @@ export class MailService {
   static async updateEmailCategory(
     prisma: PrismaClient,
     emailId: number,
-    category: string
+    category: string | null
   ) {
+    const cleanCategory = category && category.trim() ? category.trim() : null;
     return await prisma.cachedEmail.update({
       where: { id: emailId },
-      data: { category: category.trim() || "Allgemein" },
+      data: { category: cleanCategory },
       include: {
         account: { select: { id: true, name: true, email: true, color: true } },
         person: { select: { id: true, name: true, email: true } }

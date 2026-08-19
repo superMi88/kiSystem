@@ -342,20 +342,10 @@ export const mailPlugin: Plugin = {
       }
     });
 
-    const defaultCategories = ["Alle", "Allgemein", "Arbeit", "Rechnungen", "Privat", "Finanzen", "Wichtig", "Bestellungen", "Sonstiges"];
-    const distinctDbCategories = await prisma.cachedEmail.findMany({
-      where: { account: { isDeleted: false }, category: { not: null } },
-      select: { category: true },
-      distinct: ["category"]
+    const customCategories = await prisma.mailCategory.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, icon: true }
     });
-
-    const categorySet = new Set(defaultCategories);
-    distinctDbCategories.forEach(d => {
-      if (d.category && d.category.trim()) {
-        categorySet.add(d.category.trim());
-      }
-    });
-    const categories = Array.from(categorySet);
 
     const recentResult = await MailService.getUnifiedEmails(prisma, { limit: 50 });
 
@@ -384,7 +374,7 @@ export const mailPlugin: Plugin = {
               snippet: e.snippet,
               isRead: e.isRead,
               hasAttachments: e.hasAttachments,
-              category: e.category || "Allgemein",
+              category: e.category || null,
               personId: e.personId,
               personName: personName,
               personEmail: e.person?.email || null
@@ -392,7 +382,7 @@ export const mailPlugin: Plugin = {
           }),
           unreadCount: recentResult.unreadCount,
           totalCount: recentResult.totalCount,
-          categories
+          categories: customCategories
         }
       }
     ];
