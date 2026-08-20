@@ -111,6 +111,47 @@ export const timerPlugin: Plugin = {
         });
         return { status: "success", message: "Timer quittiert." };
       }
+    },
+    {
+      definition: {
+        name: "bearbeite_timer",
+        description: "Bearbeitet einen bestehenden Timer (Titel, Restdauer oder Ablaufzeit).",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            id: { type: SchemaType.INTEGER, description: "Die ID des zu bearbeitenden Timers" },
+            titel: { type: SchemaType.STRING, description: "Neuer Titel des Timers (optional)" },
+            sekunden: { type: SchemaType.INTEGER, description: "Neue Restdauer in Sekunden ab jetzt (optional)" },
+            expiresAt: { type: SchemaType.STRING, description: "Neuer Ablaufzeitpunkt als ISO-String (optional)" }
+          },
+          required: ["id"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const id = Number(args.id);
+        const data: any = {};
+        if (args.titel !== undefined) data.title = args.titel;
+        if (args.sekunden !== undefined) {
+          data.expiresAt = new Date(Date.now() + Number(args.sekunden) * 1000);
+          data.completed = false;
+        } else if (args.expiresAt !== undefined) {
+          data.expiresAt = new Date(args.expiresAt);
+          data.completed = false;
+        }
+        const updated = await prisma.timer.update({
+          where: { id },
+          data
+        });
+        return {
+          status: "success",
+          message: `Timer '${updated.title}' erfolgreich aktualisiert.`,
+          timer: {
+            id: updated.id,
+            title: updated.title,
+            expiresAt: updated.expiresAt.toISOString()
+          }
+        };
+      }
     }
   ],
   getTopWidgets: async ({ prisma }) => {

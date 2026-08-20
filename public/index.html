@@ -221,6 +221,203 @@
 
 
 
+        <!-- Event Detail Modal -->
+        <div id="event-detail-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 22px; border-radius: 12px; z-index: 300; width: 88%; max-width: 480px; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 15px; gap: 8px;">
+                <div>
+                    <span style="font-size: 0.7rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px;">📅 Kalendertermin</span>
+                    <h3 id="event-detail-title" style="color: white; margin: 4px 0 0 0; font-size: 1.15rem; word-break: break-word;">Termin</h3>
+                </div>
+                <button onclick="closeEventDetailModal()" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 1.2rem;" title="Schließen">✖</button>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 12px; text-align: left; max-height: 60vh; overflow-y: auto; padding-right: 4px;">
+                <input type="hidden" id="event-detail-id">
+                <input type="hidden" id="event-detail-date">
+                <input type="hidden" id="event-detail-is-rec">
+
+                <div id="event-detail-status-box" style="display: none;"></div>
+
+                <div class="detail-modal-section">
+                    <span class="detail-modal-label">Zeit & Datum</span>
+                    <div id="event-detail-time" class="detail-modal-value" style="font-weight: 600;">--</div>
+                </div>
+
+                <div id="event-detail-rec-section" class="detail-modal-section" style="display: none;">
+                    <span class="detail-modal-label">Wiederholung</span>
+                    <div id="event-detail-recurrence" class="detail-modal-value">🔄 --</div>
+                </div>
+
+                <div id="event-detail-persons-section" class="detail-modal-section" style="display: none;">
+                    <span class="detail-modal-label">Personen</span>
+                    <div id="event-detail-persons" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px;"></div>
+                </div>
+
+                <div class="detail-modal-section">
+                    <span class="detail-modal-label">Beschreibung / Notizen</span>
+                    <div id="event-detail-description" class="detail-modal-box" style="color: #cdd6f4;">Keine Beschreibung</div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap;">
+                <button class="cancel" onclick="closeEventDetailModal()" style="flex: 1; min-width: 70px; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Schließen</button>
+                <button id="event-detail-link-btn" class="nav-btn" style="flex: 1.1; min-width: 100px; padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; color: var(--accent); font-weight: bold;">🔗 Verlinken</button>
+                <button id="event-detail-delete-btn" class="nav-btn" style="flex: 1; min-width: 80px; padding: 10px; border-radius: 6px; border: 1px solid rgba(243,139,168,0.3); color: var(--off); cursor: pointer; font-weight: bold;">✖️ Löschen</button>
+                <button id="event-detail-edit-btn" class="save" style="flex: 1.2; min-width: 110px; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold;">✏️ Bearbeiten</button>
+            </div>
+        </div>
+
+        <!-- Event Edit / Create Modal -->
+        <div id="event-edit-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 22px; border-radius: 12px; z-index: 310; width: 88%; max-width: 480px; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px);">
+            <h3 id="event-edit-modal-title" style="color: var(--accent); margin-top: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 16px;">Termin bearbeiten</h3>
+            <input type="hidden" id="event-edit-id">
+            <input type="hidden" id="event-edit-occurrence-date">
+            <input type="hidden" id="event-edit-is-rec">
+
+            <div style="display: flex; flex-direction: column; gap: 12px; text-align: left; max-height: 60vh; overflow-y: auto; padding-right: 4px;">
+                <div class="settings-group">
+                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Titel</label>
+                    <input type="text" id="event-edit-title-input" placeholder="Titel des Termins..." style="width: 100%;">
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div class="settings-group">
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Datum</label>
+                        <input type="date" id="event-edit-date-input" style="width: 100%; color-scheme: dark;">
+                    </div>
+                    <div class="settings-group">
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Tageszeit (optional)</label>
+                        <select id="event-edit-fuzzy-input" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: var(--input); color: white; color-scheme: dark;">
+                            <option value="">Exakte Uhrzeit</option>
+                            <option value="morgens">Morgens</option>
+                            <option value="vormittag">Vormittags</option>
+                            <option value="mittags">Mittags</option>
+                            <option value="nachmittag">Nachmittags</option>
+                            <option value="abends">Abends</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="event-edit-exact-times-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div class="settings-group">
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Von (Uhrzeit)</label>
+                        <input type="time" id="event-edit-start-time" style="width: 100%; color-scheme: dark;">
+                    </div>
+                    <div class="settings-group">
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Bis (Uhrzeit)</label>
+                        <input type="time" id="event-edit-end-time" style="width: 100%; color-scheme: dark;">
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+                    <input type="checkbox" id="event-edit-allday-input" style="cursor: pointer;">
+                    <label for="event-edit-allday-input" style="font-size: 0.8rem; color: #cdd6f4; cursor: pointer;">Ganztägiger Termin</label>
+                </div>
+
+                <div class="settings-group">
+                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Beschreibung / Notizen (optional)</label>
+                    <textarea id="event-edit-desc-input" placeholder="Zusätzliche Details, Ort, Infos..." style="width: 100%; height: 80px; background: var(--input); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; color: white; outline: none; font-size: 0.85rem; font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+                </div>
+            </div>
+
+            <div class="modal-btns" style="display: flex; gap: 10px; margin-top: 16px;">
+                <button class="cancel" onclick="closeEventEditModal()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Abbrechen</button>
+                <button class="save" onclick="saveEventFromModal()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold;">Speichern</button>
+            </div>
+        </div>
+
+        <!-- Task Detail Modal -->
+        <div id="task-detail-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 22px; border-radius: 12px; z-index: 300; width: 88%; max-width: 480px; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 15px; gap: 8px;">
+                <div>
+                    <span style="font-size: 0.7rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px;">📋 Aufgabe</span>
+                    <h3 id="task-detail-title" style="color: white; margin: 4px 0 0 0; font-size: 1.15rem; word-break: break-word;">Aufgabentitel</h3>
+                </div>
+                <button onclick="closeTaskDetailModal()" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 1.2rem;" title="Schließen">✖</button>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 12px; text-align: left; max-height: 60vh; overflow-y: auto; padding-right: 4px;">
+                <input type="hidden" id="task-detail-id">
+                <input type="hidden" id="task-detail-list">
+                <input type="hidden" id="task-detail-project-id">
+                <input type="hidden" id="task-detail-raw-due">
+                <input type="hidden" id="task-detail-raw-rec">
+
+                <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                    <span style="font-size: 0.8rem; color: #cdd6f4;">Status:</span>
+                    <button id="task-detail-toggle-status-btn" onclick="toggleTaskStatusFromDetail()" style="border: none; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; transition: all 0.2s;">
+                        Offen
+                    </button>
+                </div>
+
+                <div class="detail-modal-section">
+                    <span class="detail-modal-label">Fälligkeitsdatum</span>
+                    <div id="task-detail-due" class="detail-modal-value">--</div>
+                </div>
+
+                <div id="task-detail-rec-section" class="detail-modal-section" style="display: none;">
+                    <span class="detail-modal-label">Wiederholung</span>
+                    <div id="task-detail-recurrence" class="detail-modal-value">🔄 --</div>
+                </div>
+
+                <div id="task-detail-project-section" class="detail-modal-section" style="display: none;">
+                    <span class="detail-modal-label">Projekt</span>
+                    <div id="task-detail-project" class="detail-modal-value">📁 --</div>
+                </div>
+
+                <div class="detail-modal-section">
+                    <span class="detail-modal-label">Beschreibung / Notizen</span>
+                    <div id="task-detail-notes" class="detail-modal-box" style="color: #cdd6f4;">Keine Beschreibung</div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap;">
+                <button class="cancel" onclick="closeTaskDetailModal()" style="flex: 1; min-width: 70px; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Schließen</button>
+                <button id="task-detail-link-btn" class="nav-btn" style="flex: 1.1; min-width: 100px; padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; color: var(--accent); font-weight: bold;">🔗 Verlinken</button>
+                <button id="task-detail-delete-btn" class="nav-btn" style="flex: 1; min-width: 80px; padding: 10px; border-radius: 6px; border: 1px solid rgba(243,139,168,0.3); color: var(--off); cursor: pointer; font-weight: bold;">✖️ Löschen</button>
+                <button id="task-detail-edit-btn" class="save" style="flex: 1.2; min-width: 110px; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold;">✏️ Bearbeiten</button>
+            </div>
+        </div>
+
+        <!-- Timer Detail Modal -->
+        <div id="timer-detail-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 22px; border-radius: 12px; z-index: 300; width: 88%; max-width: 440px; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 15px; gap: 8px;">
+                <div>
+                    <span style="font-size: 0.7rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px;">⏱️ Timer Details</span>
+                    <h3 id="timer-detail-title" style="color: white; margin: 4px 0 0 0; font-size: 1.15rem; word-break: break-word;">Timer</h3>
+                </div>
+                <button onclick="closeTimerDetailModal()" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 1.2rem;" title="Schließen">✖</button>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 12px; text-align: left;">
+                <input type="hidden" id="timer-detail-id">
+
+                <div style="text-align: center; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 10px; border: 1px solid rgba(255,255,255,0.06);">
+                    <div id="timer-detail-countdown" style="font-family: monospace; font-size: 2rem; font-weight: bold; color: var(--accent); letter-spacing: 2px;">--:--:--</div>
+                    <div id="timer-detail-status-text" style="font-size: 0.75rem; color: #a6e3a1; margin-top: 4px; font-weight: 600;">Läuft</div>
+                </div>
+
+                <div class="detail-modal-section">
+                    <span class="detail-modal-label">Ablaufzeit</span>
+                    <div id="timer-detail-expires" class="detail-modal-value" style="font-weight: 600;">--</div>
+                </div>
+
+                <div class="detail-modal-section">
+                    <span class="detail-modal-label">Erstellt am</span>
+                    <div id="timer-detail-created" class="detail-modal-value">--</div>
+                </div>
+
+                <div class="detail-modal-section">
+                    <span class="detail-modal-label">Schnellanpassung</span>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 2px;">
+                        <button type="button" class="nav-btn" onclick="adjustTimerTime(60)" style="font-size: 0.78rem;">+1 Min</button>
+                        <button type="button" class="nav-btn" onclick="adjustTimerTime(300)" style="font-size: 0.78rem;">+5 Min</button>
+                        <button type="button" class="nav-btn" onclick="adjustTimerTime(-60)" style="font-size: 0.78rem;">-1 Min</button>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap;">
+                <button class="cancel" onclick="closeTimerDetailModal()" style="flex: 1; min-width: 70px; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Schließen</button>
+                <button id="timer-detail-link-btn" class="nav-btn" style="flex: 1.1; min-width: 100px; padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; color: var(--accent); font-weight: bold;">🔗 Verlinken</button>
+                <button id="timer-detail-delete-btn" class="nav-btn" style="flex: 1; min-width: 80px; padding: 10px; border-radius: 6px; border: 1px solid rgba(243,139,168,0.3); color: var(--off); cursor: pointer; font-weight: bold;">⏹️ Stoppen</button>
+            </div>
+        </div>
+
         <!-- Note Modal -->
         <div id="note-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 25px; border-radius: 12px; z-index: 300; width: 85%; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px);">
             <h3 id="note-modal-title" style="color: var(--accent); margin-top: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 20px;">Notiz erstellen</h3>
@@ -763,6 +960,15 @@
                                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                             </svg>
                         </button>
+                    <!-- Chat Reply Preview Bar -->
+                    <div id="chat-reply-preview-bar" class="chat-reply-preview-bar">
+                        <div class="reply-content">
+                            <div class="reply-title">
+                                <span>↩️ Antwort auf <span id="reply-author-label">KI</span></span>
+                            </div>
+                            <div class="reply-snippet" id="reply-snippet-text">Nachrichtenvorschau...</div>
+                        </div>
+                        <button type="button" class="reply-cancel-btn" onclick="cancelChatReply()" title="Antwort abbrechen">✕</button>
                     </div>
 
                     <div id="linked-pills-bar" class="linked-pills-bar"></div>
@@ -966,12 +1172,9 @@
         }
         window.filterPeopleBySearch = filterPeopleBySearch;
 
-        function renderFilteredPeopleList() {
-            const container = document.getElementById('memory-people-list-container');
-            if (!container) return;
-
-            const q = personSearchQuery.toLowerCase();
-            const filtered = currentMemoryPeopleList.filter(p => {
+        function getFilteredPeopleListHtml(peopleList = currentMemoryPeopleList, query = personSearchQuery) {
+            const q = (query || '').trim().toLowerCase();
+            const filtered = (peopleList || []).filter(p => {
                 if (!q) return true;
                 const nameMatch = (p.name || '').toLowerCase().includes(q);
                 const aliasesMatch = (p.aliases || []).some(alias => (alias || '').toLowerCase().includes(q));
@@ -980,12 +1183,11 @@
             });
 
             if (filtered.length === 0) {
-                if (currentMemoryPeopleList.length === 0) {
-                    container.innerHTML = `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine Personen im Gedächtnis.</p>`;
+                if (!peopleList || peopleList.length === 0) {
+                    return `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine Personen im Gedächtnis.</p>`;
                 } else {
-                    container.innerHTML = `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 15px 0;">Keine Treffer für "${escapeHtml(personSearchQuery)}".</p>`;
+                    return `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 15px 0;">Keine Treffer für "${escapeHtml(query)}".</p>`;
                 }
-                return;
             }
 
             let html = '';
@@ -1023,7 +1225,15 @@
                     html += renderSwipeLinkWrapper(personContent, p.name, 'person', p.id, '', '', '', extraPersonData);
                 }
             });
-            container.innerHTML = html;
+            return html;
+        }
+        window.getFilteredPeopleListHtml = getFilteredPeopleListHtml;
+
+        function renderFilteredPeopleList() {
+            const container = document.getElementById('memory-people-list-container');
+            if (container) {
+                container.innerHTML = getFilteredPeopleListHtml();
+            }
         }
         window.renderFilteredPeopleList = renderFilteredPeopleList;
 
@@ -1442,8 +1652,16 @@
                 const taskList = contextData.taskList || 'Standard';
                 const taskRec = contextData.taskRecurrence || 'none';
                 const taskProj = contextData.taskProjectId ? Number(contextData.taskProjectId) : (contextData.projectId ? Number(contextData.projectId) : null);
+                const taskCompleted = contextData.taskCompleted === 'true';
 
                 actions = [
+                    {
+                        icon: '👁️',
+                        label: 'Details anzeigen',
+                        onClick: () => {
+                            openTaskDetailModal(taskId, taskTitle, taskNotes, taskDue, taskList, taskRec, taskProj, taskCompleted);
+                        }
+                    },
                     {
                         icon: '✏️',
                         label: 'Bearbeiten',
@@ -1478,18 +1696,50 @@
 
                 actions = [
                     {
-                        icon: '🔗',
-                        label: isBirthday ? 'Person in Chat verlinken' : 'In Chat verlinken',
-                        className: 'accent',
+                        icon: '👁️',
+                        label: 'Details anzeigen',
                         onClick: () => {
                             if (isBirthday && personId) {
-                                insertEntityLinkIntoChat(eventTitle, 'person', personId);
+                                openPersonProfileModal(Number(personId));
                             } else {
-                                insertEntityLinkIntoChat(eventTitle, 'event', eventId);
+                                openEventDetailModalFromData(contextData);
                             }
                         }
                     }
                 ];
+
+                if (!isBirthday) {
+                    actions.push({
+                        icon: '✏️',
+                        label: 'Bearbeiten',
+                        onClick: () => {
+                            openEventEditModal(
+                                eventId,
+                                eventTitle,
+                                contextData.eventStart || '',
+                                contextData.eventEnd || '',
+                                contextData.eventIsAllday === 'true',
+                                contextData.eventFuzzy || '',
+                                contextData.eventDesc || '',
+                                isRec,
+                                eventDate
+                            );
+                        }
+                    });
+                }
+
+                actions.push({
+                    icon: '🔗',
+                    label: isBirthday ? 'Person in Chat verlinken' : 'In Chat verlinken',
+                    className: 'accent',
+                    onClick: () => {
+                        if (isBirthday && personId) {
+                            insertEntityLinkIntoChat(eventTitle, 'person', personId);
+                        } else {
+                            insertEntityLinkIntoChat(eventTitle, 'event', eventId);
+                        }
+                    }
+                });
 
                 if (!isBirthday) {
                     actions.push({
@@ -1530,6 +1780,20 @@
 
                 actions = [
                     {
+                        icon: '👁️',
+                        label: 'Details anzeigen',
+                        onClick: () => {
+                            openTimerDetailModalFromData(contextData);
+                        }
+                    },
+                    {
+                        icon: '✏️',
+                        label: 'Timer anpassen',
+                        onClick: () => {
+                            openTimerDetailModalFromData(contextData);
+                        }
+                    },
+                    {
                         icon: '🔗',
                         label: 'In Chat verlinken',
                         className: 'accent',
@@ -1545,6 +1809,34 @@
                             stopAlarmSound();
                             cancelScheduledTimerAlarm(timerId);
                             callTool('loesche_timer', { id: timerId });
+                        }
+                    }
+                ];
+            } else if (type === 'day') {
+                const dayDate = contextData.dayDate || contextData.linkId || '';
+                const dayLabel = contextData.dayLabel || contextData.linkLabel || dayDate;
+
+                actions = [
+                    {
+                        icon: '🔗',
+                        label: 'Tag in Chat verlinken',
+                        className: 'accent',
+                        onClick: () => {
+                            insertEntityLinkIntoChat(dayLabel, 'day', dayDate);
+                        }
+                    },
+                    {
+                        icon: '➕',
+                        label: 'Neuer Termin an diesem Tag',
+                        onClick: () => {
+                            openEventEditModal(null, '', dayDate ? `${dayDate}T10:00:00` : '', dayDate ? `${dayDate}T11:00:00` : '', false, '', '', false, dayDate);
+                        }
+                    },
+                    {
+                        icon: '📋',
+                        label: 'Neue Aufgabe an diesem Tag',
+                        onClick: () => {
+                            openTaskModal(null, '', '', dayDate, 'Standard', 'none', null);
                         }
                     }
                 ];
@@ -1628,8 +1920,15 @@
 
                 actions = [
                     {
+                        icon: '👁️',
+                        label: 'Profil & Details',
+                        onClick: () => {
+                            openPersonProfileModal(personId);
+                        }
+                    },
+                    {
                         icon: '✏️',
-                        label: 'Person bearbeiten',
+                        label: 'Bearbeiten',
                         onClick: () => {
                             openPersonProfileModal(personId);
                         }
@@ -1640,6 +1939,14 @@
                         className: 'accent',
                         onClick: () => {
                             insertEntityLinkIntoChat(personName, 'person', personId);
+                        }
+                    },
+                    {
+                        icon: '✖️',
+                        label: 'Person löschen',
+                        className: 'danger',
+                        onClick: () => {
+                            deletePerson(personId);
                         }
                     }
                 ];
@@ -1727,6 +2034,12 @@
             menu.style.top = `${top}px`;
         }
 
+        let activeSwipeMessage = null;
+        let swipeMsgStartX = 0;
+        let swipeMsgStartY = 0;
+        let isMsgSwipeActive = false;
+        let msgSwipeThresholdCrossed = false;
+
         function handleSwipeStart(e) {
             if (e.type === 'mousedown' && e.button !== 0) return;
             
@@ -1734,15 +2047,32 @@
             const target = e.target;
 
             // Only ignore when interacting directly with explicit form elements or clickable tags
-            if (target.closest('button, input, select, textarea, a, .clickable-tag')) {
+            if (target.closest('button, input, select, textarea, a, .clickable-tag, .reply-cancel-btn')) {
                 return;
             }
 
-            const item = target.closest('.swipe-link-item');
-            if (!item) return;
+            // Check if user is touching a chat message (for swipe-to-reply)
+            const msgItem = target.closest('.message');
+            const swipeLinkItem = target.closest('.swipe-link-item');
 
-            activeSwipeItem = item;
-            activeSwipeWrapper = item.closest('.swipe-link-wrapper');
+            if (msgItem && !swipeLinkItem) {
+                activeSwipeMessage = msgItem;
+                swipeMsgStartX = touch.clientX;
+                swipeMsgStartY = touch.clientY;
+                isMsgSwipeActive = false;
+                msgSwipeThresholdCrossed = false;
+
+                if (e.type === 'mousedown') {
+                    document.addEventListener('mousemove', handleSwipeMove, { passive: false });
+                    document.addEventListener('mouseup', handleSwipeEnd);
+                }
+                return;
+            }
+
+            if (!swipeLinkItem) return;
+
+            activeSwipeItem = swipeLinkItem;
+            activeSwipeWrapper = swipeLinkItem.closest('.swipe-link-wrapper');
             activeSwipeBg = activeSwipeWrapper ? activeSwipeWrapper.querySelector('.swipe-link-bg') : null;
             
             swipeStartX = touch.clientX;
@@ -1768,8 +2098,47 @@
         }
 
         function handleSwipeMove(e) {
-            if (!activeSwipeItem) return;
             const touch = e.touches ? e.touches[0] : e;
+
+            // 1. Message Swipe-to-Reply Handling
+            if (activeSwipeMessage) {
+                const deltaX = touch.clientX - swipeMsgStartX;
+                const deltaY = touch.clientY - swipeMsgStartY;
+
+                if (!isMsgSwipeActive) {
+                    if (Math.abs(deltaY) > 8 && Math.abs(deltaY) >= Math.abs(deltaX)) {
+                        activeSwipeMessage = null;
+                        return;
+                    } else if (deltaX < -8 && Math.abs(deltaX) > Math.abs(deltaY)) {
+                        isMsgSwipeActive = true;
+                        activeSwipeMessage.classList.add('swiping');
+                    }
+                }
+
+                if (isMsgSwipeActive) {
+                    if (e.cancelable) e.preventDefault();
+                    const clampedOffset = Math.min(0, Math.max(-80, deltaX));
+                    activeSwipeMessage.style.transform = `translateX(${clampedOffset}px)`;
+
+                    const indicator = activeSwipeMessage.querySelector('.message-swipe-reply-indicator');
+                    if (indicator) {
+                        if (Math.abs(clampedOffset) >= 50) {
+                            if (!msgSwipeThresholdCrossed) {
+                                msgSwipeThresholdCrossed = true;
+                                if (navigator.vibrate) navigator.vibrate(20);
+                            }
+                            indicator.classList.add('active');
+                        } else {
+                            msgSwipeThresholdCrossed = false;
+                            indicator.classList.remove('active');
+                        }
+                    }
+                }
+                return;
+            }
+
+            // 2. Swipe-to-Link Handling
+            if (!activeSwipeItem) return;
             swipeCurrentX = touch.clientX;
             swipeCurrentY = touch.clientY;
 
@@ -1834,6 +2203,33 @@
                 document.removeEventListener('mouseup', handleSwipeEnd);
             }
 
+            // 1. End Message Swipe
+            if (activeSwipeMessage) {
+                const msg = activeSwipeMessage;
+                const wasMsgSwiping = isMsgSwipeActive;
+                const msgTriggered = msgSwipeThresholdCrossed;
+
+                msg.classList.remove('swiping');
+                msg.style.transform = 'translateX(0px)';
+
+                const indicator = msg.querySelector('.message-swipe-reply-indicator');
+                if (indicator) indicator.classList.remove('active');
+
+                if (wasMsgSwiping) {
+                    lastSwipeTime = Date.now();
+                }
+
+                if (wasMsgSwiping && msgTriggered) {
+                    startChatReply(msg);
+                }
+
+                activeSwipeMessage = null;
+                isMsgSwipeActive = false;
+                msgSwipeThresholdCrossed = false;
+                return;
+            }
+
+            // 2. End Swipe-to-Link
             if (!activeSwipeItem) return;
 
             const item = activeSwipeItem;
@@ -1883,6 +2279,52 @@
             if (Date.now() - lastSwipeTime < 350) {
                 e.stopPropagation();
                 e.preventDefault();
+                return;
+            }
+
+            // Direct click handlers for item tap & reply quote tap
+            if (e.target.closest('button, input, select, textarea, a, .pill-close, .task-checkbox, .clickable-tag, .reply-cancel-btn')) {
+                return;
+            }
+
+            const replyQuote = e.target.closest('.chat-reply-quote');
+            if (replyQuote) {
+                e.stopPropagation();
+                e.preventDefault();
+                const targetId = replyQuote.getAttribute('data-target-msg-id');
+                if (targetId) {
+                    scrollToMessage(targetId);
+                }
+                return;
+            }
+
+            const item = e.target.closest('.swipe-link-item');
+            if (item) {
+                const type = item.dataset.contextType || item.dataset.linkType;
+                const id = item.dataset.linkId;
+                if (!type) return;
+
+                if (type === 'task') {
+                    openTaskDetailModalFromData(item.dataset);
+                } else if (type === 'event') {
+                    if (item.dataset.eventIsBirthday === 'true' && item.dataset.personId) {
+                        openPersonProfileModal(Number(item.dataset.personId));
+                    } else {
+                        openEventDetailModalFromData(item.dataset);
+                    }
+                } else if (type === 'timer') {
+                    openTimerDetailModalFromData(item.dataset);
+                } else if (type === 'person') {
+                    openPersonProfileModal(Number(item.dataset.personId || id));
+                } else if (type === 'project') {
+                    openProjectModal(Number(item.dataset.projectId || id), item.dataset.projectName || item.dataset.linkLabel);
+                } else if (type === 'note') {
+                    openNoteModal(Number(item.dataset.noteId || id), item.dataset.noteTitle, item.dataset.noteContent, item.dataset.projectId ? Number(item.dataset.projectId) : null);
+                } else if (type === 'mail') {
+                    openMailReadModal(Number(item.dataset.mailId || id));
+                } else if (type === 'day') {
+                    jumpToTimelineDate(id || item.dataset.dayDate);
+                }
             }
         }, true);
 
@@ -1910,6 +2352,575 @@
             `;
         }
         window.renderSwipeLinkWrapper = renderSwipeLinkWrapper;
+
+        // =========================================================================
+        // Chat Swipe-to-Reply & Jump Helpers
+        // =========================================================================
+        let activeChatReply = null;
+
+        function startChatReply(msgEl) {
+            if (!msgEl) return;
+            const msgId = msgEl.id || msgEl.getAttribute('data-msg-id');
+            const isUser = msgEl.classList.contains('user');
+            const roleLabel = isUser ? 'Du' : 'KI';
+            
+            // Extract snippet text
+            let text = msgEl.getAttribute('data-msg-text') || '';
+            if (!text) {
+                const textDiv = msgEl.querySelector('div:not(.chat-reply-quote):not(.message-swipe-reply-indicator)');
+                text = textDiv ? textDiv.innerText : msgEl.innerText;
+            }
+            const cleanSnippet = text.replace(/<[^>]*>/g, '').trim().substring(0, 90);
+
+            activeChatReply = {
+                id: msgId,
+                author: roleLabel,
+                text: cleanSnippet
+            };
+
+            const replyBar = document.getElementById('chat-reply-preview-bar');
+            const authorLabel = document.getElementById('reply-author-label');
+            const snippetText = document.getElementById('reply-snippet-text');
+
+            if (replyBar && authorLabel && snippetText) {
+                authorLabel.textContent = roleLabel;
+                snippetText.textContent = cleanSnippet || '...';
+                replyBar.style.display = 'flex';
+            }
+
+            if (navigator.vibrate) navigator.vibrate(25);
+
+            const input = document.getElementById('user-input');
+            if (input) input.focus();
+        }
+        window.startChatReply = startChatReply;
+
+        function cancelChatReply() {
+            activeChatReply = null;
+            const replyBar = document.getElementById('chat-reply-preview-bar');
+            if (replyBar) replyBar.style.display = 'none';
+        }
+        window.cancelChatReply = cancelChatReply;
+
+        function scrollToMessage(msgId) {
+            if (!msgId) return;
+            const target = document.getElementById(msgId);
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                target.classList.remove('message-highlight-pulse');
+                void target.offsetWidth; // Force reflow
+                target.classList.add('message-highlight-pulse');
+                setTimeout(() => {
+                    target.classList.remove('message-highlight-pulse');
+                }, 2200);
+            }
+        }
+        window.scrollToMessage = scrollToMessage;
+
+        // =========================================================================
+        // Event Detail & Edit Modal Functions
+        // =========================================================================
+        window.openEventDetailModal = function(eventId, title, start, end, isAllDay, fuzzyTime, description, isRecurring, occurrenceDate, persons = [], isCancelled = false, cancellationReason = '') {
+            const modal = document.getElementById('event-detail-modal');
+            if (!modal) return;
+
+            document.getElementById('event-detail-id').value = eventId || '';
+            document.getElementById('event-detail-date').value = occurrenceDate || (start ? start.split('T')[0] : '');
+            document.getElementById('event-detail-is-rec').value = isRecurring ? 'true' : 'false';
+
+            document.getElementById('event-detail-title').textContent = title || 'Termin';
+
+            // Format time
+            let timeText = '';
+            const startDateObj = start ? new Date(start) : null;
+            const endDateObj = end ? new Date(end) : null;
+            
+            if (isAllDay) {
+                timeText = (startDateObj && !isNaN(startDateObj.getTime()) ? startDateObj.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) : occurrenceDate) + ' (Ganztägig)';
+            } else if (fuzzyTime) {
+                timeText = (startDateObj && !isNaN(startDateObj.getTime()) ? startDateObj.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) : occurrenceDate) + ` (${fuzzyTime})`;
+            } else if (startDateObj && !isNaN(startDateObj.getTime())) {
+                const datePart = startDateObj.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+                const startPart = startDateObj.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                const endPart = (endDateObj && !isNaN(endDateObj.getTime())) ? ' - ' + endDateObj.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr' : ' Uhr';
+                timeText = `${datePart}, ${startPart}${endPart}`;
+            } else {
+                timeText = occurrenceDate || 'Keine Zeitangabe';
+            }
+            document.getElementById('event-detail-time').textContent = timeText;
+
+            // Status box
+            const statusBox = document.getElementById('event-detail-status-box');
+            if (isCancelled) {
+                statusBox.style.display = 'block';
+                statusBox.innerHTML = `<div style="background: rgba(243, 139, 168, 0.15); border: 1px solid rgba(243, 139, 168, 0.4); color: var(--off); padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: bold;">⚠️ Ausgefallen ${cancellationReason ? `(${escapeHtml(cancellationReason)})` : ''}</div>`;
+            } else {
+                statusBox.style.display = 'none';
+                statusBox.innerHTML = '';
+            }
+
+            // Recurrence
+            const recSection = document.getElementById('event-detail-rec-section');
+            if (isRecurring) {
+                recSection.style.display = 'flex';
+                document.getElementById('event-detail-recurrence').textContent = '🔄 Wiederkehrender Termin';
+            } else {
+                recSection.style.display = 'none';
+            }
+
+            // Persons
+            const personsSection = document.getElementById('event-detail-persons-section');
+            const personsContainer = document.getElementById('event-detail-persons');
+            if (persons && persons.length > 0) {
+                personsSection.style.display = 'flex';
+                personsContainer.innerHTML = persons.map(p => `
+                    <span onclick="closeEventDetailModal(); openPersonProfileModal(${p.id});" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.75rem; background: rgba(203, 166, 247, 0.15); color: #cba6f7; border: 1px solid rgba(203, 166, 247, 0.3); padding: 3px 8px; border-radius: 12px; cursor: pointer;">
+                        👤 ${escapeHtml(p.name)}
+                    </span>
+                `).join('');
+            } else {
+                personsSection.style.display = 'none';
+                personsContainer.innerHTML = '';
+            }
+
+            // Description
+            const descEl = document.getElementById('event-detail-description');
+            if (description && description.trim()) {
+                descEl.textContent = description;
+                descEl.style.opacity = '1';
+            } else {
+                descEl.textContent = 'Keine zusätzliche Beschreibung vorhanden.';
+                descEl.style.opacity = '0.5';
+            }
+
+            // Buttons
+            document.getElementById('event-detail-link-btn').onclick = () => {
+                insertEntityLinkIntoChat(title, 'event', eventId);
+                closeEventDetailModal();
+            };
+
+            document.getElementById('event-detail-delete-btn').onclick = () => {
+                closeEventDetailModal();
+                deleteCalendarEvent(eventId, occurrenceDate, isRecurring);
+            };
+
+            document.getElementById('event-detail-edit-btn').onclick = () => {
+                closeEventDetailModal();
+                openEventEditModal(eventId, title, start, end, isAllDay, fuzzyTime, description, isRecurring, occurrenceDate);
+            };
+
+            modal.style.display = 'block';
+            document.body.classList.add('modal-active');
+        };
+
+        window.closeEventDetailModal = function() {
+            const modal = document.getElementById('event-detail-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.classList.remove('modal-active');
+        };
+
+        window.openEventDetailModalFromData = function(data) {
+            let persons = [];
+            try {
+                if (data.eventPersons) {
+                    persons = JSON.parse(data.eventPersons);
+                } else if (data.personId && data.personName) {
+                    persons = [{ id: Number(data.personId), name: data.personName }];
+                }
+            } catch(e) {}
+
+            openEventDetailModal(
+                data.eventId || data.linkId,
+                data.eventTitle || data.linkLabel,
+                data.eventStart,
+                data.eventEnd,
+                data.eventIsAllday === 'true' || data.eventIsAllday === true,
+                data.eventFuzzy || '',
+                data.eventDesc || '',
+                data.eventIsRec === 'true' || data.eventIsRec === true,
+                data.eventDate || '',
+                persons,
+                data.eventIscancelled === 'true' || data.eventIscancelled === true,
+                data.eventCancelreason || ''
+            );
+        };
+
+        window.openEventEditModal = function(eventId = null, title = '', start = '', end = '', isAllDay = false, fuzzyTime = '', description = '', isRecurring = false, occurrenceDate = '') {
+            const modal = document.getElementById('event-edit-modal');
+            if (!modal) return;
+
+            document.getElementById('event-edit-id').value = eventId || '';
+            document.getElementById('event-edit-occurrence-date').value = occurrenceDate || '';
+            document.getElementById('event-edit-is-rec').value = isRecurring ? 'true' : 'false';
+
+            document.getElementById('event-edit-modal-title').textContent = eventId ? 'Termin bearbeiten' : 'Neuer Termin';
+            document.getElementById('event-edit-title-input').value = title || '';
+            document.getElementById('event-edit-desc-input').value = description || '';
+
+            const dateInput = document.getElementById('event-edit-date-input');
+            const fuzzyInput = document.getElementById('event-edit-fuzzy-input');
+            const startTimeInput = document.getElementById('event-edit-start-time');
+            const endTimeInput = document.getElementById('event-edit-end-time');
+            const allDayInput = document.getElementById('event-edit-allday-input');
+
+            allDayInput.checked = !!isAllDay;
+            fuzzyInput.value = fuzzyTime || '';
+
+            if (start) {
+                const startObj = new Date(start);
+                if (!isNaN(startObj.getTime())) {
+                    dateInput.value = startObj.toISOString().split('T')[0];
+                    startTimeInput.value = startObj.toTimeString().substring(0, 5);
+                } else {
+                    dateInput.value = occurrenceDate || getLocalDateString();
+                    startTimeInput.value = '10:00';
+                }
+            } else {
+                dateInput.value = occurrenceDate || getLocalDateString();
+                startTimeInput.value = '10:00';
+            }
+
+            if (end) {
+                const endObj = new Date(end);
+                if (!isNaN(endObj.getTime())) {
+                    endTimeInput.value = endObj.toTimeString().substring(0, 5);
+                } else {
+                    endTimeInput.value = '11:00';
+                }
+            } else {
+                endTimeInput.value = '11:00';
+            }
+
+            modal.style.display = 'block';
+            document.body.classList.add('modal-active');
+        };
+
+        window.closeEventEditModal = function() {
+            const modal = document.getElementById('event-edit-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.classList.remove('modal-active');
+        };
+
+        window.saveEventFromModal = async function() {
+            const id = document.getElementById('event-edit-id').value;
+            const occurrenceDate = document.getElementById('event-edit-occurrence-date').value;
+            const isRecurring = document.getElementById('event-edit-is-rec').value === 'true';
+            const title = document.getElementById('event-edit-title-input').value.trim();
+            const dateVal = document.getElementById('event-edit-date-input').value;
+            const fuzzyVal = document.getElementById('event-edit-fuzzy-input').value;
+            const startTime = document.getElementById('event-edit-start-time').value;
+            const endTime = document.getElementById('event-edit-end-time').value;
+            const isAllDay = document.getElementById('event-edit-allday-input').checked;
+            const desc = document.getElementById('event-edit-desc-input').value.trim();
+
+            if (!title) {
+                alert("Bitte einen Titel für den Termin angeben.");
+                return;
+            }
+            if (!dateVal) {
+                alert("Bitte ein Datum angeben.");
+                return;
+            }
+
+            let startIso = `${dateVal}T${startTime || '00:00'}:00`;
+            let endIso = `${dateVal}T${endTime || '01:00'}:00`;
+
+            closeEventEditModal();
+
+            try {
+                if (id) {
+                    let nurDiesesVorkommen = false;
+                    if (isRecurring) {
+                        nurDiesesVorkommen = confirm("Möchtest du NUR DIESES EINE VORKOMMEN bearbeiten?\n\n(OK = Nur dieses Vorkommen, Abbrechen = Gesamte Serie)");
+                    }
+                    await callTool('bearbeite_termin', {
+                        eventId: String(id),
+                        datum: occurrenceDate || dateVal,
+                        nurDiesesVorkommen: nurDiesesVorkommen,
+                        neuer_titel: title,
+                        neues_datum: startIso,
+                        neues_enddatum: endIso,
+                        neue_beschreibung: desc,
+                        ganztaegig: isAllDay,
+                        tageszeit: fuzzyVal || undefined
+                    });
+                } else {
+                    await callTool('fuege_termin_hinzu', {
+                        titel: title,
+                        datum: startIso,
+                        enddatum: endIso,
+                        beschreibung: desc,
+                        ganztaegig: isAllDay,
+                        tageszeit: fuzzyVal || undefined
+                    });
+                }
+                loadTopWidgets();
+            } catch(e) {
+                console.error("Fehler beim Speichern des Termins:", e);
+                alert("Fehler beim Speichern des Termins.");
+            }
+        };
+
+        // =========================================================================
+        // Task Detail Modal Functions
+        // =========================================================================
+        window.openTaskDetailModal = function(taskId, title, notes = '', due = '', listTitle = 'Standard', recurrence = 'none', projectId = null, completed = false) {
+            const modal = document.getElementById('task-detail-modal');
+            if (!modal) return;
+
+            document.getElementById('task-detail-id').value = taskId || '';
+            document.getElementById('task-detail-list').value = listTitle || 'Standard';
+            document.getElementById('task-detail-project-id').value = projectId || '';
+            document.getElementById('task-detail-raw-due').value = due || '';
+            document.getElementById('task-detail-raw-rec').value = recurrence || 'none';
+
+            document.getElementById('task-detail-title').textContent = title || 'Aufgabe';
+            
+            // Status button
+            const statusBtn = document.getElementById('task-detail-toggle-status-btn');
+            if (completed) {
+                statusBtn.textContent = '✔️ Erledigt';
+                statusBtn.style.background = 'rgba(166, 227, 161, 0.2)';
+                statusBtn.style.color = '#a6e3a1';
+                statusBtn.setAttribute('data-completed', 'true');
+            } else {
+                statusBtn.textContent = '⏳ Offen';
+                statusBtn.style.background = 'rgba(255, 255, 255, 0.08)';
+                statusBtn.style.color = '#cdd6f4';
+                statusBtn.setAttribute('data-completed', 'false');
+            }
+
+            // Due date
+            const dueEl = document.getElementById('task-detail-due');
+            if (due) {
+                const dateObj = new Date(due);
+                if (!isNaN(dateObj.getTime())) {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const isOverdue = !completed && (dateObj < today);
+                    dueEl.innerHTML = `📅 ${dateObj.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })} ${isOverdue ? '<span style="color: var(--off); font-weight: bold; margin-left: 6px;">(Überfällig!)</span>' : ''}`;
+                } else {
+                    dueEl.textContent = due;
+                }
+            } else {
+                dueEl.textContent = 'Kein Fälligkeitsdatum';
+            }
+
+            // Recurrence
+            const recSection = document.getElementById('task-detail-rec-section');
+            if (recurrence && recurrence !== 'none') {
+                recSection.style.display = 'flex';
+                const recLabelsMap = { daily: 'täglich', weekly: 'wöchentlich', monthly: 'monatlich', yearly: 'jährlich' };
+                document.getElementById('task-detail-recurrence').textContent = `🔄 ${recLabelsMap[recurrence] || recurrence}`;
+            } else {
+                recSection.style.display = 'none';
+            }
+
+            // Project
+            const projSection = document.getElementById('task-detail-project-section');
+            if (projectId) {
+                projSection.style.display = 'flex';
+                document.getElementById('task-detail-project').textContent = `📁 Projekt #${projectId}`;
+            } else {
+                projSection.style.display = 'none';
+            }
+
+            // Notes
+            const notesEl = document.getElementById('task-detail-notes');
+            if (notes && notes.trim()) {
+                notesEl.textContent = notes;
+                notesEl.style.opacity = '1';
+            } else {
+                notesEl.textContent = 'Keine zusätzlichen Notizen vorhanden.';
+                notesEl.style.opacity = '0.5';
+            }
+
+            // Buttons
+            document.getElementById('task-detail-link-btn').onclick = () => {
+                insertEntityLinkIntoChat(title, 'task', taskId);
+                closeTaskDetailModal();
+            };
+
+            document.getElementById('task-detail-delete-btn').onclick = () => {
+                closeTaskDetailModal();
+                deleteTask(taskId);
+            };
+
+            document.getElementById('task-detail-edit-btn').onclick = () => {
+                closeTaskDetailModal();
+                openTaskModal(taskId, title, notes, due, listTitle, recurrence, projectId);
+            };
+
+            modal.style.display = 'block';
+            document.body.classList.add('modal-active');
+        };
+
+        window.closeTaskDetailModal = function() {
+            const modal = document.getElementById('task-detail-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.classList.remove('modal-active');
+        };
+
+        window.toggleTaskStatusFromDetail = async function() {
+            const taskId = document.getElementById('task-detail-id').value;
+            const listTitle = document.getElementById('task-detail-list').value || 'Standard';
+            const statusBtn = document.getElementById('task-detail-toggle-status-btn');
+            const isCompleted = statusBtn.getAttribute('data-completed') === 'true';
+            
+            if (!taskId) return;
+            try {
+                if (!isCompleted) {
+                    await callTool('erledige_aufgabe', { taskId: String(taskId), tasklistId: listTitle });
+                    statusBtn.textContent = '✔️ Erledigt';
+                    statusBtn.style.background = 'rgba(166, 227, 161, 0.2)';
+                    statusBtn.style.color = '#a6e3a1';
+                    statusBtn.setAttribute('data-completed', 'true');
+                } else {
+                    await callTool('wiederherstellen_aufgabe', { taskId: String(taskId) });
+                    statusBtn.textContent = '⏳ Offen';
+                    statusBtn.style.background = 'rgba(255, 255, 255, 0.08)';
+                    statusBtn.style.color = '#cdd6f4';
+                    statusBtn.setAttribute('data-completed', 'false');
+                }
+                loadTopWidgets();
+            } catch(e) {
+                console.error("Fehler beim Umschalten des Aufgaben-Status:", e);
+            }
+        };
+
+        window.openTaskDetailModalFromData = function(data) {
+            openTaskDetailModal(
+                data.taskId || data.linkId,
+                data.taskTitle || data.linkLabel,
+                data.taskNotes || '',
+                data.taskDue || '',
+                data.taskList || 'Standard',
+                data.taskRecurrence || 'none',
+                data.taskProjectId ? Number(data.taskProjectId) : (data.projectId ? Number(data.projectId) : null),
+                data.taskCompleted === 'true' || data.taskCompleted === true
+            );
+        };
+
+        // =========================================================================
+        // Timer Detail & Adjustment Functions
+        // =========================================================================
+        let activeTimerDetailInterval = null;
+
+        window.openTimerDetailModal = function(timerId, title, createdAt, expiresAt) {
+            const modal = document.getElementById('timer-detail-modal');
+            if (!modal) return;
+
+            document.getElementById('timer-detail-id').value = timerId || '';
+            document.getElementById('timer-detail-title').textContent = title || 'Timer';
+
+            const expiresDate = expiresAt ? new Date(expiresAt) : null;
+            const createdDate = createdAt ? new Date(createdAt) : null;
+
+            document.getElementById('timer-detail-expires').textContent = expiresDate ? expiresDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' Uhr' : '--';
+            document.getElementById('timer-detail-created').textContent = createdDate ? createdDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' Uhr' : '--';
+
+            const countdownEl = document.getElementById('timer-detail-countdown');
+            const statusTextEl = document.getElementById('timer-detail-status-text');
+
+            const updateCountdown = () => {
+                if (!expiresDate) return;
+                const now = Date.now();
+                const diff = expiresDate.getTime() - now;
+                if (diff <= 0) {
+                    countdownEl.textContent = '00:00:00';
+                    countdownEl.style.color = 'var(--off)';
+                    statusTextEl.textContent = '🔔 Abgelaufen!';
+                    statusTextEl.style.color = 'var(--off)';
+                } else {
+                    const totalSecs = Math.floor(diff / 1000);
+                    const hrs = Math.floor(totalSecs / 3600);
+                    const mins = Math.floor((totalSecs % 3600) / 60);
+                    const secs = totalSecs % 60;
+                    countdownEl.textContent = `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+                    countdownEl.style.color = 'var(--accent)';
+                    statusTextEl.textContent = '⏳ Läuft';
+                    statusTextEl.style.color = '#a6e3a1';
+                }
+            };
+
+            updateCountdown();
+            if (activeTimerDetailInterval) clearInterval(activeTimerDetailInterval);
+            activeTimerDetailInterval = setInterval(updateCountdown, 1000);
+
+            // Buttons
+            document.getElementById('timer-detail-link-btn').onclick = () => {
+                insertEntityLinkIntoChat(title, 'timer', timerId);
+                closeTimerDetailModal();
+            };
+
+            document.getElementById('timer-detail-delete-btn').onclick = async () => {
+                closeTimerDetailModal();
+                stopAlarmSound();
+                cancelScheduledTimerAlarm(Number(timerId));
+                await callTool('loesche_timer', { id: Number(timerId) });
+                loadTopWidgets();
+            };
+
+            modal.style.display = 'block';
+            document.body.classList.add('modal-active');
+        };
+
+        window.closeTimerDetailModal = function() {
+            if (activeTimerDetailInterval) {
+                clearInterval(activeTimerDetailInterval);
+                activeTimerDetailInterval = null;
+            }
+            const modal = document.getElementById('timer-detail-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.classList.remove('modal-active');
+        };
+
+        window.adjustTimerTime = async function(deltaSeconds) {
+            const timerId = document.getElementById('timer-detail-id').value;
+            if (!timerId) return;
+
+            const timerCard = document.getElementById(`timer-card-${timerId}`);
+            let currentExpires = timerCard ? timerCard.getAttribute('data-expires') : null;
+            let newExpiresDate;
+            if (currentExpires) {
+                const curExp = new Date(currentExpires).getTime();
+                const base = Math.max(Date.now(), curExp);
+                newExpiresDate = new Date(base + deltaSeconds * 1000);
+            } else {
+                newExpiresDate = new Date(Date.now() + Math.max(60, deltaSeconds) * 1000);
+            }
+
+            try {
+                await callTool('bearbeite_timer', {
+                    id: Number(timerId),
+                    expiresAt: newExpiresDate.toISOString()
+                });
+                loadTopWidgets();
+                document.getElementById('timer-detail-expires').textContent = newExpiresDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' Uhr';
+            } catch(e) {
+                console.error("Fehler beim Anpassen des Timers:", e);
+            }
+        };
+
+        window.openTimerDetailModalFromData = function(data) {
+            const timerCard = document.getElementById(`timer-card-${data.timerId || data.linkId}`);
+            const createdAt = (timerCard && timerCard.getAttribute('data-created')) || data.timerCreated || '';
+            const expiresAt = (timerCard && timerCard.getAttribute('data-expires')) || data.timerExpires || '';
+
+            openTimerDetailModal(
+                data.timerId || data.linkId,
+                data.timerTitle || data.linkLabel,
+                createdAt,
+                expiresAt
+            );
+        };
+
+        window.deletePerson = async function(id) {
+            if (confirm("Möchtest du diese Person wirklich aus dem Gedächtnis löschen?")) {
+                await callTool('loesche_person', { id: Number(id) });
+                loadTopWidgets();
+            }
+        };
 
         const recLabels = { daily: 'täglich', weekly: 'wöchentlich', monthly: 'monatlich', yearly: 'jährlich' };
         function renderSingleTaskHtml(t, isOverdue) {
@@ -1945,7 +2956,7 @@
                          </span>
                      </div>
                  </div>`;
-            const extraData = `data-task-id="${t.id}" data-task-title="${escTitle}" data-task-notes="${escNotes}" data-task-due="${t.due || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}"`;
+            const extraData = `data-task-id="${t.id}" data-task-title="${escTitle}" data-task-notes="${escNotes}" data-task-due="${t.due || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}" data-task-completed="${!!t.completed}" data-task-project-id="${t.projectId || ''}"`;
             return renderSwipeLinkWrapper(taskContent, t.title, 'task', t.id, '', '', '', extraData);
         }
 
@@ -2027,14 +3038,15 @@
                     if (res.ok) {
                         const task = await res.json();
                         const dueStr = task.due ? new Date(task.due).toISOString().split('T')[0] : '';
-                        openTaskModal(
+                        openTaskDetailModal(
                             task.id,
                             task.title,
                             task.notes || '',
                             dueStr,
                             task.listTitle || '',
                             task.recurrence || 'none',
-                            task.projectId
+                            task.projectId,
+                            task.completed
                         );
                     } else {
                         alert("Aufgabe konnte nicht geladen werden.");
@@ -2045,6 +3057,9 @@
                     focusWidget('calendar');
                 } else if (type === 'timer') {
                     focusWidget('timer');
+                } else if (type === 'day') {
+                    focusWidget('calendar');
+                    jumpToTimelineDate(id);
                 }
             } catch (err) {
                 console.error("Fehler beim Verarbeiten des Entity-Klicks:", err);
@@ -3368,9 +4383,38 @@
             return html;
         }
 
-        function addMessage(text, isUser, widget = null, attachments = []) {
+        let messageIdCounter = 1;
+
+        function addMessage(text, isUser, widget = null, attachments = [], replyTo = null) {
             const msg = document.createElement('div');
+            const msgId = `msg-${Date.now()}-${messageIdCounter++}`;
+            msg.id = msgId;
             msg.className = `message ${isUser ? 'user' : 'ai'}`;
+            msg.setAttribute('data-msg-id', msgId);
+            msg.setAttribute('data-msg-role', isUser ? 'user' : 'ai');
+            msg.setAttribute('data-msg-text', text || '');
+
+            // Swipe indicator for replying
+            const swipeIndicator = document.createElement('div');
+            swipeIndicator.className = 'message-swipe-reply-indicator';
+            swipeIndicator.textContent = '↩️';
+            msg.appendChild(swipeIndicator);
+
+            // Render reply quote if replying to a message
+            if (replyTo && replyTo.id) {
+                const quoteCard = document.createElement('div');
+                quoteCard.className = 'chat-reply-quote';
+                quoteCard.setAttribute('data-target-msg-id', replyTo.id);
+                quoteCard.innerHTML = `
+                    <div class="reply-quote-author">↩️ Antwort auf ${escapeHtml(replyTo.author || 'Nachricht')}</div>
+                    <div class="reply-quote-text">${escapeHtml(replyTo.text || '')}</div>
+                `;
+                quoteCard.onclick = (e) => {
+                    e.stopPropagation();
+                    scrollToMessage(replyTo.id);
+                };
+                msg.appendChild(quoteCard);
+            }
             
             if (attachments && attachments.length > 0) {
                 const attachmentsDiv = document.createElement('div');
@@ -3516,109 +4560,116 @@
                                 <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; width: 100%; ${birthdayStyle} ${cancelStyle}">
                                     <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
                                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                            <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
-                                            ${repeatBadge}
-                                            ${rescheduleBadge}
-                                            ${originalTimeText}
-                                            ${reasonHtml}
-                                        </div>
-                                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px;">
-                                            ${timeBadgeHtml}
-                                            ${personsHtml}
-                                        </div>
-                                        ${ev.description ? `<div style="font-size: 0.75rem; opacity: 0.6; margin-top: 4px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(ev.description)}</div>` : ''}
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 4px; align-self: center; margin-left: 8px;">
-                                        ${!ev.isBirthday ? `
-                                            <button onclick="deleteCalendarEvent('${ev.id}', '${targetDate}', ${isRec})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Termin löschen">✖</button>
-                                        ` : ''}
-                                    </div>
-                                </div>
-                            `;
-                            const linkType = ev.isBirthday && ev.persons && ev.persons.length > 0 ? 'person' : 'event';
-                            const linkId = ev.isBirthday && ev.persons && ev.persons.length > 0 ? ev.persons[0].id : ev.id;
-                            html += renderSwipeLinkWrapper(eventContent, ev.title, linkType, linkId);
-                        }
-                    });
-                    html += `</div>`;
-                }
-                html += `</div></div>`;
-                widgetDiv.innerHTML = html;
-            } else if (data.status === 'auth_required') {
-                widgetDiv.innerHTML = `
-                    <p style="font-size:0.85rem; margin:0;">${data.message}</p>
-                    <a href="${data.url}" target="_blank" class="auth-btn">Google Kalender verbinden</a>
-                `;
-            } else if (data.type === 'image_widget') {
-                widgetDiv.classList.add('image-widget');
-                widgetDiv.innerHTML = `
-                    <img src="${data.url}" class="generated-image" alt="${data.prompt}">
-                    <div class="image-caption">"${data.prompt}"</div>
-                `;
-            }
+                                             <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
+                                             ${repeatBadge}
+                                             ${rescheduleBadge}
+                                             ${originalTimeText}
+                                             ${reasonHtml}
+                                         </div>
+                                         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px;">
+                                             ${timeBadgeHtml}
+                                             ${personsHtml}
+                                         </div>
+                                         ${ev.description ? `<div style="font-size: 0.75rem; opacity: 0.6; margin-top: 4px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(ev.description)}</div>` : ''}
+                                     </div>
+                                     <div style="display: flex; align-items: center; gap: 4px; align-self: center; margin-left: 8px;">
+                                         ${!ev.isBirthday ? `
+                                             <button onclick="deleteCalendarEvent('${ev.id}', '${targetDate}', ${isRec})" style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 0.85rem; padding: 2px 6px;" title="Termin löschen">✖</button>
+                                         ` : ''}
+                                     </div>
+                                 </div>
+                             `;
+                             const linkType = ev.isBirthday && ev.persons && ev.persons.length > 0 ? 'person' : 'event';
+                             const linkId = ev.isBirthday && ev.persons && ev.persons.length > 0 ? ev.persons[0].id : ev.id;
+                             html += renderSwipeLinkWrapper(eventContent, ev.title, linkType, linkId);
+                         }
+                     });
+                     html += `</div>`;
+                 }
+                 html += `</div></div>`;
+                 widgetDiv.innerHTML = html;
+             } else if (data.status === 'auth_required') {
+                 widgetDiv.innerHTML = `
+                     <p style="font-size:0.85rem; margin:0;">${data.message}</p>
+                     <a href="${data.url}" target="_blank" class="auth-btn">Google Kalender verbinden</a>
+                 `;
+             } else if (data.type === 'image_widget') {
+                 widgetDiv.classList.add('image-widget');
+                 widgetDiv.innerHTML = `
+                     <img src="${data.url}" class="generated-image" alt="${data.prompt}">
+                     <div class="image-caption">"${data.prompt}"</div>
+                 `;
+             }
 
-            container.appendChild(widgetDiv);
-        }
+             container.appendChild(widgetDiv);
+         }
 
-        async function sendMessage() {
-            const text = userInput.value.trim();
-            
-            // Collect linked items from the pills bar
-            const pillsBar = document.getElementById('linked-pills-bar');
-            const links = [];
-            if (pillsBar) {
-                const pills = pillsBar.querySelectorAll('.link-pill');
-                pills.forEach(pill => {
-                    const label = pill.getAttribute('data-label');
-                    const url = pill.getAttribute('data-url');
-                    links.push(`[${label}](${url})`);
-                });
-            }
+         async function sendMessage() {
+             const text = userInput.value.trim();
+             
+             // Collect linked items from the pills bar
+             const pillsBar = document.getElementById('linked-pills-bar');
+             const links = [];
+             if (pillsBar) {
+                 const pills = pillsBar.querySelectorAll('.link-pill');
+                 pills.forEach(pill => {
+                     const label = pill.getAttribute('data-label');
+                     const url = pill.getAttribute('data-url');
+                     links.push(`[${label}](${url})`);
+                 });
+             }
 
-            if (!text && attachedFiles.length === 0 && links.length === 0) return;
+             if (!text && attachedFiles.length === 0 && links.length === 0) return;
 
-            if (document.body.classList.contains('mobile-mode')) {
-                switchMobileView('chat');
-            }
+             if (document.body.classList.contains('mobile-mode')) {
+                 switchMobileView('chat');
+             }
 
-            // Construct userDisplayMessage to show in the chat bubble (including links so they render as badges)
-            let userDisplayMessage = text;
-            if (links.length > 0) {
-                userDisplayMessage += (userDisplayMessage ? '\n\n' : '') + 'Verlinkte Referenzen:\n' + links.join('\n');
-            }
+             // Save active reply before clearing
+             const replyToSend = activeChatReply ? { ...activeChatReply } : null;
+             cancelChatReply();
 
-            const attachmentsToSend = [...attachedFiles];
-            addMessage(userDisplayMessage, true, null, attachmentsToSend);
-            userInput.value = '';
-            autoResizeInput();
+             // Construct userDisplayMessage to show in the chat bubble (including links so they render as badges)
+             let userDisplayMessage = text;
+             if (links.length > 0) {
+                 userDisplayMessage += (userDisplayMessage ? '\n\n' : '') + 'Verlinkte Referenzen:\n' + links.join('\n');
+             }
 
-            // Construct exact text to send to the backend
-            let textToSend = text;
-            if (links.length > 0) {
-                textToSend += (textToSend ? '\n\n' : '') + 'Verlinkte Referenzen:\n' + links.join('\n');
-            }
+             const attachmentsToSend = [...attachedFiles];
+             addMessage(userDisplayMessage, true, null, attachmentsToSend, replyToSend);
+             userInput.value = '';
+             autoResizeInput();
 
-            // Clear the linked pills bar
-            if (pillsBar) {
-                pillsBar.innerHTML = '';
-                updateLinkedPillsBarVisibility();
-            }
+             // Construct exact text to send to the backend
+             let textToSend = text;
+             if (replyToSend) {
+                 textToSend = `[Antwort auf Nachricht von ${replyToSend.author}: "${replyToSend.text}"]\n\n` + textToSend;
+             }
+             if (links.length > 0) {
+                 textToSend += (textToSend ? '\n\n' : '') + 'Verlinkte Referenzen:\n' + links.join('\n');
+             }
 
-            console.log("Sende Nachricht mit Anhängen:", attachmentsToSend.length);
-            attachedFiles = [];
-            renderAttachments();
+             // Clear the linked pills bar
+             if (pillsBar) {
+                 pillsBar.innerHTML = '';
+                 updateLinkedPillsBarVisibility();
+             }
 
-            const thinkingDiv = document.createElement('div');
-            thinkingDiv.className = 'message ai thinking';
-            thinkingDiv.innerHTML = `
-                <div class="thinking-header">
-                    Gemini denkt nach
-                    <div class="thinking-dots"><span></span><span></span><span></span></div>
-                </div>
-                <div class="thinking-tools-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
-            `;
-            chatBox.appendChild(thinkingDiv);
-            chatBox.scrollTop = chatBox.scrollHeight;
+             console.log("Sende Nachricht mit Anhängen:", attachmentsToSend.length);
+             attachedFiles = [];
+             renderAttachments();
+
+             const thinkingDiv = document.createElement('div');
+             thinkingDiv.className = 'message ai thinking';
+             thinkingDiv.innerHTML = `
+                 <div class="thinking-header">
+                     Gemini denkt nach
+                     <div class="thinking-dots"><span></span><span></span><span></span></div>
+                 </div>
+                 <div class="thinking-tools-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+             `;
+             chatBox.appendChild(thinkingDiv);
+             chatBox.scrollTop = chatBox.scrollHeight;
 
             const thinkingToolsList = thinkingDiv.querySelector('.thinking-tools-list');
 
@@ -3777,10 +4828,6 @@
             return Math.round(diffTime / (1000 * 60 * 60 * 24));
         }
 
-        function renderGapDividerHtml() {
-            return `<div class="timeline-gap-divider" style="border-top: 1px dashed rgba(255, 255, 255, 0.15); margin: 10px 0; width: 100%;"></div>`;
-        }
-
         function renderTimelineDayHtml(dayData) {
             const dateStr = dayData.date;
             const parts = dateStr.split('-').map(Number);
@@ -3819,8 +4866,10 @@
             const hasEvents = dayData.events && dayData.events.length > 0;
             const hasCompletedTasks = dayData.completedTasks && dayData.completedTasks.length > 0;
 
+            const dayTitleLabel = escapeHtml(dayData.displayDate || formattedDate);
+
             let html = `
-                <div class="${boxClass}" id="timeline-day-${dateStr}" data-date="${dateStr}" style="display: flex; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); margin-bottom: 8px;">
+                <div class="${boxClass} swipe-link-item" id="timeline-day-${dateStr}" data-date="${dateStr}" data-context-type="day" data-link-type="day" data-link-id="${dateStr}" data-day-date="${dateStr}" data-day-label="${dayTitleLabel}" style="display: flex; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); margin-bottom: 8px;">
                     <!-- Akzentbalken links: Grün (Zukunft), Blau (Heute), Pfirsich (Vergangenheit) -->
                     <div style="width: 5px; background-color: ${accentColor}; flex-shrink: 0;"></div>
 
@@ -3828,8 +4877,9 @@
                         
                         <!-- Datum Header -->
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
-                            <div style="font-size: 0.82rem; font-weight: bold; color: ${isToday ? 'var(--accent)' : 'var(--text)'}; display: flex; align-items: center; gap: 6px;" title="${longFormattedDate}">
-                                📅 ${dayData.displayDate || formattedDate}
+                            <div style="font-size: 0.82rem; font-weight: bold; color: ${isToday ? 'var(--accent)' : 'var(--text)'}; display: flex; align-items: center; gap: 8px;" title="${longFormattedDate}">
+                                <span>📅 ${dayData.displayDate || formattedDate}</span>
+                                <button type="button" class="timeline-day-link-btn" onclick="event.stopPropagation(); insertEntityLinkIntoChat('${dayTitleLabel}', 'day', '${dateStr}')" title="Diesen Tag im Chat verlinken">🔗 Link</button>
                             </div>
                             ${dayBadge}
                         </div>
@@ -3908,7 +4958,7 @@
                                     </div>
                                 </div>
                             `;
-                            const extraDayTaskData = `data-task-id="${rawTaskId}" data-task-title="${escTitle}" data-task-notes="${escNotes}" data-task-due="${ev.time || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}"`;
+                            const extraDayTaskData = `data-task-id="${rawTaskId}" data-task-title="${escTitle}" data-task-notes="${escNotes}" data-task-due="${ev.time || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}" data-task-completed="${!!ev.completed}" data-task-project-id="${ev.projectId || ''}"`;
                             html += renderSwipeLinkWrapper(taskContent, ev.title, 'task', rawTaskId, '', '', '', extraDayTaskData);
                         } else {
                             const isRec = ev.recurring || ev.isRecurring;
@@ -3922,6 +4972,9 @@
                             
                             const rescheduleBorder = ev.originalStart ? 'border-left: 3px solid #f9e2af; padding-left: 6px;' : '';
                             const escTitle = escapeHtml(ev.title).replace(/"/g, '&quot;');
+                            const escDesc = escapeHtml(ev.description || '').replace(/"/g, '&quot;');
+                            const escPersonsJson = escapeHtml(JSON.stringify(ev.persons || [])).replace(/"/g, '&quot;');
+                            const escReason = escapeHtml(ev.cancellationReason || '').replace(/"/g, '&quot;');
                             
                             const timeBadgeHtml = getEventTimeBadge(ev);
                             
@@ -3963,7 +5016,7 @@
                             `;
                             const linkType = ev.isBirthday && ev.persons && ev.persons.length > 0 ? 'person' : 'event';
                             const linkId = ev.isBirthday && ev.persons && ev.persons.length > 0 ? ev.persons[0].id : ev.id;
-                            const extraTimelineEventData = `data-event-id="${ev.id}" data-event-title="${escTitle}" data-event-date="${targetDate}" data-event-is-rec="${isRec}" data-event-is-birthday="${!!ev.isBirthday}" data-person-id="${ev.persons && ev.persons.length > 0 ? ev.persons[0].id : ''}"`;
+                            const extraTimelineEventData = `data-event-id="${ev.id}" data-event-title="${escTitle}" data-event-date="${targetDate}" data-event-start="${ev.start || ev.time || ''}" data-event-end="${ev.end || ''}" data-event-is-allday="${!!ev.isAllDay}" data-event-fuzzy="${ev.fuzzyTime || ''}" data-event-desc="${escDesc}" data-event-is-rec="${isRec}" data-event-is-birthday="${!!ev.isBirthday}" data-person-id="${ev.persons && ev.persons.length > 0 ? ev.persons[0].id : ''}" data-event-persons="${escPersonsJson}" data-event-iscancelled="${!!ev.isCancelled}" data-event-cancelreason="${escReason}" data-event-originalstart="${ev.originalStart || ''}"`;
                             html += renderSwipeLinkWrapper(eventContent, ev.title, linkType, linkId, '', '', '', extraTimelineEventData);
                         }
                     });
@@ -4040,14 +5093,8 @@
             timelineCanScrollPast = true;
             timelineCanScrollFuture = true;
 
-            // Nur Tage mit Inhalt anzeigen, plus "Heute" und ggf. das explizit angesprungene Datum
-            let visibleDays = rawDays.filter(d => hasTimelineDayContent(d) || d.date === todayStr || (forceIncludeDateStr && d.date === forceIncludeDateStr));
-
-            if (visibleDays.length === 0) {
-                const fallbackDate = forceIncludeDateStr || todayStr;
-                visibleDays = [{ date: fallbackDate, displayDate: 'Heute', events: [], diaryEntries: [], completedTasks: [] }];
-            }
-
+            // Render all days continuously
+            let visibleDays = [...rawDays];
             visibleDays.sort((a, b) => a.date.localeCompare(b.date)); // Chronological ascending
 
             // Keep header date input updated
@@ -4075,18 +5122,11 @@
             html += `
                     <div id="timeline-loading-past" style="display: none; text-align: center; padding: 6px; font-size: 0.72rem; color: #fab387; opacity: 0.85;">⬆️ Lade vergangene Tage...</div>
                     
-                    <!-- Scrollbare Tage-Liste (Oben: Vergangenheit, Unten: Zukunft) mit gestrichelten Linien bei Lücken -->
+                    <!-- Scrollbare Tage-Liste (Oben: Vergangenheit, Unten: Zukunft) -->
                     <div id="timeline-days-list" style="display: flex; flex-direction: column;">
             `;
 
             for (let i = 0; i < visibleDays.length; i++) {
-                if (i > 0) {
-                    const prevDate = visibleDays[i - 1].date;
-                    const currDate = visibleDays[i].date;
-                    if (getTimelineDayDiff(prevDate, currDate) > 1) {
-                        html += renderGapDividerHtml();
-                    }
-                }
                 html += renderTimelineDayHtml(visibleDays[i]);
             }
 
@@ -4136,37 +5176,19 @@
                 if (!res.ok) throw new Error("Fehler beim Laden");
                 const data = await res.json();
                 const rawDays = data.days || [];
-                const todayStr = getLocalDateString();
 
                 timelineOldestLoadedDateStr = startStr;
 
-                const visibleDays = rawDays.filter(d => hasTimelineDayContent(d) || d.date === todayStr);
+                const visibleDays = [...rawDays];
 
                 const daysListDiv = document.getElementById('timeline-days-list');
                 if (daysListDiv && visibleDays.length > 0) {
                     visibleDays.sort((a, b) => a.date.localeCompare(b.date));
-                    
-                    const oldestExistingCard = daysListDiv.querySelector('.timeline-day-box');
-                    const oldestExistingDate = oldestExistingCard ? oldestExistingCard.getAttribute('data-date') : null;
 
                     let prependHtml = '';
                     for (let i = 0; i < visibleDays.length; i++) {
-                        if (i > 0) {
-                            const prevDate = visibleDays[i - 1].date;
-                            const currDate = visibleDays[i].date;
-                            if (getTimelineDayDiff(prevDate, currDate) > 1) {
-                                prependHtml += renderGapDividerHtml();
-                            }
-                        }
                         if (!document.getElementById(`timeline-day-${visibleDays[i].date}`)) {
                             prependHtml += renderTimelineDayHtml(visibleDays[i]);
-                        }
-                    }
-
-                    if (oldestExistingDate && visibleDays.length > 0) {
-                        const lastNewDate = visibleDays[visibleDays.length - 1].date;
-                        if (getTimelineDayDiff(lastNewDate, oldestExistingDate) > 1) {
-                            prependHtml += renderGapDividerHtml();
                         }
                     }
 
@@ -4206,36 +5228,17 @@
                 if (!res.ok) throw new Error("Fehler beim Laden");
                 const data = await res.json();
                 const rawDays = data.days || [];
-                const todayStr = getLocalDateString();
 
                 timelineNewestLoadedDateStr = endStr;
 
-                const visibleDays = rawDays.filter(d => hasTimelineDayContent(d) || d.date === todayStr);
+                const visibleDays = [...rawDays];
 
                 const daysListDiv = document.getElementById('timeline-days-list');
                 if (daysListDiv && visibleDays.length > 0) {
                     visibleDays.sort((a, b) => a.date.localeCompare(b.date));
 
-                    const allCards = daysListDiv.querySelectorAll('.timeline-day-box');
-                    const newestExistingCard = allCards.length > 0 ? allCards[allCards.length - 1] : null;
-                    const newestExistingDate = newestExistingCard ? newestExistingCard.getAttribute('data-date') : null;
-
                     let appendHtml = '';
-                    if (newestExistingDate) {
-                        const firstNewDate = visibleDays[0].date;
-                        if (getTimelineDayDiff(newestExistingDate, firstNewDate) > 1) {
-                            appendHtml += renderGapDividerHtml();
-                        }
-                    }
-
                     for (let i = 0; i < visibleDays.length; i++) {
-                        if (i > 0) {
-                            const prevDate = visibleDays[i - 1].date;
-                            const currDate = visibleDays[i].date;
-                            if (getTimelineDayDiff(prevDate, currDate) > 1) {
-                                appendHtml += renderGapDividerHtml();
-                            }
-                        }
                         if (!document.getElementById(`timeline-day-${visibleDays[i].date}`)) {
                             appendHtml += renderTimelineDayHtml(visibleDays[i]);
                         }
@@ -4450,7 +5453,7 @@
                                                     </div>
                                                 </div>
                                             `;
-                                            const extraTaskData = `data-task-id="${t.id}" data-task-title="${escT}" data-task-notes="${escN}" data-task-project="${p.id}"`;
+                                            const extraTaskData = `data-task-id="${t.id}" data-task-title="${escT}" data-task-notes="${escN}" data-task-due="${t.due || ''}" data-task-project="${p.id}" data-task-completed="${!!t.completed}"`;
                                             html += renderSwipeLinkWrapper(taskContent, t.title, 'task', t.id, '', '', '', extraTaskData);
                                         });
 
@@ -4510,7 +5513,7 @@
                                                 </div>
                                             </div>
                                         `;
-                                        const extraTaskData = `data-task-id="${t.id}" data-task-title="${escT}" data-task-notes="${escN}"`;
+                                        const extraTaskData = `data-task-id="${t.id}" data-task-title="${escT}" data-task-notes="${escN}" data-task-due="${t.due || ''}" data-task-completed="${!!t.completed}"`;
                                         html += renderSwipeLinkWrapper(taskContent, t.title, 'task', t.id, '', '', '', extraTaskData);
                                     });
 
@@ -4552,9 +5555,10 @@
                         } else if (widget.data.widgetType === 'memory_people_list') {
                             widgetDiv.id = 'widget-memory';
                             currentMemoryPeopleList = widget.data.people || [];
-                            let html = `<div id="memory-people-list-container" style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 8px;"></div>`;
+                            let html = `<div id="memory-people-list-container" style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 8px;">`;
+                            html += getFilteredPeopleListHtml(currentMemoryPeopleList, personSearchQuery);
+                            html += `</div>`;
                             widgetDiv.innerHTML = html;
-                            renderFilteredPeopleList();
                         } else if (widget.data.widgetType === 'tasks_overview') {
                             let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">`;
                             

@@ -692,7 +692,7 @@ input:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--acc
     margin-bottom: 0;
     width: 60%;
 }
-/* Desktop: View-spezifische Layouts für geteilte Fenster */
+/* Desktop: View-spezifische Layouts */
 body:not(.mobile-mode).view-chat .top-panel {
     display: none !important;
 }
@@ -705,24 +705,16 @@ body:not(.mobile-mode).view-chat .right-column {
     width: 100% !important;
 }
 
-/* Auf allen anderen Seiten (Plugins, Verlauf, Einstellungen) wird der Chat immer 50/50 geteilt angezeigt */
-body:not(.mobile-mode):not(.view-chat) .side-panel-container {
-    grid-template-columns: 1fr 1fr !important;
+body:not(.mobile-mode).view-plugins .side-panel-container {
+    grid-template-columns: 1fr !important;
     transform: translateX(0) !important;
 }
-body:not(.mobile-mode):not(.view-chat) .top-panel {
+body:not(.mobile-mode).view-plugins .top-panel {
     display: flex !important;
     width: 100% !important;
 }
-body:not(.mobile-mode):not(.view-chat) .right-column {
-    display: flex !important;
-    width: 100% !important;
-}
-body:not(.mobile-mode):not(.view-chat) #chat-section {
-    display: flex !important;
-}
-body:not(.mobile-mode):not(.view-chat) #chat-box {
-    display: flex !important;
+body:not(.mobile-mode).view-plugins .right-column {
+    display: none !important;
 }
 /* Settings Modal has been removed to be inline settings-section instead */
 
@@ -962,6 +954,9 @@ body.mobile-mode #view-toggle-container.mobile-only {
 body.mobile-mode.view-chat #chat-box {
     padding-bottom: 145px !important;
 }
+body.mobile-mode:not(.view-chat) .top-panel {
+    padding-bottom: 145px !important;
+}
 
 /* 1. Pure Chat view on Mobile (100% Fullscreen Chat) */
 body.mobile-mode.view-chat .top-panel {
@@ -982,63 +977,57 @@ body.mobile-mode.view-chat .right-column {
     background: transparent !important;
 }
 
-/* 2. All other views on Mobile (Split Screen: Top 50% Plugin/Page, Bottom 50% Chat) */
-body.mobile-mode:not(.view-chat) .side-panel-container {
-    display: grid !important;
-    grid-template-columns: 1fr !important;
-    grid-template-rows: 1fr 1fr !important;
-    height: 100vh !important;
-    overflow: hidden !important;
-    transform: translateX(0) !important;
-}
-
-body.mobile-mode:not(.view-chat) .top-panel {
+/* Control panels display and scrolling on mobile */
+body.mobile-mode .top-panel {
     grid-column: 1 !important;
     grid-row: 1 !important;
-    height: 100% !important;
-    max-height: 50vh !important;
-    padding-top: 62px !important;
-    padding-bottom: 15px !important;
+    padding-top: 70px !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
     overflow-y: auto !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
     display: flex !important;
+    border-bottom: none !important;
+}
+body.mobile-mode.view-chat .top-panel,
+body.mobile-mode.view-history .top-panel,
+body.mobile-mode.view-settings .top-panel {
+    display: none !important;
 }
 
-body.mobile-mode:not(.view-chat) .right-column {
+body.mobile-mode .right-column {
     grid-column: 1 !important;
-    grid-row: 2 !important;
-    height: 100% !important;
-    max-height: 50vh !important;
-    padding-top: 0 !important;
+    grid-row: 1 !important;
+    padding-top: 60px !important;
+    height: 100vh !important;
     display: flex !important;
-    flex-direction: column !important;
-    position: relative !important;
-    background: var(--bg) !important;
-    pointer-events: auto !important;
+    transition: background 0.3s;
+}
+
+/* In plugin views on Mobile, top-panel takes full 100% and right-column is transparent overlay for floating bottom bar */
+body.mobile-mode.view-plugins .right-column {
+    background: transparent !important;
     border: none !important;
     box-shadow: none !important;
-    overflow: hidden !important;
+    pointer-events: none !important;
 }
-
-body.mobile-mode:not(.view-chat) .right-column #chat-section {
-    display: flex !important;
-    flex-direction: column !important;
-    height: 100% !important;
-    overflow: hidden !important;
-    flex: 1 !important;
+body.mobile-mode.view-plugins .right-column .input-area,
+body.mobile-mode.view-plugins .right-column .input-area *,
+body.mobile-mode.view-plugins .right-column #attachments-bar,
+body.mobile-mode.view-plugins .right-column #attachments-bar * {
+    pointer-events: auto !important;
 }
-
-body.mobile-mode:not(.view-chat) .right-column #chat-box {
-    display: flex !important;
-    flex-direction: column !important;
-    flex: 1 !important;
-    overflow-y: auto !important;
-    padding-top: 8px !important;
-    padding-bottom: 140px !important;
-}
-
-body.mobile-mode .right-column #right-header {
+body.mobile-mode.view-plugins .right-column #chat-box,
+body.mobile-mode.view-plugins .right-column #history-section,
+body.mobile-mode.view-plugins .right-column #right-header {
     display: none !important;
+}
+
+/* Set single column grid layout on mobile when in any view */
+body.mobile-mode .side-panel-container {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 1fr !important;
+    transform: translateX(0) !important;
 }
 
 /* Hide all widgets in container by default when a plugin view is active on mobile */
@@ -1902,4 +1891,238 @@ body.mobile-mode .top-panel > div:first-child {
     z-index: 9999;
     background: transparent;
 }
+
+/* ==========================================================================
+   Chat Swipe-to-Reply, Reply Bar & Message Highlight
+   ========================================================================== */
+.message {
+    position: relative;
+    touch-action: pan-y;
+    will-change: transform;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s, background 0.3s;
+}
+
+.message.swiping {
+    transition: none !important;
+}
+
+.message-swipe-reply-indicator {
+    position: absolute;
+    right: -45px;
+    top: 50%;
+    transform: translateY(-50%) scale(0.8);
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(137, 180, 250, 0.2);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s;
+    z-index: 10;
+}
+
+.message-swipe-reply-indicator.active {
+    background: var(--accent);
+    color: #11111b;
+    transform: translateY(-50%) scale(1.15);
+    opacity: 1;
+    box-shadow: 0 0 16px rgba(137, 180, 250, 0.5);
+}
+
+.chat-reply-preview-bar {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(17, 17, 27, 0.95);
+    border-top: 1px solid rgba(137, 180, 250, 0.3);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px 8px 0 0;
+    margin-bottom: 0px;
+    animation: replyBarSlideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 100;
+}
+
+@keyframes replyBarSlideUp {
+    0% {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.chat-reply-preview-bar .reply-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
+}
+
+.chat-reply-preview-bar .reply-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.chat-reply-preview-bar .reply-snippet {
+    font-size: 0.75rem;
+    color: #cdd6f4;
+    opacity: 0.85;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chat-reply-preview-bar .reply-cancel-btn {
+    background: transparent;
+    border: none;
+    color: var(--off);
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 4px 8px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+}
+
+.chat-reply-preview-bar .reply-cancel-btn:hover {
+    background: rgba(243, 139, 168, 0.15);
+}
+
+.chat-reply-quote {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 10px;
+    margin-bottom: 6px;
+    background: rgba(0, 0, 0, 0.25);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.chat-reply-quote:hover {
+    background: rgba(137, 180, 250, 0.15);
+    border-left-color: #cba6f7;
+    transform: translateX(2px);
+}
+
+.chat-reply-quote .reply-quote-author {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.chat-reply-quote .reply-quote-text {
+    font-size: 0.74rem;
+    color: rgba(255, 255, 255, 0.8);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.25;
+}
+
+.message-highlight-pulse {
+    animation: messagePulseAnim 2s ease-in-out forwards !important;
+}
+
+@keyframes messagePulseAnim {
+    0% {
+        box-shadow: 0 0 0 3px var(--accent), 0 0 25px rgba(137, 180, 250, 0.85);
+        transform: scale(1.02);
+    }
+    30% {
+        box-shadow: 0 0 0 4px var(--accent), 0 0 35px rgba(137, 180, 250, 0.95);
+        transform: scale(1.025);
+    }
+    100% {
+        box-shadow: none;
+        transform: scale(1);
+    }
+}
+
+/* ==========================================================================
+   Detail Modal & Card Interactive Enhancements
+   ========================================================================== */
+.detail-modal-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    text-align: left;
+    margin-bottom: 12px;
+}
+
+.detail-modal-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.detail-modal-value {
+    font-size: 0.85rem;
+    color: #cdd6f4;
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.detail-modal-box {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.timeline-day-box {
+    transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.timeline-day-box:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.timeline-day-link-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.timeline-day-link-btn:hover {
+    color: var(--accent);
+    background: rgba(137, 180, 250, 0.1);
+}
+
 
