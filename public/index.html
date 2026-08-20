@@ -960,6 +960,8 @@
                                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                             </svg>
                         </button>
+                    </div>
+
                     <!-- Chat Reply Preview Bar -->
                     <div id="chat-reply-preview-bar" class="chat-reply-preview-bar">
                         <div class="reply-content">
@@ -1419,7 +1421,7 @@
                         const todayStr = getLocalDateString();
                         const todayEl = document.getElementById(`timeline-day-${todayStr}`);
                         if (todayEl) {
-                            scrollElementInsideTopPanel(todayEl, 'center', behavior);
+                            scrollElementInsideTopPanel(todayEl, 'start', behavior);
                         }
                     };
                     scrollToToday('auto');
@@ -2317,7 +2319,7 @@
                 } else if (type === 'person') {
                     openPersonProfileModal(Number(item.dataset.personId || id));
                 } else if (type === 'project') {
-                    openProjectModal(Number(item.dataset.projectId || id), item.dataset.projectName || item.dataset.linkLabel);
+                    toggleProjectCollapse(Number(item.dataset.projectId || id));
                 } else if (type === 'note') {
                     openNoteModal(Number(item.dataset.noteId || id), item.dataset.noteTitle, item.dataset.noteContent, item.dataset.projectId ? Number(item.dataset.projectId) : null);
                 } else if (type === 'mail') {
@@ -4770,7 +4772,7 @@
             return top;
         }
 
-        function scrollElementInsideTopPanel(targetEl, block = 'center', behavior = 'smooth') {
+        function scrollElementInsideTopPanel(targetEl, block = 'start', behavior = 'smooth') {
             const topPanel = document.querySelector('.top-panel');
             if (!topPanel || !targetEl) return;
 
@@ -4795,8 +4797,10 @@
 
             if (block === 'center') {
                 targetScrollTop = relativeTop - (panelHeight / 2) + (targetHeight / 2);
-            } else if (block === 'start') {
-                targetScrollTop = relativeTop - 15;
+            } else if (block === 'start' || block === 'top') {
+                const isMobile = document.body.classList.contains('mobile-mode');
+                const headerOffset = isMobile ? 80 : 15;
+                targetScrollTop = relativeTop - headerOffset;
             }
 
             const finalScrollTop = Math.max(0, targetScrollTop);
@@ -5143,7 +5147,7 @@
             setTimeout(() => {
                 const targetEl = document.getElementById(`timeline-day-${scrollTargetDate}`);
                 if (targetEl) {
-                    scrollElementInsideTopPanel(targetEl, 'center', forceIncludeDateStr ? 'smooth' : 'auto');
+                    scrollElementInsideTopPanel(targetEl, 'start', forceIncludeDateStr ? 'smooth' : 'auto');
                     if (forceIncludeDateStr) {
                         flashTimelineDay(targetEl);
                     }
@@ -5273,7 +5277,7 @@
 
             let targetEl = document.getElementById(`timeline-day-${dateStr}`);
             if (targetEl) {
-                scrollElementInsideTopPanel(targetEl, 'center', 'smooth');
+                scrollElementInsideTopPanel(targetEl, 'start', 'smooth');
                 flashTimelineDay(targetEl);
                 return;
             }
