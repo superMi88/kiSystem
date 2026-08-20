@@ -709,6 +709,53 @@ app.put("/api/mail/messages/:id/person", async (req, res) => {
   }
 });
 
+app.get("/api/memory/people", async (req, res) => {
+  try {
+    const people = await prisma.person.findMany({
+      where: { isDeleted: false },
+      select: {
+        id: true,
+        isOwner: true,
+        email: true,
+        emails: true,
+        biography: true,
+        aliases: {
+          select: {
+            name: true,
+            isPrimary: true
+          }
+        }
+      }
+    });
+
+    const formattedPeople = people.map(p => {
+      const primaryAlias = p.aliases ? (p.aliases.find(a => a.isPrimary) || p.aliases[0]) : null;
+      const nameStr = primaryAlias && primaryAlias.name ? primaryAlias.name : (p.isOwner ? "Ich" : `Person #${p.id}`);
+      const aliasList = (p.aliases || []).map(a => a.name).filter(n => n && n !== nameStr);
+      return {
+        id: p.id,
+        isOwner: !!p.isOwner,
+        name: nameStr,
+        email: p.email,
+        emails: p.emails,
+        aliases: aliasList,
+        biography: p.biography
+      };
+    });
+
+    formattedPeople.sort((a, b) => {
+      if (a.isOwner) return -1;
+      if (b.isOwner) return 1;
+      return (a.name || "").localeCompare(b.name || "");
+    });
+
+    res.json(formattedPeople);
+  } catch (e: any) {
+    console.error("Fehler beim Abrufen der Personen:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.put("/api/entities/person/:id/email", async (req, res) => {
   try {
     const id = Number(req.params.id);

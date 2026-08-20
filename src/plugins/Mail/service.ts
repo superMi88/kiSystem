@@ -479,14 +479,21 @@ export class MailService {
   }
 
   /**
-   * Ändert die Kategorie einer E-Mail.
+   * Ändert die Kategorie(n) einer E-Mail (unterstützt einzelne Kategorie oder Liste/Array mehrerer Kategorien).
    */
   static async updateEmailCategory(
     prisma: PrismaClient,
     emailId: number,
-    category: string | null
+    category: string | string[] | null
   ) {
-    const cleanCategory = category && category.trim() ? category.trim() : null;
+    let cleanCategory: string | null = null;
+    if (Array.isArray(category)) {
+      const list = category.map(c => typeof c === "string" ? c.trim() : "").filter(Boolean);
+      cleanCategory = list.length > 0 ? Array.from(new Set(list)).join(", ") : null;
+    } else if (typeof category === "string" && category.trim()) {
+      cleanCategory = category.trim();
+    }
+
     return await prisma.cachedEmail.update({
       where: { id: emailId },
       data: { category: cleanCategory },
@@ -627,7 +634,7 @@ export class MailService {
     }
 
     if (options?.category && options.category !== "all" && options.category !== "Alle") {
-      where.category = options.category;
+      where.category = { contains: options.category.trim(), mode: "insensitive" };
     }
 
     if (options?.personId) {

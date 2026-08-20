@@ -2125,4 +2125,72 @@ body.mobile-mode .top-panel > div:first-child {
     background: rgba(137, 180, 250, 0.1);
 }
 
+/* Mail Person & Category Selection Dialogs */
+.mail-select-dialog-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    user-select: none;
+}
+
+.mail-select-dialog-item:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+.mail-select-dialog-item.selected {
+    background: rgba(137, 180, 250, 0.12);
+    border-color: var(--accent);
+    box-shadow: 0 0 10px rgba(137, 180, 250, 0.2);
+}
+
+.mail-person-dialog-item.selected {
+    background: rgba(203, 166, 247, 0.14);
+    border-color: #cba6f7;
+    box-shadow: 0 0 10px rgba(203, 166, 247, 0.2);
+}
+
+.mail-checkbox-box {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    background: rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 900;
+    color: transparent;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.mail-select-dialog-item.selected .mail-checkbox-box {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #11111b;
+    box-shadow: 0 0 8px rgba(137, 180, 250, 0.4);
+}
+
+.mail-select-remove-item {
+    background: rgba(243, 139, 168, 0.06);
+    border: 1px dashed rgba(243, 139, 168, 0.3);
+    color: #f38ba8;
+    margin-bottom: 4px;
+}
+
+.mail-select-remove-item:hover {
+    background: rgba(243, 139, 168, 0.15);
+    border-color: rgba(243, 139, 168, 0.6);
+}
+
+
 
