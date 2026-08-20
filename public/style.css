@@ -688,21 +688,37 @@ input:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--acc
     margin-bottom: 0;
     width: 60%;
 }
-/* View-spezifische Layouts für geteilte Fenster */
-body.view-plugins .right-column {
+/* Desktop: View-spezifische Layouts für geteilte Fenster */
+body:not(.mobile-mode).view-chat .top-panel {
     display: none !important;
 }
-body.view-plugins .side-panel-container {
-    grid-template-columns: 1fr;
-    transform: translateX(-100%);
+body:not(.mobile-mode).view-chat .side-panel-container {
+    grid-template-columns: 1fr !important;
+    transform: translateX(0) !important;
+}
+body:not(.mobile-mode).view-chat .right-column {
+    display: flex !important;
+    width: 100% !important;
 }
 
-body.view-chat .top-panel {
-    display: none !important;
+/* Auf allen anderen Seiten (Plugins, Verlauf, Einstellungen) wird der Chat immer 50/50 geteilt angezeigt */
+body:not(.mobile-mode):not(.view-chat) .side-panel-container {
+    grid-template-columns: 1fr 1fr !important;
+    transform: translateX(0) !important;
 }
-body.view-chat .side-panel-container {
-    grid-template-columns: 1fr;
-    transform: translateX(100%);
+body:not(.mobile-mode):not(.view-chat) .top-panel {
+    display: flex !important;
+    width: 100% !important;
+}
+body:not(.mobile-mode):not(.view-chat) .right-column {
+    display: flex !important;
+    width: 100% !important;
+}
+body:not(.mobile-mode):not(.view-chat) #chat-section {
+    display: flex !important;
+}
+body:not(.mobile-mode):not(.view-chat) #chat-box {
+    display: flex !important;
 }
 /* Settings Modal has been removed to be inline settings-section instead */
 
@@ -940,59 +956,85 @@ body.mobile-mode #view-toggle-container.mobile-only {
 
 /* Adjust bottom padding to prevent items from being cut off by the floating bar */
 body.mobile-mode.view-chat #chat-box {
-    padding-bottom: 140px !important;
-}
-body.mobile-mode:not(.view-chat) .top-panel {
-    padding-bottom: 140px !important;
+    padding-bottom: 145px !important;
 }
 
-/* Control panels display and scrolling on mobile */
-body.mobile-mode .top-panel {
-    grid-column: 1 !important;
-    grid-row: 1 !important;
-    padding-top: 70px !important;
-    height: 100vh;
-    overflow-y: auto;
-}
-body.mobile-mode.view-chat .top-panel,
-body.mobile-mode.view-history .top-panel,
-body.mobile-mode.view-settings .top-panel {
+/* 1. Pure Chat view on Mobile (100% Fullscreen Chat) */
+body.mobile-mode.view-chat .top-panel {
     display: none !important;
 }
-
-body.mobile-mode .right-column {
-    grid-column: 1 !important;
-    grid-row: 1 !important;
-    padding-top: 60px !important;
-    height: 100vh;
-    display: flex !important;
-    transition: background 0.3s;
-}
-
-/* Pass-through clicks to the dashboard plugin view when they are displayed */
-body.mobile-mode.view-plugins .right-column {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    pointer-events: none !important;
-}
-body.mobile-mode.view-plugins .right-column .input-area,
-body.mobile-mode.view-plugins .right-column .input-area *,
-body.mobile-mode.view-plugins .right-column #attachments-bar,
-body.mobile-mode.view-plugins .right-column #attachments-bar * {
-    pointer-events: auto !important;
-}
-body.mobile-mode.view-plugins .right-column #chat-box,
-body.mobile-mode.view-plugins .right-column #history-section,
-body.mobile-mode.view-plugins .right-column #right-header {
-    display: none !important;
-}
-
-/* Set single column grid layout on mobile when in any view */
-body.mobile-mode .side-panel-container {
+body.mobile-mode.view-chat .side-panel-container {
+    display: grid !important;
     grid-template-columns: 1fr !important;
     grid-template-rows: 1fr !important;
     transform: translateX(0) !important;
+}
+body.mobile-mode.view-chat .right-column {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    padding-top: 60px !important;
+    height: 100vh !important;
+    display: flex !important;
+    background: transparent !important;
+}
+
+/* 2. All other views on Mobile (Split Screen: Top 50% Plugin/Page, Bottom 50% Chat) */
+body.mobile-mode:not(.view-chat) .side-panel-container {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 1fr 1fr !important;
+    height: 100vh !important;
+    overflow: hidden !important;
+    transform: translateX(0) !important;
+}
+
+body.mobile-mode:not(.view-chat) .top-panel {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    height: 100% !important;
+    max-height: 50vh !important;
+    padding-top: 62px !important;
+    padding-bottom: 15px !important;
+    overflow-y: auto !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    display: flex !important;
+}
+
+body.mobile-mode:not(.view-chat) .right-column {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    height: 100% !important;
+    max-height: 50vh !important;
+    padding-top: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    position: relative !important;
+    background: var(--bg) !important;
+    pointer-events: auto !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+}
+
+body.mobile-mode:not(.view-chat) .right-column #chat-section {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    overflow: hidden !important;
+    flex: 1 !important;
+}
+
+body.mobile-mode:not(.view-chat) .right-column #chat-box {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 !important;
+    overflow-y: auto !important;
+    padding-top: 8px !important;
+    padding-bottom: 140px !important;
+}
+
+body.mobile-mode .right-column #right-header {
+    display: none !important;
 }
 
 /* Hide all widgets in container by default when a plugin view is active on mobile */

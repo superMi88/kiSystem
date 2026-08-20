@@ -1247,6 +1247,29 @@
                 if (typeof historySection !== 'undefined' && historySection && historySection.style.display === 'none') {
                     showSection('history');
                 }
+            } else if (viewName === 'settings') {
+                if (typeof settingsSection !== 'undefined' && settingsSection && settingsSection.style.display === 'none') {
+                    showSection('settings');
+                }
+            } else {
+                // In all plugin views (calendar, timer, projects, memory, mail, tasks, journal), ensure chat section is active
+                if (typeof chatSection !== 'undefined' && chatSection) {
+                    chatSection.style.display = 'flex';
+                }
+                if (typeof historySection !== 'undefined' && historySection) {
+                    historySection.style.display = 'none';
+                }
+                if (typeof settingsSection !== 'undefined' && settingsSection) {
+                    settingsSection.style.display = 'none';
+                }
+            }
+
+            // Scroll chat to bottom so newest messages are visible
+            const chatBoxEl = document.getElementById('chat-box');
+            if (chatBoxEl) {
+                setTimeout(() => {
+                    chatBoxEl.scrollTop = chatBoxEl.scrollHeight;
+                }, 50);
             }
         }
         window.switchMobileView = switchMobileView;
