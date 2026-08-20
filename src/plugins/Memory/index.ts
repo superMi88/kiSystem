@@ -709,10 +709,12 @@ export const memoryPlugin: Plugin = {
       const formattedPeople = people.map(p => {
         const primaryAlias = p.aliases ? (p.aliases.find(a => a.isPrimary) || p.aliases[0]) : null;
         const nameStr = primaryAlias && primaryAlias.name ? primaryAlias.name : (p.isOwner ? "Ich" : `Person #${p.id}`);
+        const aliasList = (p.aliases || []).map(a => a.name).filter(n => n && n !== nameStr);
         return {
           id: p.id,
           isOwner: !!p.isOwner,
           name: nameStr,
+          aliases: aliasList,
           notes: p.biography || "Keine Biografie vorhanden."
         };
       });
