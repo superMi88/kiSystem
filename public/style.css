@@ -1,5 +1,5 @@
 :root {
-    --bg: transparent;
+    --bg: #11111b;
     --card: #1e1e2e;
     --accent: #89b4fa;
     --text: #cdd6f4;
@@ -12,13 +12,17 @@
 * { box-sizing: border-box; }
 
 html, body {
-    background: transparent !important;
+    background: #11111b;
     margin: 0;
     padding: 0;
     height: 100vh;
     overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     color: var(--text);
+}
+
+body.electron-transparent {
+    background: transparent !important;
 }
 
 /* Container für das gesamte Side-Panel (Side-by-Side Grid Layout) */
@@ -29,16 +33,16 @@ html, body {
     padding: 0;
     gap: 0;
     width: 100%;
-    transform: translateX(-100%);
-    opacity: 0;
+    transform: translateX(0);
+    opacity: 1;
+    pointer-events: auto;
     transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    pointer-events: none; /* Keine Klicks während es versteckt ist */
 }
 
-body.active .side-panel-container {
-    transform: translateX(0) !important;
-    opacity: 1 !important;
-    pointer-events: auto !important;
+body.electron-floating:not(.active) .side-panel-container {
+    transform: translateX(-100%) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
 }
 
 /* Gemeinsame Kachel-Stile */
