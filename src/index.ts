@@ -709,6 +709,92 @@ app.put("/api/mail/messages/:id/person", async (req, res) => {
   }
 });
 
+app.delete("/api/mail/messages/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    await prisma.cachedEmail.delete({ where: { id } });
+    res.json({ success: true, message: "E-Mail gelöscht." });
+  } catch (e: any) {
+    console.error("Fehler beim Löschen der E-Mail:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/mail/messages/batch-category", async (req, res) => {
+  try {
+    const { ids, category } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "IDs Array erforderlich." });
+    }
+    let cleanCategory: string | null = null;
+    if (Array.isArray(category)) {
+      const list = category.map(c => typeof c === "string" ? c.trim() : "").filter(Boolean);
+      cleanCategory = list.length > 0 ? Array.from(new Set(list)).join(", ") : null;
+    } else if (typeof category === "string" && category.trim()) {
+      cleanCategory = category.trim();
+    }
+    await prisma.cachedEmail.updateMany({
+      where: { id: { in: ids.map(Number) } },
+      data: { category: cleanCategory }
+    });
+    res.json({ success: true, count: ids.length, category: cleanCategory });
+  } catch (e: any) {
+    console.error("Fehler bei Batch-Kategorisierung:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/mail/messages/batch-person", async (req, res) => {
+  try {
+    const { ids, personId } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "IDs Array erforderlich." });
+    }
+    const pId = personId !== undefined && personId !== null ? Number(personId) : null;
+    await prisma.cachedEmail.updateMany({
+      where: { id: { in: ids.map(Number) } },
+      data: { personId: pId }
+    });
+    res.json({ success: true, count: ids.length, personId: pId });
+  } catch (e: any) {
+    console.error("Fehler bei Batch-Personenzuordnung:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/mail/messages/batch-read", async (req, res) => {
+  try {
+    const { ids, isRead } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "IDs Array erforderlich." });
+    }
+    await prisma.cachedEmail.updateMany({
+      where: { id: { in: ids.map(Number) } },
+      data: { isRead: !!isRead }
+    });
+    res.json({ success: true, count: ids.length, isRead: !!isRead });
+  } catch (e: any) {
+    console.error("Fehler bei Batch-Gelesen-Status:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/mail/messages/batch-delete", async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "IDs Array erforderlich." });
+    }
+    await prisma.cachedEmail.deleteMany({
+      where: { id: { in: ids.map(Number) } }
+    });
+    res.json({ success: true, count: ids.length });
+  } catch (e: any) {
+    console.error("Fehler beim Batch-Löschen:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get("/api/memory/people", async (req, res) => {
   try {
     const people = await prisma.person.findMany({
