@@ -2116,9 +2116,6 @@
 
         function insertEntityLinkIntoChat(label, type, id) {
             addLinkedPill(label, type, id);
-            if (document.body.classList.contains('mobile-mode')) {
-                switchMobileView('chat');
-            }
         }
         window.insertEntityLinkIntoChat = insertEntityLinkIntoChat;
 
@@ -4558,7 +4555,6 @@
                             let html = `<div id="memory-people-list-container" style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 8px;"></div>`;
                             widgetDiv.innerHTML = html;
                             renderFilteredPeopleList();
-                        }
                         } else if (widget.data.widgetType === 'tasks_overview') {
                             let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">`;
                             
@@ -4772,6 +4768,7 @@
                 }
             }
         }
+        window.focusWidget = focusWidget;
 
         async function callTool(name, args) {
             try {
