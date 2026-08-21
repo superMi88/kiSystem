@@ -1696,9 +1696,9 @@
             const type = contextData.contextType || contextData.linkType;
             if (!type) return;
 
-            const id = contextData.linkId || contextData.mailId || contextData.taskId || contextData.eventId || contextData.personId || contextData.timerId || contextData.noteId || contextData.projectId;
+            const id = contextData.linkId || contextData.mailId || contextData.taskId || contextData.eventId || contextData.personId || contextData.timerId || contextData.noteId || contextData.projectId || contextData.dayDate || contextData.date;
 
-            if (type !== 'day' && id !== undefined && id !== null) {
+            if (id !== undefined && id !== null) {
                 startSelectionMode(type, id, contextData);
                 isLongPressActive = true;
                 lastSwipeTime = Date.now();
@@ -2305,6 +2305,7 @@
             if (wasSwiping || isLongPressActive) {
                 lastSwipeTime = Date.now();
             }
+            isLongPressActive = false;
 
             if (wasSwiping && triggered) {
                 const label = item.dataset.linkLabel || '';
@@ -2337,6 +2338,24 @@
 
         // Suppress click events if a swipe gesture or long-press was just completed
         window.addEventListener('click', (e) => {
+            // If in selection mode, handle item toggling immediately without threshold delay
+            if (currentSelectionType !== null) {
+                let targetItem = e.target.closest(`.swipe-link-item[data-context-type="${currentSelectionType}"], .swipe-link-item[data-link-type="${currentSelectionType}"]`);
+                if (!targetItem) {
+                    targetItem = e.target.closest('.swipe-link-item');
+                }
+                if (targetItem) {
+                    const type = targetItem.dataset.contextType || targetItem.dataset.linkType;
+                    const id = targetItem.dataset.linkId || targetItem.dataset.mailId || targetItem.dataset.taskId || targetItem.dataset.eventId || targetItem.dataset.personId || targetItem.dataset.timerId || targetItem.dataset.noteId || targetItem.dataset.projectId || targetItem.dataset.dayDate || targetItem.dataset.date;
+                    if (type === currentSelectionType) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        toggleSelectionItem(type, id, targetItem.dataset);
+                        return;
+                    }
+                }
+            }
+
             if (Date.now() - lastSwipeTime < 350) {
                 e.stopPropagation();
                 e.preventDefault();
@@ -2359,20 +2378,10 @@
                 return;
             }
 
-            const item = e.target.closest('.swipe-link-item');
             if (item) {
                 const type = item.dataset.contextType || item.dataset.linkType;
                 const id = item.dataset.linkId || item.dataset.mailId || item.dataset.taskId || item.dataset.eventId || item.dataset.personId || item.dataset.timerId || item.dataset.noteId || item.dataset.projectId;
                 if (!type) return;
-
-                if (currentSelectionType !== null) {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    if (type === currentSelectionType) {
-                        toggleSelectionItem(type, id, item.dataset);
-                    }
-                    return;
-                }
 
                 if (type === 'task') {
                     openTaskDetailModalFromData(item.dataset);
@@ -2418,7 +2427,6 @@
                         <span class="swipe-link-text">Link</span>
                     </div>
                     <div class="swipe-link-item ${extraClasses} ${selClass}" data-swipe-link="true" data-context-type="${type}" data-link-label="${escLabel}" data-link-type="${type}" data-link-id="${id}" ${extraDataAttrs} style="${extraStyles}">
-                        <div class="entity-select-check-badge">✓</div>
                         ${innerHtml}
                     </div>
                 </div>
@@ -5994,11 +6002,6 @@
             } else {
                 html += `<div style="display: flex; flex-direction: column; gap: 6px;">`;
                 filteredEmails.forEach(e => {
-                    const mailIdNum = Number(e.id);
-                    const isSelected = selectedMailIds.has(mailIdNum);
-                    const selectClass = isSelected ? 'is-selected' : '';
-                    const checkHtml = `<div class="mail-card-select-check">✓</div>`;
-
                     const escSubject = escapeHtml(e.subject || '(Kein Betreff)').replace(/'/g, "\\'");
                     const unreadBadge = !e.isRead ? `<span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; margin-right: 4px; flex-shrink: 0;" title="Ungelesen"></span>` : '';
                     const unreadBg = !e.isRead ? 'rgba(137, 180, 250, 0.08)' : 'rgba(255,255,255,0.02)';
@@ -6306,8 +6309,8 @@
         let selectedItemMeta = new Map();
 
         function isItemSelected(type, id) {
-            if (!currentSelectionType || currentSelectionType !== type) return false;
-            return selectedItemIds.has(String(id)) || selectedItemIds.has(Number(id));
+            if (!currentSelectionType || currentSelectionType !== type || id === undefined || id === null) return false;
+            return selectedItemIds.has(id) || selectedItemIds.has(String(id)) || (!isNaN(Number(id)) && selectedItemIds.has(Number(id)));
         }
         window.isItemSelected = isItemSelected;
 
@@ -6340,11 +6343,17 @@
                 return;
             }
 
-            if (selectedItemIds.has(normId) || selectedItemIds.has(String(normId))) {
+            const isAlreadySelected = selectedItemIds.has(normId) ||
+                selectedItemIds.has(String(normId)) ||
+                (!isNaN(Number(normId)) && selectedItemIds.has(Number(normId)));
+
+            if (isAlreadySelected) {
                 selectedItemIds.delete(normId);
                 selectedItemIds.delete(String(normId));
+                if (!isNaN(Number(normId))) selectedItemIds.delete(Number(normId));
                 selectedItemMeta.delete(normId);
                 selectedItemMeta.delete(String(normId));
+                if (!isNaN(Number(normId))) selectedItemMeta.delete(Number(normId));
             } else {
                 selectedItemIds.add(normId);
                 const label = extraData.linkLabel || extraData.taskTitle || extraData.eventTitle || extraData.mailSubject || extraData.noteTitle || extraData.personName || extraData.timerTitle || extraData.journalTitle || extraData.projectName || 'Element';
@@ -6405,10 +6414,15 @@
 
             document.querySelectorAll('.swipe-link-item').forEach(item => {
                 const itemType = item.dataset.contextType || item.dataset.linkType;
-                const itemIdRaw = item.dataset.linkId || item.dataset.mailId || item.dataset.taskId || item.dataset.eventId || item.dataset.personId || item.dataset.timerId || item.dataset.noteId || item.dataset.projectId;
-                const itemId = !isNaN(Number(itemIdRaw)) && String(itemIdRaw).trim() !== '' ? Number(itemIdRaw) : String(itemIdRaw);
+                const itemIdRaw = item.dataset.linkId || item.dataset.mailId || item.dataset.taskId || item.dataset.eventId || item.dataset.personId || item.dataset.timerId || item.dataset.noteId || item.dataset.projectId || item.dataset.dayDate || item.dataset.date;
 
-                if (itemType === currentSelectionType && (selectedItemIds.has(itemId) || selectedItemIds.has(String(itemIdRaw)))) {
+                const isSel = (itemType === currentSelectionType) && (
+                    selectedItemIds.has(itemIdRaw) ||
+                    selectedItemIds.has(String(itemIdRaw)) ||
+                    (!isNaN(Number(itemIdRaw)) && selectedItemIds.has(Number(itemIdRaw)))
+                );
+
+                if (isSel) {
                     item.classList.add('is-selected');
                 } else {
                     item.classList.remove('is-selected');
@@ -6442,10 +6456,6 @@
                     <button type="button" onclick="linkSelectionIntoChat()" class="sel-action-btn" title="Im Chat verlinken">
                         <span class="action-icon">🔗</span>
                         <span class="action-text">Link</span>
-                    </button>
-                    <button type="button" onclick="toggleSelectionReadStatus()" class="sel-action-btn" title="Gelesen / Ungelesen markieren">
-                        <span class="action-icon">✉️</span>
-                        <span class="action-text">Status</span>
                     </button>
                     <button type="button" onclick="deleteSelectionItems()" class="sel-action-btn delete-btn" title="Ausgewählte E-Mails löschen">
                         <span class="action-icon">🗑️</span>
@@ -6516,6 +6526,25 @@
                         <span class="action-text">Löschen</span>
                     </button>
                 `;
+            } else if (type === 'day') {
+                actionsHtml += `
+                    <button type="button" onclick="openNewEventForSelectedDay()" class="sel-action-btn" title="Neuer Termin an diesem Tag">
+                        <span class="action-icon">➕</span>
+                        <span class="action-text">Termin</span>
+                    </button>
+                    <button type="button" onclick="openNewTaskForSelectedDay()" class="sel-action-btn" title="Neue Aufgabe an diesem Tag">
+                        <span class="action-icon">📋</span>
+                        <span class="action-text">Aufgabe</span>
+                    </button>
+                    <button type="button" onclick="linkSelectionIntoChat()" class="sel-action-btn" title="Tag(e) im Chat verlinken">
+                        <span class="action-icon">🔗</span>
+                        <span class="action-text">Link</span>
+                    </button>
+                    <button type="button" onclick="jumpToSelectedDay()" class="sel-action-btn" title="Zum Tag in der Timeline scrollen">
+                        <span class="action-icon">🎯</span>
+                        <span class="action-text">Fokus</span>
+                    </button>
+                `;
             } else if (type === 'note' || type === 'journal' || type === 'project') {
                 actionsHtml += `
                     <button type="button" onclick="linkSelectionIntoChat()" class="sel-action-btn" title="Im Chat verlinken">
@@ -6535,6 +6564,38 @@
         // ==========================================
         // Action Handlers across Entity Types
         // ==========================================
+        function openNewEventForSelectedDay() {
+            if (selectedItemIds.size === 0) return;
+            const firstId = Array.from(selectedItemIds)[0];
+            const meta = selectedItemMeta.get(firstId) || {};
+            const dayDate = meta?.extraData?.dayDate || meta?.extraData?.date || String(firstId);
+            exitSelectionMode();
+            openEventEditModal(null, '', dayDate ? `${dayDate}T10:00:00` : '', dayDate ? `${dayDate}T11:00:00` : '', false, '', '', false, dayDate);
+        }
+        window.openNewEventForSelectedDay = openNewEventForSelectedDay;
+
+        function openNewTaskForSelectedDay() {
+            if (selectedItemIds.size === 0) return;
+            const firstId = Array.from(selectedItemIds)[0];
+            const meta = selectedItemMeta.get(firstId) || {};
+            const dayDate = meta?.extraData?.dayDate || meta?.extraData?.date || String(firstId);
+            exitSelectionMode();
+            openTaskModal(null, '', '', dayDate, 'Standard', 'none', null);
+        }
+        window.openNewTaskForSelectedDay = openNewTaskForSelectedDay;
+
+        function jumpToSelectedDay() {
+            if (selectedItemIds.size === 0) return;
+            const firstId = Array.from(selectedItemIds)[0];
+            const meta = selectedItemMeta.get(firstId) || {};
+            const dayDate = meta?.extraData?.dayDate || meta?.extraData?.date || String(firstId);
+            exitSelectionMode();
+            if (typeof jumpToTimelineDate === 'function') {
+                jumpToTimelineDate(dayDate);
+            }
+        }
+        window.jumpToSelectedDay = jumpToSelectedDay;
+
         function linkSelectionIntoChat() {
             if (selectedItemIds.size === 0) return;
             selectedItemIds.forEach(id => {

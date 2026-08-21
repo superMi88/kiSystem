@@ -2209,34 +2209,11 @@ body.mobile-mode .top-panel > div:first-child {
 .note-item.is-selected,
 .journal-item.is-selected,
 .project-card.is-selected {
-    background: linear-gradient(135deg, rgba(137, 180, 250, 0.28) 0%, rgba(203, 166, 247, 0.22) 100%) !important;
+    background: linear-gradient(135deg, rgba(137, 180, 250, 0.32) 0%, rgba(203, 166, 247, 0.24) 100%) !important;
     border-color: var(--accent) !important;
-    border-left: 4.5px solid var(--accent) !important;
-    box-shadow: 0 4px 20px rgba(137, 180, 250, 0.35), inset 0 0 14px rgba(137, 180, 250, 0.2) !important;
+    border-left: 5px solid var(--accent) !important;
+    box-shadow: 0 4px 22px rgba(137, 180, 250, 0.4), inset 0 0 16px rgba(137, 180, 250, 0.22) !important;
     transform: translateY(-1.5px) scale(1.01) !important;
-}
-
-.entity-select-check-badge,
-.mail-card-select-check {
-    display: none;
-    width: 19px;
-    height: 19px;
-    border-radius: 50%;
-    background: var(--accent);
-    color: #11111b;
-    font-size: 0.72rem;
-    font-weight: 900;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    box-shadow: 0 0 8px rgba(137, 180, 250, 0.6);
-    margin-right: 4px;
-}
-
-.swipe-link-item.is-selected .entity-select-check-badge,
-.mail-item-card.is-selected .mail-card-select-check,
-.mail-item-card.is-selected .entity-select-check-badge {
-    display: inline-flex;
 }
 
 .universal-selection-bar {
