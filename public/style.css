@@ -2193,24 +2193,34 @@ body.mobile-mode .top-panel > div:first-child {
 }
 
 /* =========================================================================
-   Mail Multi-Selection & Action Bar
+   Universal Multi-Selection & Navigation Action Bar
    ========================================================================= */
-.mail-item-card {
+.swipe-link-item {
     position: relative;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.mail-item-card.is-selected {
+.swipe-link-item.is-selected,
+.mail-item-card.is-selected,
+.task-item.is-selected,
+.timer-item.is-selected,
+.person-item.is-selected,
+.event-item.is-selected,
+.note-item.is-selected,
+.journal-item.is-selected,
+.project-card.is-selected {
     background: linear-gradient(135deg, rgba(137, 180, 250, 0.28) 0%, rgba(203, 166, 247, 0.22) 100%) !important;
     border-color: var(--accent) !important;
     border-left: 4.5px solid var(--accent) !important;
-    box-shadow: 0 4px 18px rgba(137, 180, 250, 0.35), inset 0 0 12px rgba(137, 180, 250, 0.18) !important;
-    transform: translateY(-1px) scale(1.01) !important;
+    box-shadow: 0 4px 20px rgba(137, 180, 250, 0.35), inset 0 0 14px rgba(137, 180, 250, 0.2) !important;
+    transform: translateY(-1.5px) scale(1.01) !important;
 }
 
+.entity-select-check-badge,
 .mail-card-select-check {
     display: none;
-    width: 18px;
-    height: 18px;
+    width: 19px;
+    height: 19px;
     border-radius: 50%;
     background: var(--accent);
     color: #11111b;
@@ -2223,11 +2233,13 @@ body.mobile-mode .top-panel > div:first-child {
     margin-right: 4px;
 }
 
-.mail-item-card.is-selected .mail-card-select-check {
+.swipe-link-item.is-selected .entity-select-check-badge,
+.mail-item-card.is-selected .mail-card-select-check,
+.mail-item-card.is-selected .entity-select-check-badge {
     display: inline-flex;
 }
 
-.mail-selection-bar {
+.universal-selection-bar {
     display: flex;
     align-items: center;
     justify-content: space-around;
@@ -2248,6 +2260,7 @@ body.mobile-mode .top-panel > div:first-child {
     to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+.sel-action-btn,
 .mail-action-btn {
     display: flex;
     flex-direction: column;
@@ -2265,8 +2278,10 @@ body.mobile-mode .top-panel > div:first-child {
     transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
     min-width: 44px;
     flex: 1;
+    white-space: nowrap;
 }
 
+.sel-action-btn:hover,
 .mail-action-btn:hover {
     background: rgba(137, 180, 250, 0.16);
     border-color: var(--accent);
@@ -2274,15 +2289,18 @@ body.mobile-mode .top-panel > div:first-child {
     transform: translateY(-2px);
 }
 
+.sel-action-btn:active,
 .mail-action-btn:active {
     transform: scale(0.95);
 }
 
+.sel-action-btn .action-icon,
 .mail-action-btn .action-icon {
     font-size: 1.05rem;
     line-height: 1;
 }
 
+.sel-action-btn.cancel-btn,
 .mail-action-btn.cancel-btn {
     background: rgba(243, 139, 168, 0.12);
     border-color: rgba(243, 139, 168, 0.3);
@@ -2291,20 +2309,24 @@ body.mobile-mode .top-panel > div:first-child {
     min-width: 40px;
 }
 
+.sel-action-btn.cancel-btn:hover,
 .mail-action-btn.cancel-btn:hover {
     background: rgba(243, 139, 168, 0.25);
     border-color: #f38ba8;
 }
 
+.sel-action-btn.delete-btn,
 .mail-action-btn.delete-btn {
     color: #f38ba8;
 }
+.sel-action-btn.delete-btn:hover,
 .mail-action-btn.delete-btn:hover {
     background: rgba(243, 139, 168, 0.2);
     border-color: #f38ba8;
 }
 
-/* On Desktop: Float Selection Bar smoothly if active */
+/* Float Selection Bar on Desktop */
+body:not(.mobile-mode).entity-selection-active #view-toggle-container,
 body:not(.mobile-mode).mail-selection-active #view-toggle-container {
     display: flex !important;
     position: fixed !important;
@@ -2317,9 +2339,12 @@ body:not(.mobile-mode).mail-selection-active #view-toggle-container {
     max-width: 92vw !important;
     background: transparent !important;
 }
+body:not(.mobile-mode).entity-selection-active #normal-nav-buttons,
 body:not(.mobile-mode).mail-selection-active #normal-nav-buttons {
     display: none !important;
 }
+body:not(.mobile-mode).entity-selection-active #universal-selection-action-bar,
+body:not(.mobile-mode).mail-selection-active #universal-selection-action-bar,
 body:not(.mobile-mode).mail-selection-active #mail-selection-action-bar {
     display: flex !important;
 }

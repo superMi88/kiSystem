@@ -1034,32 +1034,9 @@
                             </button>
                         </div>
 
-                        <!-- Mail Multi-Selection Action Bar (Replaces nav-buttons during mail multi-select) -->
-                        <div id="mail-selection-action-bar" class="mail-selection-bar" style="display: none;">
-                            <button type="button" onclick="exitMailSelectionMode()" class="mail-action-btn cancel-btn" title="Auswahl aufheben">
-                                <span class="action-icon">✕</span>
-                                <span class="action-text" id="mail-sel-count-badge">1</span>
-                            </button>
-                            <button type="button" onclick="openCategoryModalForSelection()" class="mail-action-btn" title="Kategorie(n) für alle ausgewählten E-Mails zuweisen">
-                                <span class="action-icon">🏷️</span>
-                                <span class="action-text">Kategorie</span>
-                            </button>
-                            <button type="button" onclick="openPersonModalForSelection()" class="mail-action-btn" title="Person für alle ausgewählten E-Mails zuordnen">
-                                <span class="action-icon">👤</span>
-                                <span class="action-text">Person</span>
-                            </button>
-                            <button type="button" onclick="linkSelectedMailsIntoChat()" class="mail-action-btn" title="Ausgewählte E-Mails im Chat verlinken">
-                                <span class="action-icon">🔗</span>
-                                <span class="action-text">Link</span>
-                            </button>
-                            <button type="button" onclick="toggleSelectedMailsReadStatus()" class="mail-action-btn" title="Gelesen / Ungelesen markieren">
-                                <span class="action-icon">✉️</span>
-                                <span class="action-text">Status</span>
-                            </button>
-                            <button type="button" onclick="deleteSelectedMails()" class="mail-action-btn delete-btn" title="Ausgewählte E-Mails löschen">
-                                <span class="action-icon">🗑️</span>
-                                <span class="action-text">Löschen</span>
-                            </button>
+                        <!-- Universal Multi-Selection Action Bar (Replaces nav-buttons dynamically for any selected entity) -->
+                        <div id="universal-selection-action-bar" class="universal-selection-bar" style="display: none;">
+                            <!-- Dynamically populated based on active selection type -->
                         </div>
                     </div>
 
@@ -1719,6 +1696,15 @@
             const type = contextData.contextType || contextData.linkType;
             if (!type) return;
 
+            const id = contextData.linkId || contextData.mailId || contextData.taskId || contextData.eventId || contextData.personId || contextData.timerId || contextData.noteId || contextData.projectId;
+
+            if (type !== 'day' && id !== undefined && id !== null) {
+                startSelectionMode(type, id, contextData);
+                isLongPressActive = true;
+                lastSwipeTime = Date.now();
+                return;
+            }
+
             // Trigger haptic feedback
             if (navigator.vibrate) navigator.vibrate(35);
             itemEl.classList.add('long-press-active');
@@ -2376,8 +2362,17 @@
             const item = e.target.closest('.swipe-link-item');
             if (item) {
                 const type = item.dataset.contextType || item.dataset.linkType;
-                const id = item.dataset.linkId;
+                const id = item.dataset.linkId || item.dataset.mailId || item.dataset.taskId || item.dataset.eventId || item.dataset.personId || item.dataset.timerId || item.dataset.noteId || item.dataset.projectId;
                 if (!type) return;
+
+                if (currentSelectionType !== null) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    if (type === currentSelectionType) {
+                        toggleSelectionItem(type, id, item.dataset);
+                    }
+                    return;
+                }
 
                 if (type === 'task') {
                     openTaskDetailModalFromData(item.dataset);
@@ -2396,12 +2391,7 @@
                 } else if (type === 'note') {
                     openNoteModal(Number(item.dataset.noteId || id), item.dataset.noteTitle, item.dataset.noteContent, item.dataset.projectId ? Number(item.dataset.projectId) : null);
                 } else if (type === 'mail') {
-                    const mId = Number(item.dataset.mailId || id);
-                    if (isMailSelectionMode) {
-                        toggleMailSelection(mId);
-                    } else {
-                        openMailReadModal(mId);
-                    }
+                    openMailReadModal(Number(item.dataset.mailId || id));
                 } else if (type === 'day') {
                     jumpToTimelineDate(id || item.dataset.dayDate);
                 }
@@ -2419,13 +2409,16 @@
 
         function renderSwipeLinkWrapper(innerHtml, label, type, id, extraClasses = '', extraStyles = '', wrapperStyles = '', extraDataAttrs = '') {
             const escLabel = escapeHtml(label || '').replace(/"/g, '&quot;');
+            const isSel = (typeof isItemSelected === 'function') && isItemSelected(type, id);
+            const selClass = isSel ? 'is-selected' : '';
             return `
                 <div class="swipe-link-wrapper" style="${wrapperStyles}">
                     <div class="swipe-link-bg">
                         <span class="swipe-link-icon">🔗</span>
                         <span class="swipe-link-text">Link</span>
                     </div>
-                    <div class="swipe-link-item ${extraClasses}" data-swipe-link="true" data-context-type="${type}" data-link-label="${escLabel}" data-link-type="${type}" data-link-id="${id}" ${extraDataAttrs} style="${extraStyles}">
+                    <div class="swipe-link-item ${extraClasses} ${selClass}" data-swipe-link="true" data-context-type="${type}" data-link-label="${escLabel}" data-link-type="${type}" data-link-id="${id}" ${extraDataAttrs} style="${extraStyles}">
+                        <div class="entity-select-check-badge">✓</div>
                         ${innerHtml}
                     </div>
                 </div>
@@ -6062,10 +6055,9 @@
                     }
 
                     const mailContent = `
-                        <div class="mail-item-card ${selectClass}" data-mail-card-id="${e.id}" onclick="handleMailCardClick(event, ${e.id})" style="display: flex; flex-direction: column; gap: 5px; padding: 9px 11px; border-radius: 8px; background: ${unreadBg}; border: 1px solid ${unreadBorder}; border-left: 3.5px solid ${accColor}; cursor: pointer; width: 100%; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='${unreadBg}'">
+                        <div class="mail-item-card" data-mail-card-id="${e.id}" style="display: flex; flex-direction: column; gap: 5px; padding: 9px 11px; border-radius: 8px; background: ${unreadBg}; border: 1px solid ${unreadBorder}; border-left: 3.5px solid ${accColor}; cursor: pointer; width: 100%; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='${unreadBg}'">
                             <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
                                 <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
-                                    ${checkHtml}
                                     ${unreadBadge}
                                     <span style="font-size: 0.82rem; font-weight: 600; color: ${subjectColor}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                         ${escapeHtml(e.fromName || e.from)}
@@ -6307,125 +6299,261 @@
         window.toggleCurrentMailReadStatus = toggleCurrentMailReadStatus;
 
         // ==========================================
-        // Mail Multi-Selection Mode Logic
+        // Universal Multi-Selection System
         // ==========================================
-        let selectedMailIds = new Set();
-        let isMailSelectionMode = false;
+        let currentSelectionType = null;
+        let selectedItemIds = new Set();
+        let selectedItemMeta = new Map();
 
-        function startMailSelectionMode(initialMailId) {
-            isMailSelectionMode = true;
-            selectedMailIds.clear();
-            if (initialMailId) {
-                selectedMailIds.add(Number(initialMailId));
-            }
-            if (navigator.vibrate) navigator.vibrate(30);
-            updateMailSelectionUI();
+        function isItemSelected(type, id) {
+            if (!currentSelectionType || currentSelectionType !== type) return false;
+            return selectedItemIds.has(String(id)) || selectedItemIds.has(Number(id));
         }
-        window.startMailSelectionMode = startMailSelectionMode;
+        window.isItemSelected = isItemSelected;
 
-        function toggleMailSelection(mailId) {
-            mailId = Number(mailId);
-            if (selectedMailIds.has(mailId)) {
-                selectedMailIds.delete(mailId);
+        function startSelectionMode(type, id, extraData = {}) {
+            if (!type || id === undefined || id === null) return;
+            const normId = !isNaN(Number(id)) && String(id).trim() !== '' ? Number(id) : String(id);
+
+            if (currentSelectionType !== type) {
+                selectedItemIds.clear();
+                selectedItemMeta.clear();
+            }
+
+            currentSelectionType = type;
+            selectedItemIds.add(normId);
+            const label = extraData.linkLabel || extraData.taskTitle || extraData.eventTitle || extraData.mailSubject || extraData.noteTitle || extraData.personName || extraData.timerTitle || extraData.journalTitle || extraData.projectName || 'Element';
+            selectedItemMeta.set(normId, { label, type, extraData });
+
+            if (navigator.vibrate) navigator.vibrate(30);
+            updateSelectionUI();
+        }
+        window.startSelectionMode = startSelectionMode;
+        window.startMailSelectionMode = (id) => startSelectionMode('mail', id);
+
+        function toggleSelectionItem(type, id, extraData = {}) {
+            if (!type || id === undefined || id === null) return;
+            const normId = !isNaN(Number(id)) && String(id).trim() !== '' ? Number(id) : String(id);
+
+            if (currentSelectionType !== type) {
+                startSelectionMode(type, id, extraData);
+                return;
+            }
+
+            if (selectedItemIds.has(normId) || selectedItemIds.has(String(normId))) {
+                selectedItemIds.delete(normId);
+                selectedItemIds.delete(String(normId));
+                selectedItemMeta.delete(normId);
+                selectedItemMeta.delete(String(normId));
             } else {
-                selectedMailIds.add(mailId);
+                selectedItemIds.add(normId);
+                const label = extraData.linkLabel || extraData.taskTitle || extraData.eventTitle || extraData.mailSubject || extraData.noteTitle || extraData.personName || extraData.timerTitle || extraData.journalTitle || extraData.projectName || 'Element';
+                selectedItemMeta.set(normId, { label, type, extraData });
                 if (navigator.vibrate) navigator.vibrate(20);
             }
 
-            if (selectedMailIds.size === 0) {
-                exitMailSelectionMode();
+            if (selectedItemIds.size === 0) {
+                exitSelectionMode();
                 return;
             }
 
-            updateMailSelectionUI();
+            updateSelectionUI();
         }
-        window.toggleMailSelection = toggleMailSelection;
+        window.toggleSelectionItem = toggleSelectionItem;
+        window.toggleMailSelection = (id) => toggleSelectionItem('mail', id);
 
-        function exitMailSelectionMode() {
-            isMailSelectionMode = false;
-            selectedMailIds.clear();
-            document.body.classList.remove('mail-selection-active');
-            
-            document.querySelectorAll('.mail-item-card.is-selected').forEach(el => {
-                el.classList.remove('is-selected');
-            });
+        function exitSelectionMode() {
+            currentSelectionType = null;
+            selectedItemIds.clear();
+            selectedItemMeta.clear();
+            document.body.classList.remove('entity-selection-active', 'mail-selection-active');
+
+            document.querySelectorAll('.is-selected').forEach(el => el.classList.remove('is-selected'));
 
             const normalNav = document.getElementById('normal-nav-buttons');
-            const mailBar = document.getElementById('mail-selection-action-bar');
+            const selBar = document.getElementById('universal-selection-action-bar');
             if (normalNav) normalNav.style.display = 'flex';
-            if (mailBar) mailBar.style.display = 'none';
+            if (selBar) {
+                selBar.style.display = 'none';
+                selBar.innerHTML = '';
+            }
         }
-        window.exitMailSelectionMode = exitMailSelectionMode;
+        window.exitSelectionMode = exitSelectionMode;
+        window.exitMailSelectionMode = exitSelectionMode;
 
-        function updateMailSelectionUI() {
-            if (!isMailSelectionMode || selectedMailIds.size === 0) {
-                exitMailSelectionMode();
+        function updateSelectionUI() {
+            if (!currentSelectionType || selectedItemIds.size === 0) {
+                exitSelectionMode();
                 return;
             }
 
-            document.body.classList.add('mail-selection-active');
+            document.body.classList.add('entity-selection-active');
+            if (currentSelectionType === 'mail') {
+                document.body.classList.add('mail-selection-active');
+            } else {
+                document.body.classList.remove('mail-selection-active');
+            }
 
             const normalNav = document.getElementById('normal-nav-buttons');
-            const mailBar = document.getElementById('mail-selection-action-bar');
-            const countBadge = document.getElementById('mail-sel-count-badge');
+            const selBar = document.getElementById('universal-selection-action-bar');
 
             if (normalNav) normalNav.style.display = 'none';
-            if (mailBar) mailBar.style.display = 'flex';
-            if (countBadge) countBadge.textContent = selectedMailIds.size;
-
-            document.querySelectorAll('.mail-item-card').forEach(card => {
-                const cardMailId = Number(card.getAttribute('data-mail-card-id'));
-                if (cardMailId && selectedMailIds.has(cardMailId)) {
-                    card.classList.add('is-selected');
-                } else {
-                    card.classList.remove('is-selected');
-                }
-            });
-        }
-        window.updateMailSelectionUI = updateMailSelectionUI;
-
-        function handleMailCardClick(event, mailId) {
-            if (isMailSelectionMode) {
-                if (event) {
-                    event.stopPropagation();
-                    event.preventDefault();
-                }
-                toggleMailSelection(mailId);
-                return;
+            if (selBar) {
+                selBar.style.display = 'flex';
+                renderSelectionActionBar(currentSelectionType, selectedItemIds.size);
             }
-            openMailReadModal(mailId);
-        }
-        window.handleMailCardClick = handleMailCardClick;
 
-        function openCategoryModalForSelection() {
-            if (selectedMailIds.size === 0) return;
-            openMailCategorySelectModal(Array.from(selectedMailIds));
-        }
-        window.openCategoryModalForSelection = openCategoryModalForSelection;
+            document.querySelectorAll('.swipe-link-item').forEach(item => {
+                const itemType = item.dataset.contextType || item.dataset.linkType;
+                const itemIdRaw = item.dataset.linkId || item.dataset.mailId || item.dataset.taskId || item.dataset.eventId || item.dataset.personId || item.dataset.timerId || item.dataset.noteId || item.dataset.projectId;
+                const itemId = !isNaN(Number(itemIdRaw)) && String(itemIdRaw).trim() !== '' ? Number(itemIdRaw) : String(itemIdRaw);
 
-        function openPersonModalForSelection() {
-            if (selectedMailIds.size === 0) return;
-            openMailPersonSelectModal(Array.from(selectedMailIds));
-        }
-        window.openPersonModalForSelection = openPersonModalForSelection;
-
-        function linkSelectedMailsIntoChat() {
-            if (selectedMailIds.size === 0) return;
-            selectedMailIds.forEach(id => {
-                const card = document.querySelector(`.swipe-link-item[data-link-id="${id}"], .swipe-link-item[data-mail-id="${id}"]`);
-                const subject = card ? (card.dataset.mailSubject || card.dataset.linkLabel || 'E-Mail') : 'E-Mail';
-                insertEntityLinkIntoChat(subject, 'mail', id);
+                if (itemType === currentSelectionType && (selectedItemIds.has(itemId) || selectedItemIds.has(String(itemIdRaw)))) {
+                    item.classList.add('is-selected');
+                } else {
+                    item.classList.remove('is-selected');
+                }
             });
-            exitMailSelectionMode();
+        }
+        window.updateSelectionUI = updateSelectionUI;
+        window.updateMailSelectionUI = updateSelectionUI;
+
+        function renderSelectionActionBar(type, count) {
+            const selBar = document.getElementById('universal-selection-action-bar');
+            if (!selBar) return;
+
+            let actionsHtml = `
+                <button type="button" onclick="exitSelectionMode()" class="sel-action-btn cancel-btn" title="Auswahl aufheben">
+                    <span class="action-icon">✕</span>
+                    <span class="action-text">${count}</span>
+                </button>
+            `;
+
+            if (type === 'mail') {
+                actionsHtml += `
+                    <button type="button" onclick="openCategoryModalForSelection()" class="sel-action-btn" title="Kategorie(n) zuweisen">
+                        <span class="action-icon">🏷️</span>
+                        <span class="action-text">Kategorie</span>
+                    </button>
+                    <button type="button" onclick="openPersonModalForSelection()" class="sel-action-btn" title="Person zuordnen">
+                        <span class="action-icon">👤</span>
+                        <span class="action-text">Person</span>
+                    </button>
+                    <button type="button" onclick="linkSelectionIntoChat()" class="sel-action-btn" title="Im Chat verlinken">
+                        <span class="action-icon">🔗</span>
+                        <span class="action-text">Link</span>
+                    </button>
+                    <button type="button" onclick="toggleSelectionReadStatus()" class="sel-action-btn" title="Gelesen / Ungelesen markieren">
+                        <span class="action-icon">✉️</span>
+                        <span class="action-text">Status</span>
+                    </button>
+                    <button type="button" onclick="deleteSelectionItems()" class="sel-action-btn delete-btn" title="Ausgewählte E-Mails löschen">
+                        <span class="action-icon">🗑️</span>
+                        <span class="action-text">Löschen</span>
+                    </button>
+                `;
+            } else if (type === 'task') {
+                actionsHtml += `
+                    <button type="button" onclick="toggleTasksCompletionForSelection()" class="sel-action-btn" title="Aufgaben als erledigt / offen markieren">
+                        <span class="action-icon">✅</span>
+                        <span class="action-text">Erledigt</span>
+                    </button>
+                    <button type="button" onclick="openPersonModalForSelection()" class="sel-action-btn" title="Person zuordnen">
+                        <span class="action-icon">👤</span>
+                        <span class="action-text">Person</span>
+                    </button>
+                    <button type="button" onclick="linkSelectionIntoChat()" class="sel-action-btn" title="Im Chat verlinken">
+                        <span class="action-icon">🔗</span>
+                        <span class="action-text">Link</span>
+                    </button>
+                    <button type="button" onclick="deleteSelectionItems()" class="sel-action-btn delete-btn" title="Ausgewählte Aufgaben löschen">
+                        <span class="action-icon">🗑️</span>
+                        <span class="action-text">Löschen</span>
+                    </button>
+                `;
+            } else if (type === 'event') {
+                actionsHtml += `
+                    <button type="button" onclick="openPersonModalForSelection()" class="sel-action-btn" title="Person verknüpfen">
+                        <span class="action-icon">👤</span>
+                        <span class="action-text">Person</span>
+                    </button>
+                    <button type="button" onclick="linkSelectionIntoChat()" class="sel-action-btn" title="Im Chat verlinken">
+                        <span class="action-icon">🔗</span>
+                        <span class="action-text">Link</span>
+                    </button>
+                    <button type="button" onclick="deleteSelectionItems()" class="sel-action-btn delete-btn" title="Ausgewählte Termine löschen">
+                        <span class="action-icon">🗑️</span>
+                        <span class="action-text">Löschen</span>
+                    </button>
+                `;
+            } else if (type === 'timer') {
+                actionsHtml += `
+                    <button type="button" onclick="toggleTimersForSelection()" class="sel-action-btn" title="Timer starten / pausieren">
+                        <span class="action-icon">⏯️</span>
+                        <span class="action-text">Start/Stop</span>
+                    </button>
+                    <button type="button" onclick="resetTimersForSelection()" class="sel-action-btn" title="Timer zurücksetzen">
+                        <span class="action-icon">🔄</span>
+                        <span class="action-text">Reset</span>
+                    </button>
+                    <button type="button" onclick="linkSelectionIntoChat()" class="sel-action-btn" title="Im Chat verlinken">
+                        <span class="action-icon">🔗</span>
+                        <span class="action-text">Link</span>
+                    </button>
+                    <button type="button" onclick="deleteSelectionItems()" class="sel-action-btn delete-btn" title="Ausgewählte Timer löschen">
+                        <span class="action-icon">🗑️</span>
+                        <span class="action-text">Löschen</span>
+                    </button>
+                `;
+            } else if (type === 'person') {
+                actionsHtml += `
+                    <button type="button" onclick="linkSelectionIntoChat()" class="sel-action-btn" title="Im Chat verlinken">
+                        <span class="action-icon">🔗</span>
+                        <span class="action-text">Link</span>
+                    </button>
+                    <button type="button" onclick="deleteSelectionItems()" class="sel-action-btn delete-btn" title="Ausgewählte Personen löschen">
+                        <span class="action-icon">🗑️</span>
+                        <span class="action-text">Löschen</span>
+                    </button>
+                `;
+            } else if (type === 'note' || type === 'journal' || type === 'project') {
+                actionsHtml += `
+                    <button type="button" onclick="linkSelectionIntoChat()" class="sel-action-btn" title="Im Chat verlinken">
+                        <span class="action-icon">🔗</span>
+                        <span class="action-text">Link</span>
+                    </button>
+                    <button type="button" onclick="deleteSelectionItems()" class="sel-action-btn delete-btn" title="Löschen">
+                        <span class="action-icon">🗑️</span>
+                        <span class="action-text">Löschen</span>
+                    </button>
+                `;
+            }
+
+            selBar.innerHTML = actionsHtml;
+        }
+
+        // ==========================================
+        // Action Handlers across Entity Types
+        // ==========================================
+        function linkSelectionIntoChat() {
+            if (selectedItemIds.size === 0) return;
+            selectedItemIds.forEach(id => {
+                const meta = selectedItemMeta.get(id) || {};
+                const label = meta.label || 'Element';
+                const type = meta.type || currentSelectionType || 'item';
+                insertEntityLinkIntoChat(label, type, id);
+            });
+            exitSelectionMode();
             if (document.body.classList.contains('mobile-mode')) {
                 switchMobileView('chat');
             }
         }
-        window.linkSelectedMailsIntoChat = linkSelectedMailsIntoChat;
+        window.linkSelectionIntoChat = linkSelectionIntoChat;
+        window.linkSelectedMailsIntoChat = linkSelectionIntoChat;
 
-        async function toggleSelectedMailsReadStatus() {
-            if (selectedMailIds.size === 0) return;
-            const ids = Array.from(selectedMailIds);
+        async function toggleSelectionReadStatus() {
+            if (selectedItemIds.size === 0 || currentSelectionType !== 'mail') return;
+            const ids = Array.from(selectedItemIds).map(Number);
             try {
                 let anyUnread = false;
                 ids.forEach(id => {
@@ -6440,38 +6568,119 @@
                     body: JSON.stringify({ ids, isRead: newReadStatus })
                 });
                 if (res.ok) {
-                    exitMailSelectionMode();
+                    exitSelectionMode();
                     loadTopWidgets();
                 }
             } catch (err) {
                 console.error("Fehler beim Ändern des Gelesen-Status:", err);
             }
         }
-        window.toggleSelectedMailsReadStatus = toggleSelectedMailsReadStatus;
+        window.toggleSelectionReadStatus = toggleSelectionReadStatus;
+        window.toggleSelectedMailsReadStatus = toggleSelectionReadStatus;
 
-        async function deleteSelectedMails() {
-            if (selectedMailIds.size === 0) return;
-            const count = selectedMailIds.size;
-            if (!confirm(`Möchtest du die ${count} ausgewählte(n) E-Mail(s) wirklich löschen?`)) return;
-
+        async function toggleTasksCompletionForSelection() {
+            if (selectedItemIds.size === 0 || currentSelectionType !== 'task') return;
+            const ids = Array.from(selectedItemIds);
             try {
-                const res = await fetch(getApiUrl('/api/mail/messages/batch-delete'), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ids: Array.from(selectedMailIds) })
+                let anyIncomplete = false;
+                ids.forEach(id => {
+                    const el = document.querySelector(`.swipe-link-item[data-link-id="${id}"], .swipe-link-item[data-task-id="${id}"]`);
+                    if (el && el.dataset.taskCompleted !== 'true') anyIncomplete = true;
                 });
-                if (res.ok) {
-                    exitMailSelectionMode();
-                    loadTopWidgets();
-                } else {
-                    alert("Fehler beim Löschen der E-Mails.");
-                }
+                const newCompleted = anyIncomplete;
+
+                await Promise.all(ids.map(id => callTool('aktualisiere_aufgabe', { id: String(id), completed: newCompleted })));
+                exitSelectionMode();
+                loadTopWidgets();
             } catch (err) {
-                console.error("Fehler beim Löschen:", err);
-                alert("Fehler beim Löschen der E-Mails.");
+                console.error("Fehler beim Aktualisieren der Aufgaben:", err);
+                alert("Fehler beim Aktualisieren der Aufgaben.");
             }
         }
-        window.deleteSelectedMails = deleteSelectedMails;
+        window.toggleTasksCompletionForSelection = toggleTasksCompletionForSelection;
+
+        function toggleTimersForSelection() {
+            if (selectedItemIds.size === 0 || currentSelectionType !== 'timer') return;
+            selectedItemIds.forEach(id => {
+                if (typeof toggleTimer === 'function') toggleTimer(Number(id));
+            });
+            exitSelectionMode();
+        }
+        window.toggleTimersForSelection = toggleTimersForSelection;
+
+        function resetTimersForSelection() {
+            if (selectedItemIds.size === 0 || currentSelectionType !== 'timer') return;
+            selectedItemIds.forEach(id => {
+                if (typeof resetTimer === 'function') resetTimer(Number(id));
+            });
+            exitSelectionMode();
+        }
+        window.resetTimersForSelection = resetTimersForSelection;
+
+        async function deleteSelectionItems() {
+            if (selectedItemIds.size === 0) return;
+            const count = selectedItemIds.size;
+            const typeName = currentSelectionType === 'mail' ? 'E-Mail(s)' : (currentSelectionType === 'task' ? 'Aufgabe(n)' : (currentSelectionType === 'event' ? 'Termin(e)' : (currentSelectionType === 'timer' ? 'Timer' : (currentSelectionType === 'person' ? 'Person(en)' : 'Element(e)'))));
+            if (!confirm(`Möchtest du die ${count} ausgewählte(n) ${typeName} wirklich löschen?`)) return;
+
+            const ids = Array.from(selectedItemIds);
+            const type = currentSelectionType;
+
+            try {
+                if (type === 'mail') {
+                    await fetch(getApiUrl('/api/mail/messages/batch-delete'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ids: ids.map(Number) })
+                    });
+                } else if (type === 'task') {
+                    await Promise.all(ids.map(id => callTool('loesche_aufgabe', { id: String(id) })));
+                } else if (type === 'note') {
+                    await Promise.all(ids.map(id => callTool('loesche_notiz', { id: Number(id) })));
+                } else if (type === 'timer') {
+                    ids.forEach(id => {
+                        stopAlarmSound();
+                        cancelScheduledTimerAlarm(Number(id));
+                    });
+                    await Promise.all(ids.map(id => callTool('loesche_timer', { id: Number(id) })));
+                } else if (type === 'person') {
+                    await Promise.all(ids.map(id => typeof window.deletePerson === 'function' ? window.deletePerson(Number(id)) : null));
+                } else if (type === 'event') {
+                    await Promise.all(ids.map(id => {
+                        const meta = selectedItemMeta.get(id);
+                        const eventDate = meta?.extraData?.eventDate || '';
+                        const isRec = meta?.extraData?.eventIsRec === 'true';
+                        return typeof deleteCalendarEvent === 'function' ? deleteCalendarEvent(id, eventDate, isRec) : null;
+                    }));
+                } else if (type === 'journal') {
+                    await Promise.all(ids.map(id => {
+                        const meta = selectedItemMeta.get(id);
+                        const jDate = meta?.extraData?.journalDate || '';
+                        return typeof deleteJournalEntry === 'function' ? deleteJournalEntry(id, jDate) : null;
+                    }));
+                }
+
+                exitSelectionMode();
+                loadTopWidgets();
+            } catch (err) {
+                console.error("Fehler beim Löschen:", err);
+                alert("Fehler beim Löschen der Elemente.");
+            }
+        }
+        window.deleteSelectionItems = deleteSelectionItems;
+        window.deleteSelectedMails = deleteSelectionItems;
+
+        function openCategoryModalForSelection() {
+            if (selectedItemIds.size === 0) return;
+            openMailCategorySelectModal(Array.from(selectedItemIds));
+        }
+        window.openCategoryModalForSelection = openCategoryModalForSelection;
+
+        function openPersonModalForSelection() {
+            if (selectedItemIds.size === 0) return;
+            openMailPersonSelectModal(Array.from(selectedItemIds));
+        }
+        window.openPersonModalForSelection = openPersonModalForSelection;
 
         // ==========================================
         // Person Selection Dialog Logic (Single & Multi-Mail)
@@ -6617,22 +6826,27 @@
             const pId = personId !== null && personId !== undefined ? Number(personId) : null;
 
             try {
-                const res = await fetch(getApiUrl('/api/mail/messages/batch-person'), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ids: currentPersonModalMailIds, personId: pId })
-                });
-                if (res.ok) {
-                    closeMailPersonModal();
-                    exitMailSelectionMode();
-                    loadTopWidgets();
-
-                    const readModal = document.getElementById('mail-read-modal');
-                    if (readModal && readModal.style.display === 'flex' && currentReadMailId && currentPersonModalMailIds.includes(currentReadMailId)) {
-                        openMailReadModal(currentReadMailId);
-                    }
+                if (currentSelectionType === 'task') {
+                    await Promise.all(currentPersonModalMailIds.map(id => callTool('aktualisiere_aufgabe', { id: String(id), personId: pId })));
                 } else {
-                    alert("Fehler beim Verknüpfen der Person.");
+                    const res = await fetch(getApiUrl('/api/mail/messages/batch-person'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ids: currentPersonModalMailIds, personId: pId })
+                    });
+                    if (!res.ok) {
+                        alert("Fehler beim Verknüpfen der Person.");
+                        return;
+                    }
+                }
+
+                closeMailPersonModal();
+                exitSelectionMode();
+                loadTopWidgets();
+
+                const readModal = document.getElementById('mail-read-modal');
+                if (readModal && readModal.style.display === 'flex' && currentReadMailId && currentPersonModalMailIds.includes(currentReadMailId)) {
+                    openMailReadModal(currentReadMailId);
                 }
             } catch (err) {
                 console.error("[Mail] Fehler beim Zuweisen der Person:", err);
@@ -6860,7 +7074,7 @@
 
                 if (res.ok) {
                     closeMailCategoryModal();
-                    exitMailSelectionMode();
+                    exitSelectionMode();
                     loadTopWidgets();
 
                     const readModal = document.getElementById('mail-read-modal');
