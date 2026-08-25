@@ -2378,9 +2378,10 @@
                 return;
             }
 
+            const item = e.target.closest('.swipe-link-item');
             if (item) {
                 const type = item.dataset.contextType || item.dataset.linkType;
-                const id = item.dataset.linkId || item.dataset.mailId || item.dataset.taskId || item.dataset.eventId || item.dataset.personId || item.dataset.timerId || item.dataset.noteId || item.dataset.projectId;
+                const id = item.dataset.linkId || item.dataset.mailId || item.dataset.taskId || item.dataset.eventId || item.dataset.personId || item.dataset.timerId || item.dataset.noteId || item.dataset.projectId || item.dataset.dayDate || item.dataset.date;
                 if (!type) return;
 
                 if (type === 'task') {
@@ -2396,13 +2397,13 @@
                 } else if (type === 'person') {
                     openPersonProfileModal(Number(item.dataset.personId || id));
                 } else if (type === 'project') {
-                    toggleProjectCollapse(Number(item.dataset.projectId || id));
+                    toggleProjectCollapse(item.dataset.projectId || id);
                 } else if (type === 'note') {
                     openNoteModal(Number(item.dataset.noteId || id), item.dataset.noteTitle, item.dataset.noteContent, item.dataset.projectId ? Number(item.dataset.projectId) : null);
                 } else if (type === 'mail') {
                     openMailReadModal(Number(item.dataset.mailId || id));
                 } else if (type === 'day') {
-                    jumpToTimelineDate(id || item.dataset.dayDate);
+                    jumpToTimelineDate(id || item.dataset.dayDate || item.dataset.date);
                 }
             }
         }, true);
@@ -4897,10 +4898,12 @@
 
         function hasTimelineDayContent(dayData) {
             if (!dayData) return false;
+            const isToday = (dayData.date === getLocalDateString());
+            const hasOverdue = isToday && ((dayData.overdueTasks && dayData.overdueTasks.length > 0) || (window.timelineOverdueTasks && window.timelineOverdueTasks.length > 0));
             const hasEntries = dayData.diaryEntries && dayData.diaryEntries.length > 0;
             const hasEvents = dayData.events && dayData.events.length > 0;
             const hasCompletedTasks = dayData.completedTasks && dayData.completedTasks.length > 0;
-            return !!(hasEntries || hasEvents || hasCompletedTasks);
+            return !!(hasOverdue || hasEntries || hasEvents || hasCompletedTasks);
         }
 
         function getTimelineDayDiff(dateStr1, dateStr2) {
@@ -4945,6 +4948,8 @@
                 dayBadge = `<span style="background: rgba(166, 227, 161, 0.15); color: #a6e3a1; font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; font-weight: bold; border: 1px solid rgba(166, 227, 161, 0.3);">Morgen</span>`;
             }
 
+            const overdueList = (isToday && ((dayData.overdueTasks && dayData.overdueTasks.length > 0) ? dayData.overdueTasks : (window.timelineOverdueTasks || []))) || [];
+            const hasOverdue = overdueList.length > 0;
             const hasEntries = dayData.diaryEntries && dayData.diaryEntries.length > 0;
             const hasEvents = dayData.events && dayData.events.length > 0;
             const hasCompletedTasks = dayData.completedTasks && dayData.completedTasks.length > 0;
@@ -4966,9 +4971,60 @@
                     </div>
             `;
 
-            if (!hasEntries && !hasEvents && !hasCompletedTasks) {
+            if (!hasOverdue && !hasEntries && !hasEvents && !hasCompletedTasks) {
                 dayInnerHtml += `<p style="font-size: 0.72rem; opacity: 0.35; margin: 2px 0; font-style: italic;">Keine Termine oder Einträge.</p>`;
             } else {
+                // 0. Ausstehende / Überfällige Aufgaben (für Heute)
+                if (hasOverdue) {
+                    dayInnerHtml += `
+                        <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px;">
+                            <div style="font-size: 0.7rem; font-weight: 700; color: var(--off); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px;">
+                                <span>⚠️ Ausstehende Aufgaben (${overdueList.length})</span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                    `;
+                    overdueList.forEach(t => {
+                        const rawTaskId = String(t.id).replace('task-', '');
+                        const escTitle = escapeHtml(t.title).replace(/"/g, '&quot;');
+                        const escNotes = escapeHtml(t.notes || t.description || '').replace(/"/g, '&quot;');
+                        const escListTitle = escapeHtml(t.listTitle || 'Standard').replace(/"/g, '&quot;');
+                        const recurrenceVal = t.recurrence || 'none';
+                        const isRecurring = recurrenceVal && recurrenceVal !== 'none';
+                        const repeatBadge = isRecurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrend: ${recurrenceVal}">🔄</span>` : '';
+                        
+                        let dueText = '';
+                        if (t.due) {
+                            const dateObj = new Date(t.due);
+                            const dueStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : t.due;
+                            dueText = `Ausstehend (fällig seit ${dueStr})`;
+                        } else {
+                            dueText = 'Ausstehend (ohne Datum)';
+                        }
+
+                        const taskContent = `
+                            <div class="task-item overdue" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(243, 139, 168, 0.07); border: 1px solid rgba(243, 139, 168, 0.3); border-left: 3.5px solid var(--off); width: 100%; cursor: pointer;">
+                                <div style="display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; min-width: 0; flex: 1;">
+                                    <input type="checkbox" class="task-checkbox" data-task-id="${rawTaskId}" data-tasklist-id="${escListTitle}" onchange="completeTask(this)" style="margin-top: 3px;">
+                                    <div style="line-height: 1.35; color: var(--text); overflow: hidden; text-overflow: ellipsis; word-break: break-word; flex: 1;">
+                                        <span style="font-weight: 600; color: #ffffff;">${escapeHtml(t.title)}</span>
+                                        ${repeatBadge}
+                                        <div style="font-size: 0.7rem; color: var(--off); font-weight: 700; margin-top: 2px; display: flex; align-items: center; gap: 3px;">
+                                            <span>⚠️ ${escapeHtml(dueText)}</span>
+                                        </div>
+                                        ${(t.notes || t.description) ? `<div style="font-size: 0.72rem; opacity: 0.65; margin-top: 2px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(t.notes || t.description)}</div>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        const extraDayTaskData = `data-task-id="${rawTaskId}" data-task-title="${escTitle}" data-task-notes="${escNotes}" data-task-due="${t.due || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}" data-task-completed="false" data-task-project-id="${t.projectId || ''}"`;
+                        dayInnerHtml += renderSwipeLinkWrapper(taskContent, t.title, 'task', rawTaskId, '', '', '', extraDayTaskData);
+                    });
+                    dayInnerHtml += `
+                            </div>
+                        </div>
+                    `;
+                }
+
                 // 1. Tagebucheinträge (falls vorhanden)
                 if (hasEntries) {
                     dayInnerHtml += `
@@ -5171,9 +5227,15 @@
             }
 
             const todayStr = getLocalDateString();
+            window.timelineOverdueTasks = (data && data.overdueTasks) || [];
 
             if (!rawDays || rawDays.length === 0) {
-                rawDays = [{ date: todayStr, displayDate: 'Heute', events: [], diaryEntries: [], completedTasks: [] }];
+                rawDays = [{ date: todayStr, displayDate: 'Heute', events: [], diaryEntries: [], completedTasks: [], overdueTasks: window.timelineOverdueTasks }];
+            } else {
+                const todayDay = rawDays.find(d => d.date === todayStr);
+                if (todayDay) {
+                    todayDay.overdueTasks = window.timelineOverdueTasks;
+                }
             }
 
             rawDays.sort((a, b) => a.date.localeCompare(b.date));
@@ -5194,21 +5256,6 @@
 
             let html = `
                 <div style="text-align: left; padding: 0 0 15px 0; display: flex; flex-direction: column; gap: 10px;">
-                    <!-- Überfällige Aufgaben (falls vorhanden) -->
-            `;
-
-            if (data && data.overdueTasks && data.overdueTasks.length > 0) {
-                html += `
-                    <div style="font-weight: 600; font-size: 0.7rem; color: var(--off); text-transform: uppercase; letter-spacing: 0.5px;">⚠️ Überfällige Aufgaben</div>
-                    <div style="display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-radius: 8px; background: rgba(243, 139, 168, 0.04); border: 1px solid rgba(243, 139, 168, 0.15); margin-bottom: 6px;">
-                `;
-                data.overdueTasks.forEach(t => {
-                    html += renderSingleTaskHtml(t, true);
-                });
-                html += `</div>`;
-            }
-
-            html += `
                     <div id="timeline-loading-past" style="display: none; text-align: center; padding: 6px; font-size: 0.72rem; color: #fab387; opacity: 0.85;">⬆️ Lade vergangene Tage...</div>
                     
                     <!-- Scrollbare Tage-Liste (Oben: Vergangenheit, Unten: Zukunft) -->
@@ -5542,7 +5589,7 @@
                                                     </div>
                                                 </div>
                                             `;
-                                            const extraTaskData = `data-task-id="${t.id}" data-task-title="${escT}" data-task-notes="${escN}" data-task-due="${t.due || ''}" data-task-project="${p.id}" data-task-completed="${!!t.completed}"`;
+                                            const extraTaskData = `data-task-id="${t.id}" data-task-title="${escT}" data-task-notes="${escN}" data-task-due="${t.due || ''}" data-task-project="${p.id}" data-task-project-id="${p.id}" data-task-completed="${!!t.completed}"`;
                                             html += renderSwipeLinkWrapper(taskContent, t.title, 'task', t.id, '', '', '', extraTaskData);
                                         });
 

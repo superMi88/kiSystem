@@ -466,18 +466,27 @@ export async function getTimelineRangeData(startDate: Date, endDate: Date, prism
     });
   });
 
+  const overdueMapped = overdueTasks.map((t: any) => ({
+    id: String(t.id),
+    title: t.title,
+    notes: t.notes || "",
+    due: t.due ? t.due.toISOString() : null,
+    listTitle: t.listTitle,
+    recurrence: t.recurrence,
+    isTask: true,
+    isOverdue: true,
+    projectId: t.projectId
+  }));
+
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  if (daysMap[todayKey]) {
+    (daysMap[todayKey] as any).overdueTasks = overdueMapped;
+  }
+
   const sortedKeys = Object.keys(daysMap).sort();
   return {
     days: sortedKeys.map(k => daysMap[k]),
-    overdueTasks: overdueTasks.map((t: any) => ({
-      id: String(t.id),
-      title: t.title,
-      notes: t.notes || "",
-      due: t.due ? t.due.toISOString() : null,
-      listTitle: t.listTitle,
-      recurrence: t.recurrence,
-      isTask: true
-    }))
+    overdueTasks: overdueMapped
   };
 }
 
