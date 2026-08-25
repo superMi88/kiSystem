@@ -137,7 +137,7 @@ export class MailService {
     account: MailAccount,
     prisma: PrismaClient,
     options?: { fullSync?: boolean; batchLimit?: number }
-  ): Promise<{ count: number; error?: string }> {
+  ): Promise<{ count: number; newEmails: any[]; error?: string }> {
     console.log(`[MailService] Starte Synchronisierung für Konto: ${account.name} (${account.email})...`);
 
     const client = new ImapFlow({
@@ -151,6 +151,8 @@ export class MailService {
       logger: false
     });
 
+    const newEmails: any[] = [];
+
     try {
       await client.connect();
       const lock = await client.getMailboxLock("INBOX");
@@ -161,7 +163,7 @@ export class MailService {
           console.log(`[MailService] Posteingang von ${account.email} ist leer.`);
           lock.release();
           await client.logout();
-          return { count: 0 };
+          return { count: 0, newEmails: [] };
         }
 
         // Lade alle Personen für automatische Absendererkennung
@@ -286,7 +288,7 @@ export class MailService {
             const hasAttachments = !!(parsed.attachments && parsed.attachments.length > 0);
             const matchedPersonId = findMatchingPersonId(rawFrom, fromName);
 
-            await prisma.cachedEmail.create({
+            const createdMail = await prisma.cachedEmail.create({
               data: {
                 accountId: account.id,
                 uid: uidNum,
@@ -306,21 +308,36 @@ export class MailService {
               }
             });
 
+            if (!isRead) {
+              newEmails.push({
+                id: createdMail.id,
+                accountId: account.id,
+                accountName: account.name,
+                accountEmail: account.email,
+                accountColor: account.color,
+                from: rawFrom,
+                fromName: fromName,
+                subject: rawSubject,
+                snippet: snippet,
+                date: mailDate.toISOString()
+              });
+            }
+
             processedCount++;
           } catch (itemErr) {
             console.error(`[MailService] Fehler beim Parsen einer E-Mail (UID: ${message.uid}):`, itemErr);
           }
         }
 
-        console.log(`[MailService] ${processedCount} E-Mails für ${account.email} erfolgreich synchronisiert.`);
-        return { count: processedCount };
+        console.log(`[MailService] ${processedCount} E-Mails für ${account.email} erfolgreich synchronisiert (davon ${newEmails.length} neu/ungelesen).`);
+        return { count: processedCount, newEmails };
       } finally {
         lock.release();
         await client.logout();
       }
     } catch (err: any) {
       console.error(`[MailService] Fehler beim Abrufen der E-Mails für ${account.email}:`, err);
-      return { count: 0, error: err.message };
+      return { count: 0, newEmails: [], error: err.message };
     }
   }
 
@@ -332,6 +349,7 @@ export class MailService {
     options?: { fullSync?: boolean }
   ): Promise<{
     totalSynced: number;
+    newEmails: any[];
     results: { accountId: number; name: string; email: string; count: number; error?: string }[];
   }> {
     const accounts = await prisma.mailAccount.findMany({
@@ -339,12 +357,16 @@ export class MailService {
     });
 
     if (accounts.length === 0) {
-      return { totalSynced: 0, results: [] };
+      return { totalSynced: 0, newEmails: [], results: [] };
     }
 
+    const allNewEmails: any[] = [];
     const promises = accounts.map(async account => {
       try {
         const res = await this.syncAccountEmails(account, prisma, options);
+        if (res.newEmails && res.newEmails.length > 0) {
+          allNewEmails.push(...res.newEmails);
+        }
         return {
           accountId: account.id,
           name: account.name,
@@ -365,7 +387,78 @@ export class MailService {
 
     const results = await Promise.all(promises);
     const totalSynced = results.reduce((acc, curr) => acc + curr.count, 0);
-    return { totalSynced, results };
+    return { totalSynced, newEmails: allNewEmails, results };
+  }
+
+  /**
+   * Holt die neuesten ungelesenen E-Mails für Push-Benachrichtigungen.
+   * Unterstützt optional sinceId, um nur E-Mails zurückzugeben, die neuer als diese ID sind.
+   */
+  static async getLatestUnreadEmails(
+    prisma: PrismaClient,
+    options?: { sinceId?: number; limit?: number }
+  ) {
+    const limit = options?.limit ? Number(options.limit) : 10;
+    const sinceId = options?.sinceId !== undefined && options?.sinceId !== null ? Number(options.sinceId) : 0;
+
+    const where: any = {
+      isRead: false,
+      account: { isDeleted: false }
+    };
+
+    if (sinceId > 0) {
+      where.id = { gt: sinceId };
+    }
+
+    const [emails, unreadCount, latestMail] = await Promise.all([
+      prisma.cachedEmail.findMany({
+        where,
+        orderBy: { id: "desc" },
+        take: limit,
+        include: {
+          account: {
+            select: { id: true, name: true, email: true, color: true }
+          },
+          person: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              aliases: { select: { name: true, isPrimary: true } }
+            }
+          }
+        }
+      }),
+      prisma.cachedEmail.count({
+        where: { isRead: false, account: { isDeleted: false } }
+      }),
+      prisma.cachedEmail.findFirst({
+        orderBy: { id: "desc" },
+        select: { id: true }
+      })
+    ]);
+
+    const latestMailId = latestMail?.id || 0;
+
+    return {
+      latestMailId,
+      unreadCount,
+      newEmails: emails.map(m => ({
+        id: m.id,
+        accountId: m.accountId,
+        accountName: m.account.name,
+        accountEmail: m.account.email,
+        accountColor: m.account.color,
+        from: m.from,
+        fromName: m.fromName,
+        to: m.to,
+        subject: m.subject,
+        snippet: m.snippet,
+        date: m.date.toISOString(),
+        category: m.category,
+        personName: m.person?.name || m.person?.aliases[0]?.name || null
+      }))
+    };
   }
 
   /**

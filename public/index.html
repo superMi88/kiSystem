@@ -717,6 +717,26 @@
             </div>
 
             <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; padding-right: 4px; margin-bottom: 15px;">
+                <!-- Sektion: Push-Benachrichtigungen -->
+                <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 14px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px;">
+                        <div>
+                            <strong style="color: var(--accent); font-size: 0.85rem; display: block; margin-bottom: 2px;">🔔 Push-Benachrichtigungen</strong>
+                            <p style="font-size: 0.72rem; opacity: 0.7; margin: 0; line-height: 1.35;">Erhalte Benachrichtigungen auf dein Handy, sobald neue E-Mails eintreffen.</p>
+                        </div>
+                        <label class="switch" style="flex-shrink: 0;" title="Benachrichtigungen aktivieren/deaktivieren">
+                            <input type="checkbox" id="mail-settings-push-toggle" onchange="toggleMailPushNotifications(this.checked)" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap;">
+                        <button onclick="sendTestMailPushNotification()" class="nav-btn" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; border: 1px solid rgba(137, 180, 250, 0.3); background: rgba(137, 180, 250, 0.1); color: var(--accent); cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">
+                            🧪 Test-Benachrichtigung an Handy senden
+                        </button>
+                        <span id="mail-push-test-status" style="font-size: 0.72rem; opacity: 0.8;"></span>
+                    </div>
+                </div>
+
                 <!-- Sektion 1: Voll-Synchronisation -->
                 <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 14px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
@@ -6217,6 +6237,52 @@
 
         async function openMailReadModal(id) {
             currentReadMailId = id;
+
+            // Automatisch in die Mail-Ansicht wechseln
+            if (typeof focusWidget === 'function') {
+                focusWidget('mail');
+            }
+
+            // Spezielles Handling für Test-Benachrichtigung (ID -1)
+            if (id === -1 || id === '-1') {
+                const modal = document.getElementById('mail-read-modal');
+                const badgeEl = document.getElementById('mail-read-account-badge');
+                const personBadgeEl = document.getElementById('mail-read-person-badge');
+                const catContainer = document.getElementById('mail-read-categories-container');
+                const readToggleBtn = document.getElementById('mail-read-toggle-read-btn');
+                const subjectEl = document.getElementById('mail-read-subject');
+                const fromEl = document.getElementById('mail-read-from');
+                const toEl = document.getElementById('mail-read-to');
+                const dateEl = document.getElementById('mail-read-date');
+                const bodyEl = document.getElementById('mail-read-body');
+
+                if (badgeEl) {
+                    badgeEl.innerHTML = `✉️ Empfangen auf: <strong>test@kisystem.app</strong>`;
+                    badgeEl.style.color = '#89b4fa';
+                    badgeEl.style.borderColor = '#89b4fa';
+                }
+                if (personBadgeEl) personBadgeEl.innerHTML = '';
+                if (catContainer) catContainer.innerHTML = '<span style="font-size: 0.68rem; color: var(--accent); background: rgba(137, 180, 250, 0.12); border: 1px solid rgba(137, 180, 250, 0.25); padding: 1px 6px; border-radius: 6px;">🔔 Push Test</span>';
+                if (readToggleBtn) readToggleBtn.style.display = 'none';
+                if (subjectEl) subjectEl.textContent = '🎉 Test-Benachrichtigung für neue E-Mails';
+                if (fromEl) fromEl.textContent = 'kiSystem Support <support@kisystem.app>';
+                if (toEl) toEl.textContent = 'Du';
+                if (dateEl) dateEl.textContent = new Date().toLocaleString('de-DE');
+                if (bodyEl) {
+                    bodyEl.innerHTML = `
+                        <div style="padding: 12px; background: rgba(137, 180, 250, 0.1); border-radius: 8px; border: 1px solid rgba(137, 180, 250, 0.3); margin-bottom: 12px;">
+                            <strong style="color: var(--accent); font-size: 0.95rem; display: block; margin-bottom: 6px;">✅ Push-Benachrichtigungen funktionieren einwandfrei!</strong>
+                            <p style="margin: 0; font-size: 0.85rem; line-height: 1.45; color: #cdd6f4;">
+                                Beim Antippen einer Push-Benachrichtigung auf deinem Smartphone gelangst du direkt in die E-Mail-Detailansicht und dein Posteingang wird geöffnet.
+                            </p>
+                        </div>
+                    `;
+                }
+                if (modal) modal.style.display = 'flex';
+                document.body.classList.add('modal-active');
+                return;
+            }
+
             try {
                 const res = await fetch(getApiUrl(`/api/mail/messages/${id}`));
                 if (!res.ok) {
@@ -6237,6 +6303,8 @@
                 const dateEl = document.getElementById('mail-read-date');
                 const bodyEl = document.getElementById('mail-read-body');
                 const linkBtn = document.getElementById('mail-read-link-btn');
+
+                if (readToggleBtn) readToggleBtn.style.display = 'inline-block';
 
                 const acc = mail.account || {};
                 const accColor = acc.color || '#89b4fa';
@@ -7405,6 +7473,7 @@
             modal.style.display = 'flex';
             document.body.classList.add('modal-active');
 
+            initMailPushSettings();
             loadMailSettingsCategories();
             loadMailSettingsAccounts();
         }
@@ -7418,6 +7487,79 @@
         }
         window.closeMailSettingsModal = closeMailSettingsModal;
         window.closeMailAccountsModal = closeMailSettingsModal;
+
+        function initMailPushSettings() {
+            const pushToggle = document.getElementById('mail-settings-push-toggle');
+            if (pushToggle) {
+                const isEnabled = localStorage.getItem('mail_notifications_enabled') !== 'false';
+                pushToggle.checked = isEnabled;
+            }
+        }
+
+        async function toggleMailPushNotifications(enabled) {
+            localStorage.setItem('mail_notifications_enabled', enabled ? 'true' : 'false');
+            if (enabled) {
+                requestNotificationPermissions();
+            }
+            if (window.AndroidWidgetInterface && typeof window.AndroidWidgetInterface.setMailNotificationsEnabled === 'function') {
+                window.AndroidWidgetInterface.setMailNotificationsEnabled(enabled);
+            } else if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetSettings && typeof window.Capacitor.Plugins.WidgetSettings.setMailNotificationsEnabled === 'function') {
+                window.Capacitor.Plugins.WidgetSettings.setMailNotificationsEnabled({ enabled });
+            }
+            console.log("[Mail] Push-Benachrichtigungen:", enabled ? "Aktiviert" : "Deaktiviert");
+        }
+        window.toggleMailPushNotifications = toggleMailPushNotifications;
+
+        async function sendTestMailPushNotification() {
+            const statusEl = document.getElementById('mail-push-test-status');
+            if (statusEl) {
+                statusEl.textContent = '⏳ Sende Test...';
+                statusEl.style.color = 'var(--accent)';
+            }
+
+            try {
+                requestNotificationPermissions();
+
+                let notificationTriggered = false;
+
+                if (window.AndroidWidgetInterface && typeof window.AndroidWidgetInterface.showTestMailNotification === 'function') {
+                    window.AndroidWidgetInterface.showTestMailNotification();
+                    notificationTriggered = true;
+                } else if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetSettings && typeof window.Capacitor.Plugins.WidgetSettings.showTestMailNotification === 'function') {
+                    window.Capacitor.Plugins.WidgetSettings.showTestMailNotification();
+                    notificationTriggered = true;
+                }
+
+                // Fallback / Server API Test
+                const res = await fetch(getApiUrl('/api/mail/notifications/test'), { method: 'POST' });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (!notificationTriggered && 'Notification' in window && Notification.permission === 'granted') {
+                        try {
+                            new Notification(data.testMail.subject, {
+                                body: data.testMail.snippet,
+                                icon: '/icon.png'
+                            });
+                        } catch (e) {
+                            console.error("Web notification error:", e);
+                        }
+                    }
+                }
+
+                if (statusEl) {
+                    statusEl.textContent = '✅ Benachrichtigung gesendet!';
+                    statusEl.style.color = '#a6e3a1';
+                    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 4000);
+                }
+            } catch (err) {
+                console.error("[Mail] Test-Benachrichtigung Fehler:", err);
+                if (statusEl) {
+                    statusEl.textContent = '❌ Fehler beim Senden.';
+                    statusEl.style.color = 'var(--off)';
+                }
+            }
+        }
+        window.sendTestMailPushNotification = sendTestMailPushNotification;
 
         async function loadMailSettingsCategories() {
             const listEl = document.getElementById('mail-settings-categories-list');
@@ -8230,9 +8372,116 @@
                 });
             }
             requestNotificationPermissions();
+            checkMailNotificationsForeground();
+            handleMailHashRouting();
+            window.addEventListener('hashchange', handleMailHashRouting);
         }
         initializeApp();
         setInterval(loadAlerts, 3000); // Alle 3 Sekunden prüfen
+        setInterval(checkMailNotificationsForeground, 15000); // Alle 15 Sekunden auf neue Mails prüfen
+
+        function handleMailHashRouting() {
+            // Android Pending Mail Intent prüfen
+            if (window.AndroidWidgetInterface && typeof window.AndroidWidgetInterface.getPendingOpenMailId === 'function') {
+                try {
+                    const pendingId = window.AndroidWidgetInterface.getPendingOpenMailId();
+                    if (pendingId && pendingId !== 0) {
+                        setTimeout(() => {
+                            if (typeof openMailReadModal === 'function') {
+                                openMailReadModal(pendingId);
+                            }
+                        }, 200);
+                        return;
+                    }
+                } catch (e) {
+                    console.error("Error reading pending open mail id:", e);
+                }
+            }
+
+            if (window.location.hash && window.location.hash.startsWith('#mail-')) {
+                const raw = window.location.hash.replace('#mail-', '');
+                const mailId = Number(raw);
+                if (mailId !== 0 && !isNaN(mailId)) {
+                    setTimeout(() => {
+                        if (typeof openMailReadModal === 'function') {
+                            openMailReadModal(mailId);
+                        }
+                    }, 200);
+                }
+            }
+        }
+
+        let lastNotifiedForegroundMailId = Number(localStorage.getItem('last_foreground_mail_id') || 0);
+
+        function showMailPushNotification(fromName, subject, snippet, mailId, accountEmail) {
+            if (localStorage.getItem('mail_notifications_enabled') === 'false') return;
+
+            const sender = (fromName && fromName.trim() && fromName !== 'Unbekannt') ? fromName.trim() : 'Neue E-Mail';
+            const mailSubject = (subject && subject.trim()) ? subject.trim() : '(Kein Betreff)';
+            const preview = snippet ? snippet.trim() : '';
+
+            if (window.AndroidWidgetInterface && typeof window.AndroidWidgetInterface.showMailNotification === 'function') {
+                window.AndroidWidgetInterface.showMailNotification(sender, mailSubject, preview, mailId, accountEmail || '');
+            } else if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetSettings && typeof window.Capacitor.Plugins.WidgetSettings.showMailNotification === 'function') {
+                window.Capacitor.Plugins.WidgetSettings.showMailNotification({
+                    fromName: sender,
+                    subject: mailSubject,
+                    snippet: preview,
+                    mailId: mailId,
+                    accountEmail: accountEmail || ''
+                });
+            } else if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                    new Notification(`📧 ${sender}: ${mailSubject}`, {
+                        body: preview,
+                        icon: '/icon.png'
+                    });
+                } catch (e) {
+                    console.error("Web notification error:", e);
+                }
+            }
+        }
+        window.showMailPushNotification = showMailPushNotification;
+
+        async function checkMailNotificationsForeground() {
+            if (localStorage.getItem('mail_notifications_enabled') === 'false') return;
+
+            try {
+                const endpoint = lastNotifiedForegroundMailId > 0
+                    ? `/api/mail/notifications/latest?sinceId=${lastNotifiedForegroundMailId}`
+                    : `/api/mail/notifications/latest`;
+
+                const res = await fetch(getApiUrl(endpoint));
+                if (!res.ok) return;
+
+                const data = await res.json();
+                const newEmails = data.newEmails || [];
+
+                if (newEmails.length > 0) {
+                    if (lastNotifiedForegroundMailId > 0) {
+                        newEmails.forEach(mail => {
+                            showMailPushNotification(
+                                mail.fromName || mail.from,
+                                mail.subject,
+                                mail.snippet,
+                                mail.id,
+                                mail.accountEmail
+                            );
+                        });
+                    }
+
+                    const maxId = Math.max(...newEmails.map(m => m.id), data.latestMailId || 0);
+                    lastNotifiedForegroundMailId = Math.max(lastNotifiedForegroundMailId, maxId);
+                    localStorage.setItem('last_foreground_mail_id', String(lastNotifiedForegroundMailId));
+                } else if (data.latestMailId && data.latestMailId > lastNotifiedForegroundMailId) {
+                    lastNotifiedForegroundMailId = data.latestMailId;
+                    localStorage.setItem('last_foreground_mail_id', String(lastNotifiedForegroundMailId));
+                }
+            } catch (err) {
+                // Background check error ignored
+            }
+        }
+        window.checkMailNotificationsForeground = checkMailNotificationsForeground;
 
         function requestNotificationPermissions() {
             if ('Notification' in window && Notification.permission === 'default') {

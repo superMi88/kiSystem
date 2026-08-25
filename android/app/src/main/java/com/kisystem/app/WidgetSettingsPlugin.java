@@ -120,4 +120,44 @@ public class WidgetSettingsPlugin extends Plugin {
         }
         call.resolve();
     }
+
+    @PluginMethod
+    public void showMailNotification(PluginCall call) {
+        String fromName = call.getString("fromName", "Neue E-Mail");
+        String subject = call.getString("subject", "");
+        String snippet = call.getString("snippet", "");
+        int mailId = call.getInt("mailId", 0);
+        String accountEmail = call.getString("accountEmail", "");
+        MailNotificationHelper.showMailNotification(getContext(), fromName, subject, snippet, mailId, accountEmail);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void showTestMailNotification(PluginCall call) {
+        MailNotificationHelper.showTestNotification(getContext());
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void checkMailNotificationsNow(PluginCall call) {
+        MainActivity.triggerImmediateMailSync(getContext());
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setMailNotificationsEnabled(PluginCall call) {
+        Boolean enabled = call.getBoolean("enabled", true);
+        SharedPreferences prefs = getContext().getSharedPreferences("WidgetStorage", Context.MODE_PRIVATE);
+        prefs.edit().putBoolean("mail_notifications_enabled", enabled != null ? enabled : true).apply();
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void isMailNotificationsEnabled(PluginCall call) {
+        SharedPreferences prefs = getContext().getSharedPreferences("WidgetStorage", Context.MODE_PRIVATE);
+        boolean enabled = prefs.getBoolean("mail_notifications_enabled", true);
+        JSObject ret = new JSObject();
+        ret.put("enabled", enabled);
+        call.resolve(ret);
+    }
 }

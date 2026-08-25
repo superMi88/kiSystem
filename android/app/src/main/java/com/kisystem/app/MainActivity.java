@@ -18,7 +18,14 @@ import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.work.Constraints;
+import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.NetworkType;
+import androidx.work.OneTimeWorkRequest;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
 import com.getcapacitor.BridgeActivity;
+import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends BridgeActivity {
 
@@ -38,7 +45,13 @@ public class MainActivity extends BridgeActivity {
         }
 
         requestNotificationPermission();
+        MailNotificationHelper.createNotificationChannel(this);
+        schedulePeriodicMailSync(this);
+        triggerImmediateMailSync(this);
+        handleMailIntent(getIntent());
     }
+
+    private static int pendingOpenMailId = 0;
 
     public void requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= 33) {
@@ -49,9 +62,75 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleMailIntent(intent);
+    }
+
+    private void handleMailIntent(Intent intent) {
+        if (intent == null) return;
+        int mailId = intent.getIntExtra("open_mail_id", 0);
+        if (mailId != 0) {
+            pendingOpenMailId = mailId;
+            Log.d("MainActivity", "Handling mail intent for mailId: " + mailId);
+            
+            // Mehrstufig ausführen, um sowohl bei bereits geladener App als auch beim Kaltstart zuverlässig zu öffnen
+            long[] delays = new long[]{300, 1000, 2200};
+            for (long delay : delays) {
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    try {
+                        WebView webView = getBridge().getWebView();
+                        if (webView != null) {
+                            webView.evaluateJavascript(
+                                "(function() { if (typeof openMailReadModal === 'function') { openMailReadModal(" + mailId + "); } else { window.location.hash = '#mail-" + mailId + "'; } })()",
+                                null
+                            );
+                        }
+                    } catch (Exception e) {
+                        Log.e("MainActivity", "Error evaluating JS to open mail " + mailId, e);
+                    }
+                }, delay);
+            }
+        }
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
         syncLocalStorageToWidgetStorage();
+        triggerImmediateMailSync(this);
+    }
+
+    public static void schedulePeriodicMailSync(Context context) {
+        try {
+            Constraints constraints = new Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build();
+
+            PeriodicWorkRequest mailWork = new PeriodicWorkRequest.Builder(MailSyncWorker.class, 15, TimeUnit.MINUTES)
+                .setConstraints(constraints)
+                .build();
+
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                "MailSyncWork",
+                ExistingPeriodicWorkPolicy.KEEP,
+                mailWork
+            );
+            Log.d("MainActivity", "Scheduled periodic MailSyncWorker (every 15 min)");
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error scheduling periodic mail sync", e);
+        }
+    }
+
+    public static void triggerImmediateMailSync(Context context) {
+        try {
+            OneTimeWorkRequest oneTimeSync = new OneTimeWorkRequest.Builder(MailSyncWorker.class).build();
+            WorkManager.getInstance(context).enqueue(oneTimeSync);
+            Log.d("MainActivity", "Triggered immediate MailSyncWorker check");
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error triggering immediate mail sync", e);
+        }
     }
 
     public void syncLocalStorageToWidgetStorage() {
@@ -213,5 +292,53 @@ public class MainActivity extends BridgeActivity {
         public void requestNotificationPermission() {
             MainActivity.this.requestNotificationPermission();
         }
+
+        @JavascriptInterface
+        public void showMailNotification(String fromName, String subject, String snippet, int mailId, String accountEmail) {
+            MailNotificationHelper.showMailNotification(mContext, fromName, subject, snippet, mailId, accountEmail);
+        }
+
+        @JavascriptInterface
+        public void showTestMailNotification() {
+            MailNotificationHelper.showTestNotification(mContext);
+        }
+
+        @JavascriptInterface
+        public void checkMailNotificationsNow() {
+            MainActivity.triggerImmediateMailSync(mContext);
+        }
+
+        @JavascriptInterface
+        public void setMailNotificationsEnabled(boolean enabled) {
+            SharedPreferences prefs = mContext.getSharedPreferences("WidgetStorage", Context.MODE_PRIVATE);
+            prefs.edit().putBoolean("mail_notifications_enabled", enabled).apply();
+            Log.d("MainActivity", "setMailNotificationsEnabled: " + enabled);
+        }
+
+        @JavascriptInterface
+        public boolean isMailNotificationsEnabled() {
+            SharedPreferences prefs = mContext.getSharedPreferences("WidgetStorage", Context.MODE_PRIVATE);
+            return prefs.getBoolean("mail_notifications_enabled", true);
+        }
+
+        @JavascriptInterface
+        public int getLastNotifiedMailId() {
+            SharedPreferences prefs = mContext.getSharedPreferences("WidgetStorage", Context.MODE_PRIVATE);
+            return prefs.getInt("last_notified_mail_id", 0);
+        }
+
+        @JavascriptInterface
+        public void setLastNotifiedMailId(int id) {
+            SharedPreferences prefs = mContext.getSharedPreferences("WidgetStorage", Context.MODE_PRIVATE);
+            prefs.edit().putInt("last_notified_mail_id", id).apply();
+        }
+
+        @JavascriptInterface
+        public int getPendingOpenMailId() {
+            int id = pendingOpenMailId;
+            pendingOpenMailId = 0;
+            return id;
+        }
     }
 }
+

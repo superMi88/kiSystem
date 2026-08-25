@@ -923,6 +923,40 @@ app.post("/api/mail/sync", async (req, res) => {
   }
 });
 
+app.get("/api/mail/notifications/latest", async (req, res) => {
+  try {
+    const sinceId = req.query.sinceId ? Number(req.query.sinceId) : undefined;
+    const limit = req.query.limit ? Number(req.query.limit) : 10;
+    const result = await MailService.getLatestUnreadEmails(prisma, { sinceId, limit });
+    res.json(result);
+  } catch (e: any) {
+    console.error("Fehler beim Abrufen der Mail-Benachrichtigungen:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/mail/notifications/test", async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      testMail: {
+        id: -1,
+        accountId: 0,
+        accountName: "Test-Konto",
+        accountEmail: "test@kisystem.app",
+        accountColor: "#89b4fa",
+        from: "kiSystem Support <support@kisystem.app>",
+        fromName: "kiSystem Support",
+        subject: "🎉 Test-Benachrichtigung für neue E-Mails",
+        snippet: "Wenn du diese Push-Benachrichtigung auf deinem Smartphone siehst, funktioniert das Benachrichtigungssystem einwandfrei!",
+        date: new Date().toISOString()
+      }
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post("/api/persons/merge", async (req, res) => {
   const { sourceId, targetId } = req.body;
   if (!sourceId || !targetId) {
@@ -1282,7 +1316,11 @@ app.listen(PORT, async () => {
 
   // Periodischer Hintergrund-Sync für E-Mails alle 3 Minuten
   setInterval(() => {
-    MailService.syncAllAccounts(prisma).catch(err => {
+    MailService.syncAllAccounts(prisma).then(res => {
+      if (res.newEmails && res.newEmails.length > 0) {
+        console.log(`[Mail AutoSync] 📬 ${res.newEmails.length} neue ungelesene E-Mail(s) empfangen!`);
+      }
+    }).catch(err => {
       console.warn("[Mail AutoSync] Hintergrund-Sync fehlgeschlagen:", err?.message || err);
     });
   }, 3 * 60 * 1000);
