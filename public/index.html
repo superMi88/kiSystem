@@ -6719,6 +6719,10 @@
                 `;
             } else if (type === 'person') {
                 actionsHtml += `
+                    <button type="button" onclick="toggleFavoriteForSelection()" class="sel-action-btn" title="Zu Favoriten hinzufügen / entfernen">
+                        <span class="action-icon">⭐</span>
+                        <span class="action-text">Favorit</span>
+                    </button>
                     <button type="button" onclick="linkSelectionIntoChat()" class="sel-action-btn" title="Im Chat verlinken">
                         <span class="action-icon">🔗</span>
                         <span class="action-text">Link</span>
@@ -6861,6 +6865,51 @@
             }
         }
         window.toggleTasksCompletionForSelection = toggleTasksCompletionForSelection;
+
+        async function toggleFavoriteForSelection() {
+            if (selectedItemIds.size === 0 || currentSelectionType !== 'person') return;
+            const ids = Array.from(selectedItemIds).map(Number).filter(n => !isNaN(n));
+            try {
+                let anyNonFavorite = false;
+                ids.forEach(id => {
+                    const el = document.querySelector(`.swipe-link-item[data-link-id="${id}"], .swipe-link-item[data-person-id="${id}"]`);
+                    if (el) {
+                        if (el.dataset.personIsFavorite !== 'true') anyNonFavorite = true;
+                    } else if (currentMemoryPeopleList) {
+                        const p = currentMemoryPeopleList.find(x => Number(x.id) === Number(id));
+                        if (p && !p.isFavorite) anyNonFavorite = true;
+                    }
+                });
+                const newFavStatus = anyNonFavorite;
+
+                const res = await fetch(getApiUrl('/api/memory/people/batch-favorite'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids, isFavorite: newFavStatus })
+                });
+
+                if (res.ok) {
+                    if (currentMemoryPeopleList && currentMemoryPeopleList.length > 0) {
+                        ids.forEach(id => {
+                            const p = currentMemoryPeopleList.find(x => Number(x.id) === Number(id));
+                            if (p) p.isFavorite = newFavStatus;
+                        });
+                        renderFilteredPeopleList();
+                    }
+                    if (navigator.vibrate) navigator.vibrate(25);
+                    exitSelectionMode();
+                    loadTopWidgets();
+                } else {
+                    const err = await res.json();
+                    alert("Fehler beim Aktualisieren des Favoritenstatus: " + (err.error || "Unbekannter Fehler"));
+                }
+            } catch (err) {
+                console.error("Fehler beim Umschalten der Favoriten:", err);
+                alert("Fehler beim Umschalten der Favoriten: " + err.message);
+            }
+        }
+        window.toggleFavoriteForSelection = toggleFavoriteForSelection;
+        window.toggleSelectedPeopleFavorite = toggleFavoriteForSelection;
 
         function toggleTimersForSelection() {
             if (selectedItemIds.size === 0 || currentSelectionType !== 'timer') return;

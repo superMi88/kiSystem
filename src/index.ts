@@ -861,6 +861,24 @@ app.put("/api/entities/person/:id/favorite", async (req, res) => {
   }
 });
 
+app.post("/api/memory/people/batch-favorite", async (req, res) => {
+  try {
+    const { ids, isFavorite } = req.body;
+    if (!Array.isArray(ids)) {
+      return res.status(400).json({ error: "ids Array erforderlich." });
+    }
+    const numIds = ids.map(Number).filter(n => !isNaN(n));
+    await prisma.person.updateMany({
+      where: { id: { in: numIds } },
+      data: { isFavorite: !!isFavorite }
+    });
+    res.json({ success: true, count: numIds.length, isFavorite: !!isFavorite });
+  } catch (e: any) {
+    console.error("Fehler beim Batch-Favorisieren:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.put("/api/entities/person/:id/email", async (req, res) => {
   try {
     const id = Number(req.params.id);
