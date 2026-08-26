@@ -802,6 +802,7 @@ app.get("/api/memory/people", async (req, res) => {
       select: {
         id: true,
         isOwner: true,
+        isFavorite: true,
         email: true,
         emails: true,
         biography: true,
@@ -821,6 +822,7 @@ app.get("/api/memory/people", async (req, res) => {
       return {
         id: p.id,
         isOwner: !!p.isOwner,
+        isFavorite: !!p.isFavorite,
         name: nameStr,
         email: p.email,
         emails: p.emails,
@@ -832,12 +834,29 @@ app.get("/api/memory/people", async (req, res) => {
     formattedPeople.sort((a, b) => {
       if (a.isOwner) return -1;
       if (b.isOwner) return 1;
+      if (a.isFavorite && !b.isFavorite) return -1;
+      if (!a.isFavorite && b.isFavorite) return 1;
       return (a.name || "").localeCompare(b.name || "");
     });
 
     res.json(formattedPeople);
   } catch (e: any) {
     console.error("Fehler beim Abrufen der Personen:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/api/entities/person/:id/favorite", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { isFavorite } = req.body;
+    const updated = await prisma.person.update({
+      where: { id },
+      data: { isFavorite: !!isFavorite }
+    });
+    res.json({ success: true, isFavorite: updated.isFavorite });
+  } catch (e: any) {
+    console.error("Fehler beim Aktualisieren des Favoritenstatus:", e);
     res.status(500).json({ error: e.message });
   }
 });

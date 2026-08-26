@@ -47,6 +47,7 @@ model Person {
   email     String?          // Primäre E-Mail-Adresse der Person
   emails    String?          // Weitere E-Mail-Adressen (kommagetrennt für Alias-Erkennung)
   birthday  DateTime?        // Geburtstag der Person
+  isFavorite Boolean         @default(false) // Flag für Favoritenstatus
   createdAt DateTime         @default(now()) // Erstellungszeitpunkt des Personenprofils
   aliases   PersonAlias[]    // Alternative Namen/Aliase für die Person
   facts     Fact[]           // Gespeicherte Fakten über diese Person

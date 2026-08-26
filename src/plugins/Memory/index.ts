@@ -559,6 +559,34 @@ export const memoryPlugin: Plugin = {
     },
     {
       definition: {
+        name: "setze_person_favorit",
+        description: "Fügt eine Person zu den Favoriten hinzu oder entfernt sie daraus.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            personId: { type: SchemaType.INTEGER, description: "Die ID der Person" },
+            istFavorit: { type: SchemaType.BOOLEAN, description: "true, wenn die Person als Favorit markiert werden soll, false zum Entfernen." }
+          },
+          required: ["personId", "istFavorit"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const personId = Number(args.personId || args.id);
+        const istFavorit = !!args.istFavorit;
+        await prisma.person.update({
+          where: { id: personId },
+          data: { isFavorite: istFavorit }
+        });
+        return {
+          status: "success",
+          personId,
+          isFavorite: istFavorit,
+          message: istFavorit ? `Person wurde zu den Favoriten hinzugefügt.` : `Person wurde aus den Favoriten entfernt.`
+        };
+      }
+    },
+    {
+      definition: {
         name: "loesche_person",
         description: "Löscht (archiviert) das Profil einer Person.",
         parameters: {
@@ -570,7 +598,7 @@ export const memoryPlugin: Plugin = {
         } as any
       },
       handler: async (args, { prisma }) => {
-        const personId = Number(args.personId);
+        const personId = Number(args.personId || args.id);
         await prisma.person.update({
           where: { id: personId },
           data: { isDeleted: true }
@@ -591,7 +619,7 @@ export const memoryPlugin: Plugin = {
         } as any
       },
       handler: async (args, { prisma }) => {
-        const personId = Number(args.personId);
+        const personId = Number(args.personId || args.id);
         await prisma.person.update({
           where: { id: personId },
           data: { isDeleted: false }
@@ -697,6 +725,7 @@ export const memoryPlugin: Plugin = {
         select: {
           id: true,
           isOwner: true,
+          isFavorite: true,
           biography: true,
           aliases: {
             select: {
@@ -713,6 +742,7 @@ export const memoryPlugin: Plugin = {
         return {
           id: p.id,
           isOwner: !!p.isOwner,
+          isFavorite: !!p.isFavorite,
           name: nameStr,
           aliases: aliasList,
           notes: p.biography || "Keine Biografie vorhanden."
@@ -721,6 +751,8 @@ export const memoryPlugin: Plugin = {
       formattedPeople.sort((a, b) => {
         if (a.isOwner) return -1;
         if (b.isOwner) return 1;
+        if (a.isFavorite && !b.isFavorite) return -1;
+        if (!a.isFavorite && b.isFavorite) return 1;
         return (a.name || "").localeCompare(b.name || "");
       });
       return [
