@@ -2220,86 +2220,44 @@ body.mobile-mode .top-panel > div:first-child {
     display: flex;
     align-items: center;
     justify-content: space-around;
-    gap: 6px;
+    gap: 12px;
     width: 100%;
-    padding: 5px 8px;
-    background: rgba(17, 17, 27, 0.95);
-    border: 1px solid var(--accent);
-    border-radius: 14px;
-    box-shadow: 0 6px 28px rgba(0, 0, 0, 0.75), 0 0 16px rgba(137, 180, 250, 0.25);
-    animation: slideUpAction 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    animation: fadeInSelectionBar 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     z-index: 100;
     box-sizing: border-box;
 }
 
-@keyframes slideUpAction {
-    from { opacity: 0; transform: translateY(8px) scale(0.97); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
+@keyframes fadeInSelectionBar {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
 }
 
-.sel-action-btn,
-.mail-action-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+.sel-action-btn {
+    position: relative;
+}
+
+.sel-action-btn.cancel-btn {
     color: var(--text);
-    padding: 5px 6px;
-    border-radius: 9px;
-    cursor: pointer;
-    font-size: 0.68rem;
-    font-weight: 600;
-    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-    min-width: 44px;
-    flex: 1;
-    white-space: nowrap;
 }
-
-.sel-action-btn:hover,
-.mail-action-btn:hover {
-    background: rgba(137, 180, 250, 0.16);
-    border-color: var(--accent);
-    color: #ffffff;
-    transform: translateY(-2px);
-}
-
-.sel-action-btn:active,
-.mail-action-btn:active {
-    transform: scale(0.95);
-}
-
-.sel-action-btn .action-icon,
-.mail-action-btn .action-icon {
-    font-size: 1.05rem;
-    line-height: 1;
-}
-
-.sel-action-btn.cancel-btn,
-.mail-action-btn.cancel-btn {
-    background: rgba(243, 139, 168, 0.12);
-    border-color: rgba(243, 139, 168, 0.3);
-    color: #f38ba8;
-    flex: 0 0 auto;
-    min-width: 40px;
-}
-
-.sel-action-btn.cancel-btn:hover,
-.mail-action-btn.cancel-btn:hover {
-    background: rgba(243, 139, 168, 0.25);
-    border-color: #f38ba8;
-}
-
-.sel-action-btn.delete-btn,
-.mail-action-btn.delete-btn {
+.sel-action-btn.cancel-btn:hover {
+    background: rgba(243, 139, 168, 0.16);
+    border-color: rgba(243, 139, 168, 0.4);
     color: #f38ba8;
 }
-.sel-action-btn.delete-btn:hover,
-.mail-action-btn.delete-btn:hover {
+
+.sel-action-btn.delete-btn {
+    color: var(--off);
+}
+.sel-action-btn.delete-btn:hover {
     background: rgba(243, 139, 168, 0.2);
     border-color: #f38ba8;
+    color: #f38ba8;
+    box-shadow: 0 4px 12px rgba(243, 139, 168, 0.25);
 }
 
 /* Float Selection Bar on Desktop */
@@ -2312,9 +2270,15 @@ body:not(.mobile-mode).mail-selection-active #view-toggle-container {
     transform: translateX(-50%) !important;
     z-index: 1000 !important;
     width: auto !important;
-    min-width: 420px !important;
+    min-width: 360px !important;
     max-width: 92vw !important;
-    background: transparent !important;
+    background: rgba(17, 17, 27, 0.92) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 28px !important;
+    padding: 8px 16px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65) !important;
 }
 body:not(.mobile-mode).entity-selection-active #normal-nav-buttons,
 body:not(.mobile-mode).mail-selection-active #normal-nav-buttons {
