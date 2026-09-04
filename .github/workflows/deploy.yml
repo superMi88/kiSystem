@@ -18,10 +18,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
+
+      - name: Cache node_modules
+        id: node-modules-cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
 
       - name: Abhängigkeiten installieren
-        run: npm ci
+        if: steps.node-modules-cache.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
