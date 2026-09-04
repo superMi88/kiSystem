@@ -2216,17 +2216,12 @@ body.mobile-mode .top-panel > div:first-child {
     transform: translateY(-1.5px) scale(1.01) !important;
 }
 
-.universal-selection-bar,
-#normal-nav-buttons {
-    display: grid !important;
+.universal-selection-bar {
+    display: none;
     grid-template-columns: repeat(6, 1fr) !important;
     justify-items: center !important;
     align-items: center !important;
     width: 100% !important;
-    box-sizing: border-box;
-}
-
-.universal-selection-bar {
     padding: 0;
     background: transparent;
     border: none;
@@ -2234,6 +2229,16 @@ body.mobile-mode .top-panel > div:first-child {
     box-shadow: none;
     animation: fadeInSelectionBar 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     z-index: 100;
+    box-sizing: border-box;
+}
+
+#normal-nav-buttons {
+    display: grid !important;
+    grid-template-columns: repeat(6, 1fr) !important;
+    justify-items: center !important;
+    align-items: center !important;
+    width: 100% !important;
+    box-sizing: border-box;
 }
 
 .sel-slot-spacer {
@@ -2271,6 +2276,17 @@ body.mobile-mode .top-panel > div:first-child {
     box-shadow: 0 4px 12px rgba(243, 139, 168, 0.25);
 }
 
+/* Visibility states for selection mode across mobile & desktop */
+body.entity-selection-active #normal-nav-buttons,
+body.mail-selection-active #normal-nav-buttons {
+    display: none !important;
+}
+
+body.entity-selection-active #universal-selection-action-bar,
+body.mail-selection-active #universal-selection-action-bar {
+    display: grid !important;
+}
+
 /* Float Selection Bar on Desktop */
 body:not(.mobile-mode).entity-selection-active #view-toggle-container,
 body:not(.mobile-mode).mail-selection-active #view-toggle-container {
@@ -2290,14 +2306,6 @@ body:not(.mobile-mode).mail-selection-active #view-toggle-container {
     border-radius: 28px !important;
     padding: 8px 16px !important;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65) !important;
-}
-body:not(.mobile-mode).entity-selection-active #normal-nav-buttons,
-body:not(.mobile-mode).mail-selection-active #normal-nav-buttons {
-    display: none !important;
-}
-body:not(.mobile-mode).entity-selection-active #universal-selection-action-bar,
-body:not(.mobile-mode).mail-selection-active #universal-selection-action-bar {
-    display: grid !important;
 }
 
 /* Switch toggle slider */

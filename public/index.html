@@ -6661,49 +6661,56 @@
                 </button>
             `;
 
+            const normType = String(type || '').toLowerCase().trim();
             let options = [];
 
-            if (type === 'mail') {
+            if (normType === 'mail') {
                 options = [
                     `<button type="button" onclick="openCategoryModalForSelection()" class="plugin-nav-btn sel-action-btn" title="Kategorie(n) zuweisen">${ICONS.tag}</button>`,
                     `<button type="button" onclick="openPersonModalForSelection()" class="plugin-nav-btn sel-action-btn" title="Person zuordnen">${ICONS.person}</button>`,
                     `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
                     `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte E-Mails löschen">${ICONS.trash}</button>`
                 ];
-            } else if (type === 'task') {
+            } else if (normType === 'task' || normType === 'tasks') {
                 options = [
                     `<button type="button" onclick="toggleTasksCompletionForSelection()" class="plugin-nav-btn sel-action-btn" title="Aufgaben als erledigt / offen markieren">${ICONS.check}</button>`,
                     `<button type="button" onclick="openPersonModalForSelection()" class="plugin-nav-btn sel-action-btn" title="Person zuordnen">${ICONS.person}</button>`,
                     `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
                     `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte Aufgaben löschen">${ICONS.trash}</button>`
                 ];
-            } else if (type === 'event') {
+            } else if (normType === 'event' || normType === 'calendar') {
                 options = [
                     `<button type="button" onclick="openPersonModalForSelection()" class="plugin-nav-btn sel-action-btn" title="Person verknüpfen">${ICONS.person}</button>`,
                     `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
                     `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte Termine löschen">${ICONS.trash}</button>`
                 ];
-            } else if (type === 'timer') {
+            } else if (normType === 'timer') {
                 options = [
                     `<button type="button" onclick="toggleTimersForSelection()" class="plugin-nav-btn sel-action-btn" title="Timer starten / pausieren">${ICONS.playPause}</button>`,
                     `<button type="button" onclick="resetTimersForSelection()" class="plugin-nav-btn sel-action-btn" title="Timer zurücksetzen">${ICONS.reset}</button>`,
                     `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
                     `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte Timer löschen">${ICONS.trash}</button>`
                 ];
-            } else if (type === 'person') {
+            } else if (normType === 'person' || normType === 'memory') {
                 options = [
                     `<button type="button" onclick="toggleFavoriteForSelection()" class="plugin-nav-btn sel-action-btn" title="Zu Favoriten hinzufügen / entfernen">${ICONS.star}</button>`,
                     `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
                     `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte Personen löschen">${ICONS.trash}</button>`
                 ];
-            } else if (type === 'day') {
+            } else if (normType === 'day') {
                 options = [
                     `<button type="button" onclick="openNewEventForSelectedDay()" class="plugin-nav-btn sel-action-btn" title="Neuer Termin an diesem Tag">${ICONS.eventPlus}</button>`,
                     `<button type="button" onclick="openNewTaskForSelectedDay()" class="plugin-nav-btn sel-action-btn" title="Neue Aufgabe an diesem Tag">${ICONS.taskPlus}</button>`,
                     `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Tag(e) im Chat verlinken">${ICONS.link}</button>`,
                     `<button type="button" onclick="jumpToSelectedDay()" class="plugin-nav-btn sel-action-btn" title="Zum Tag in der Timeline scrollen">${ICONS.focus}</button>`
                 ];
-            } else if (type === 'note' || type === 'journal' || type === 'project') {
+            } else if (normType === 'note' || normType === 'journal' || normType === 'project') {
+                options = [
+                    `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
+                    `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Löschen">${ICONS.trash}</button>`
+                ];
+            } else {
+                // Generischer Fallback für beliebige andere Entitätstypen
                 options = [
                     `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
                     `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Löschen">${ICONS.trash}</button>`
