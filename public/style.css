@@ -2216,12 +2216,17 @@ body.mobile-mode .top-panel > div:first-child {
     transform: translateY(-1.5px) scale(1.01) !important;
 }
 
+.universal-selection-bar,
+#normal-nav-buttons {
+    display: grid !important;
+    grid-template-columns: repeat(6, 1fr) !important;
+    justify-items: center !important;
+    align-items: center !important;
+    width: 100% !important;
+    box-sizing: border-box;
+}
+
 .universal-selection-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-around;
-    gap: 12px;
-    width: 100%;
     padding: 0;
     background: transparent;
     border: none;
@@ -2229,7 +2234,13 @@ body.mobile-mode .top-panel > div:first-child {
     box-shadow: none;
     animation: fadeInSelectionBar 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     z-index: 100;
-    box-sizing: border-box;
+}
+
+.sel-slot-spacer {
+    width: 44px;
+    height: 44px;
+    visibility: hidden;
+    pointer-events: none;
 }
 
 @keyframes fadeInSelectionBar {
@@ -2285,9 +2296,8 @@ body:not(.mobile-mode).mail-selection-active #normal-nav-buttons {
     display: none !important;
 }
 body:not(.mobile-mode).entity-selection-active #universal-selection-action-bar,
-body:not(.mobile-mode).mail-selection-active #universal-selection-action-bar,
-body:not(.mobile-mode).mail-selection-active #mail-selection-action-bar {
-    display: flex !important;
+body:not(.mobile-mode).mail-selection-active #universal-selection-action-bar {
+    display: grid !important;
 }
 
 /* Switch toggle slider */

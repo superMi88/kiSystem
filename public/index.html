@@ -999,7 +999,7 @@
                     <!-- Floating Mobile Plugins Bar (merged inside input-area for mobile) -->
                     <div id="view-toggle-container" class="mobile-only">
                         <!-- Normal Page Navigation Buttons -->
-                        <div id="normal-nav-buttons" style="display: flex; width: 100%; justify-content: space-around; align-items: center; gap: 12px;">
+                        <div id="normal-nav-buttons" style="display: grid; grid-template-columns: repeat(6, 1fr); justify-items: center; align-items: center; width: 100%;">
                             <button class="plugin-nav-btn" id="btn-nav-calendar" onclick="focusWidget('calendar')" title="Kalender & Tagebuch">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -6583,7 +6583,7 @@
 
             const normalNav = document.getElementById('normal-nav-buttons');
             const selBar = document.getElementById('universal-selection-action-bar');
-            if (normalNav) normalNav.style.display = 'flex';
+            if (normalNav) normalNav.style.display = 'grid';
             if (selBar) {
                 selBar.style.display = 'none';
                 selBar.innerHTML = '';
@@ -6610,7 +6610,7 @@
 
             if (normalNav) normalNav.style.display = 'none';
             if (selBar) {
-                selBar.style.display = 'flex';
+                selBar.style.display = 'grid';
                 renderSelectionActionBar(currentSelectionType, selectedItemIds.size);
             }
 
@@ -6654,109 +6654,70 @@
                 focus: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>`
             };
 
-            let actionsHtml = `
+            const cancelBtnHtml = `
                 <button type="button" onclick="exitSelectionMode()" class="plugin-nav-btn sel-action-btn cancel-btn" title="Auswahl aufheben">
                     ${ICONS.cancel}
                     <span class="badge" style="display: flex;">${count}</span>
                 </button>
             `;
 
+            let options = [];
+
             if (type === 'mail') {
-                actionsHtml += `
-                    <button type="button" onclick="openCategoryModalForSelection()" class="plugin-nav-btn sel-action-btn" title="Kategorie(n) zuweisen">
-                        ${ICONS.tag}
-                    </button>
-                    <button type="button" onclick="openPersonModalForSelection()" class="plugin-nav-btn sel-action-btn" title="Person zuordnen">
-                        ${ICONS.person}
-                    </button>
-                    <button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">
-                        ${ICONS.link}
-                    </button>
-                    <button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte E-Mails löschen">
-                        ${ICONS.trash}
-                    </button>
-                `;
+                options = [
+                    `<button type="button" onclick="openCategoryModalForSelection()" class="plugin-nav-btn sel-action-btn" title="Kategorie(n) zuweisen">${ICONS.tag}</button>`,
+                    `<button type="button" onclick="openPersonModalForSelection()" class="plugin-nav-btn sel-action-btn" title="Person zuordnen">${ICONS.person}</button>`,
+                    `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
+                    `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte E-Mails löschen">${ICONS.trash}</button>`
+                ];
             } else if (type === 'task') {
-                actionsHtml += `
-                    <button type="button" onclick="toggleTasksCompletionForSelection()" class="plugin-nav-btn sel-action-btn" title="Aufgaben als erledigt / offen markieren">
-                        ${ICONS.check}
-                    </button>
-                    <button type="button" onclick="openPersonModalForSelection()" class="plugin-nav-btn sel-action-btn" title="Person zuordnen">
-                        ${ICONS.person}
-                    </button>
-                    <button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">
-                        ${ICONS.link}
-                    </button>
-                    <button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte Aufgaben löschen">
-                        ${ICONS.trash}
-                    </button>
-                `;
+                options = [
+                    `<button type="button" onclick="toggleTasksCompletionForSelection()" class="plugin-nav-btn sel-action-btn" title="Aufgaben als erledigt / offen markieren">${ICONS.check}</button>`,
+                    `<button type="button" onclick="openPersonModalForSelection()" class="plugin-nav-btn sel-action-btn" title="Person zuordnen">${ICONS.person}</button>`,
+                    `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
+                    `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte Aufgaben löschen">${ICONS.trash}</button>`
+                ];
             } else if (type === 'event') {
-                actionsHtml += `
-                    <button type="button" onclick="openPersonModalForSelection()" class="plugin-nav-btn sel-action-btn" title="Person verknüpfen">
-                        ${ICONS.person}
-                    </button>
-                    <button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">
-                        ${ICONS.link}
-                    </button>
-                    <button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte Termine löschen">
-                        ${ICONS.trash}
-                    </button>
-                `;
+                options = [
+                    `<button type="button" onclick="openPersonModalForSelection()" class="plugin-nav-btn sel-action-btn" title="Person verknüpfen">${ICONS.person}</button>`,
+                    `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
+                    `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte Termine löschen">${ICONS.trash}</button>`
+                ];
             } else if (type === 'timer') {
-                actionsHtml += `
-                    <button type="button" onclick="toggleTimersForSelection()" class="plugin-nav-btn sel-action-btn" title="Timer starten / pausieren">
-                        ${ICONS.playPause}
-                    </button>
-                    <button type="button" onclick="resetTimersForSelection()" class="plugin-nav-btn sel-action-btn" title="Timer zurücksetzen">
-                        ${ICONS.reset}
-                    </button>
-                    <button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">
-                        ${ICONS.link}
-                    </button>
-                    <button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte Timer löschen">
-                        ${ICONS.trash}
-                    </button>
-                `;
+                options = [
+                    `<button type="button" onclick="toggleTimersForSelection()" class="plugin-nav-btn sel-action-btn" title="Timer starten / pausieren">${ICONS.playPause}</button>`,
+                    `<button type="button" onclick="resetTimersForSelection()" class="plugin-nav-btn sel-action-btn" title="Timer zurücksetzen">${ICONS.reset}</button>`,
+                    `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
+                    `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte Timer löschen">${ICONS.trash}</button>`
+                ];
             } else if (type === 'person') {
-                actionsHtml += `
-                    <button type="button" onclick="toggleFavoriteForSelection()" class="plugin-nav-btn sel-action-btn" title="Zu Favoriten hinzufügen / entfernen">
-                        ${ICONS.star}
-                    </button>
-                    <button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">
-                        ${ICONS.link}
-                    </button>
-                    <button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte Personen löschen">
-                        ${ICONS.trash}
-                    </button>
-                `;
+                options = [
+                    `<button type="button" onclick="toggleFavoriteForSelection()" class="plugin-nav-btn sel-action-btn" title="Zu Favoriten hinzufügen / entfernen">${ICONS.star}</button>`,
+                    `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
+                    `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte Personen löschen">${ICONS.trash}</button>`
+                ];
             } else if (type === 'day') {
-                actionsHtml += `
-                    <button type="button" onclick="openNewEventForSelectedDay()" class="plugin-nav-btn sel-action-btn" title="Neuer Termin an diesem Tag">
-                        ${ICONS.eventPlus}
-                    </button>
-                    <button type="button" onclick="openNewTaskForSelectedDay()" class="plugin-nav-btn sel-action-btn" title="Neue Aufgabe an diesem Tag">
-                        ${ICONS.taskPlus}
-                    </button>
-                    <button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Tag(e) im Chat verlinken">
-                        ${ICONS.link}
-                    </button>
-                    <button type="button" onclick="jumpToSelectedDay()" class="plugin-nav-btn sel-action-btn" title="Zum Tag in der Timeline scrollen">
-                        ${ICONS.focus}
-                    </button>
-                `;
+                options = [
+                    `<button type="button" onclick="openNewEventForSelectedDay()" class="plugin-nav-btn sel-action-btn" title="Neuer Termin an diesem Tag">${ICONS.eventPlus}</button>`,
+                    `<button type="button" onclick="openNewTaskForSelectedDay()" class="plugin-nav-btn sel-action-btn" title="Neue Aufgabe an diesem Tag">${ICONS.taskPlus}</button>`,
+                    `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Tag(e) im Chat verlinken">${ICONS.link}</button>`,
+                    `<button type="button" onclick="jumpToSelectedDay()" class="plugin-nav-btn sel-action-btn" title="Zum Tag in der Timeline scrollen">${ICONS.focus}</button>`
+                ];
             } else if (type === 'note' || type === 'journal' || type === 'project') {
-                actionsHtml += `
-                    <button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">
-                        ${ICONS.link}
-                    </button>
-                    <button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Löschen">
-                        ${ICONS.trash}
-                    </button>
-                `;
+                options = [
+                    `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
+                    `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Löschen">${ICONS.trash}</button>`
+                ];
             }
 
-            selBar.innerHTML = actionsHtml;
+            // Exakt 6 Slots wie im normalen Nav-Menü:
+            // Slot 1: Immer Abbruch-Button ganz links
+            // Slot 2 bis (6 - options.length): Lücke / Abstand
+            // Letzte Slots: Aktionen rechtsbündig
+            const gapCount = Math.max(0, 5 - options.length);
+            const gapHtml = '<div class="sel-slot-spacer"></div>'.repeat(gapCount);
+
+            selBar.innerHTML = cancelBtnHtml + gapHtml + options.join('');
         }
 
         // ==========================================
