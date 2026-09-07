@@ -1,26 +1,48 @@
 {
   "name": "kiSystem",
-  "requirements": [
+  "repository": "superMi88/kiSystem",
+  "category": "KI & Assistenten",
+  "services": [
     {
-      "key": "DATABASE_URL",
-      "type": "database",
-      "dbType": "postgres",
-      "description": "Prisma PostgreSQL Connection URL"
-    },
-    {
-      "key": "GOOGLE_API_KEY",
-      "type": "credential",
-      "description": "Google AI / Maps API Key"
-    },
-    {
-      "key": "PORT",
-      "type": "credential",
-      "description": "Port the node server listens on"
-    },
-    {
-      "key": "GEMINI_MODEL",
-      "type": "credential",
-      "description": "Gemini Model name to use (e.g. gemini-3.5-flash)"
+      "name": "kiSystem",
+      "pm2Process": "kisystem",
+      "envPath": ".env",
+      "requirements": [
+        {
+          "key": "PORT",
+          "label": "Server Port",
+          "type": "port",
+          "defaultValue": "3001",
+          "description": "Port, auf dem der Node/Express-Server lauscht"
+        },
+        {
+          "key": "DATABASE_URL",
+          "label": "PostgreSQL Datenbank",
+          "type": "database",
+          "dbType": "postgres",
+          "description": "Prisma PostgreSQL Verbindungs-URL (mit pgvector Extension)"
+        },
+        {
+          "key": "GOOGLE_API_KEY",
+          "label": "Google Gemini API Key",
+          "type": "secret",
+          "description": "API-Schlüssel für Google Generative AI (Gemini)"
+        },
+        {
+          "key": "GEMINI_MODEL",
+          "label": "Gemini Modell",
+          "type": "credential",
+          "defaultValue": "gemini-3.5-flash",
+          "description": "Standard Gemini Modell (z. B. gemini-3.5-flash)"
+        },
+        {
+          "key": "MOBILE_SERVER_URL",
+          "label": "Mobile Server URL",
+          "type": "domain",
+          "defaultValue": "https://ki.kleiner-wald-server.de",
+          "description": "Server-Adresse für die mobile App (Capacitor)"
+        }
+      ]
     }
   ]
 }
