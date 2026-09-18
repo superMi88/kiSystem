@@ -1036,6 +1036,7 @@ body.mobile-mode.view-plugins #top-widgets-container > div {
 }
 
 /* Show only the active plugin widget */
+body.mobile-mode.view-dashboard #top-widgets-container > #widget-dashboard,
 body.mobile-mode.view-calendar #top-widgets-container > #widget-calendar,
 body.mobile-mode.view-timer #top-widgets-container > #widget-timer,
 body.mobile-mode.view-projects #top-widgets-container > #widget-projects,
@@ -1644,16 +1645,32 @@ body.mobile-mode .top-panel > div:first-child {
 /* Unified Timeline Widget Styles (Kalender & Tagebuch) */
 .timeline-day-box {
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    border-left: none !important;
+    border-right: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
 }
 .timeline-day-box.today-box {
-    border-color: rgba(137, 180, 250, 0.35) !important;
-    background: rgba(137, 180, 250, 0.04) !important;
-    box-shadow: 0 4px 12px rgba(137, 180, 250, 0.08) !important;
+    border-top: 1px solid rgba(137, 180, 250, 0.35) !important;
+    border-bottom: 1px solid rgba(137, 180, 250, 0.35) !important;
+    border-left: none !important;
+    border-right: none !important;
+    background: rgba(137, 180, 250, 0.025) !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
 }
 .timeline-day-box.timeline-jump-highlight {
-    border-color: var(--accent) !important;
-    box-shadow: 0 0 18px rgba(137, 180, 250, 0.5) !important;
-    transform: scale(1.01);
+    border-top: 1px solid var(--accent) !important;
+    border-bottom: 1px solid var(--accent) !important;
+    border-left: none !important;
+    border-right: none !important;
+    box-shadow: 0 0 16px rgba(137, 180, 250, 0.25) !important;
+    border-radius: 0 !important;
+}
+.swipe-link-wrapper:has(> .timeline-day-box) {
+    border-radius: 0 !important;
+}
+
 }
 
 /* Mail Plugin Styles */
@@ -2103,10 +2120,14 @@ body.mobile-mode .top-panel > div:first-child {
 
 .timeline-day-box {
     transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+    border-left: none !important;
+    border-right: none !important;
+    border-radius: 0 !important;
 }
 
 .timeline-day-box:hover {
-    border-color: rgba(255, 255, 255, 0.12);
+    border-top-color: rgba(255, 255, 255, 0.15);
+    border-bottom-color: rgba(255, 255, 255, 0.15);
 }
 
 .timeline-day-link-btn {
@@ -2233,12 +2254,62 @@ body.mobile-mode .top-panel > div:first-child {
 }
 
 #normal-nav-buttons {
-    display: grid !important;
-    grid-template-columns: repeat(6, 1fr) !important;
-    justify-items: center !important;
+    display: flex !important;
+    justify-content: center !important;
     align-items: center !important;
+    gap: 12px !important;
     width: 100% !important;
     box-sizing: border-box;
+    padding: 0 8px;
+}
+
+.main-tab-btn {
+    flex: 1;
+    max-width: 180px;
+    height: 42px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    outline: none;
+    position: relative;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    user-select: none;
+}
+
+.main-tab-btn svg {
+    flex-shrink: 0;
+    transition: transform 0.2s;
+}
+
+.main-tab-btn:hover {
+    background: rgba(137, 180, 250, 0.12);
+    border-color: rgba(137, 180, 250, 0.4);
+    color: var(--accent);
+    transform: translateY(-1px);
+}
+
+.main-tab-btn:hover svg {
+    transform: scale(1.08);
+}
+
+.main-tab-btn:active {
+    transform: scale(0.97) translateY(0);
+}
+
+.main-tab-btn.active {
+    background: rgba(137, 180, 250, 0.2) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+    box-shadow: 0 0 16px rgba(137, 180, 250, 0.3) !important;
 }
 
 .sel-slot-spacer {
@@ -2349,6 +2420,610 @@ input:checked + .slider:before {
   transform: translateX(18px);
   background-color: #11111b;
 }
+
+/* ==========================================================================
+   ARBEITSTISCH DASHBOARD & WIDGETS
+   ========================================================================== */
+
+.arbeitstisch-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.arbeitstisch-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(30, 30, 46, 0.8), rgba(24, 24, 37, 0.9));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.arbeitstisch-greeting {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.arbeitstisch-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+    margin: 0;
+    color: #ffffff;
+    letter-spacing: 0.3px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.arbeitstisch-subtitle {
+    font-size: 0.8rem;
+    color: var(--accent);
+    font-weight: 500;
+}
+
+.arbeitstisch-quick-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.arbeitstisch-quick-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid rgba(137, 180, 250, 0.3);
+    background: rgba(137, 180, 250, 0.1);
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.arbeitstisch-quick-btn:hover {
+    background: rgba(137, 180, 250, 0.2);
+    border-color: var(--accent);
+    transform: translateY(-1px);
+}
+
+/* Grid Layout for Arbeitstisch Cards */
+.arbeitstisch-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    width: 100%;
+}
+
+@media (min-width: 820px) {
+    .arbeitstisch-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.arbeitstisch-card {
+    border-radius: 14px;
+    background: rgba(24, 24, 37, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 16px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    backdrop-filter: blur(12px);
+    transition: border-color 0.2s;
+}
+
+.arbeitstisch-card:hover {
+    border-color: rgba(137, 180, 250, 0.25);
+}
+
+.arbeitstisch-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 10px;
+    gap: 8px;
+}
+
+.card-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #cdd6f4;
+}
+
+.card-icon {
+    font-size: 1.1rem;
+}
+
+.card-counter-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #a6adc8;
+}
+
+.card-counter-badge.urgent {
+    background: rgba(243, 139, 168, 0.2);
+    color: #f38ba8;
+    border: 1px solid rgba(243, 139, 168, 0.3);
+}
+
+.card-counter-badge.unread {
+    background: rgba(250, 179, 135, 0.2);
+    color: #fab387;
+    border: 1px solid rgba(250, 179, 135, 0.3);
+}
+
+.card-counter-badge.active {
+    background: rgba(166, 227, 161, 0.2);
+    color: #a6e3a1;
+    border: 1px solid rgba(166, 227, 161, 0.3);
+}
+
+.card-action-link {
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.card-action-link:hover {
+    background: rgba(137, 180, 250, 0.1);
+}
+
+.arbeitstisch-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding-right: 2px;
+    overscroll-behavior: contain;
+}
+
+.arbeitstisch-empty-hint {
+    padding: 18px 12px;
+    text-align: center;
+    font-size: 0.78rem;
+    opacity: 0.65;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 10px;
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+/* Event Item on Arbeitstisch */
+.arbeitstisch-event-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.arbeitstisch-event-item:hover {
+    background: rgba(137, 180, 250, 0.08);
+    border-color: rgba(137, 180, 250, 0.25);
+    transform: translateX(2px);
+}
+
+.event-time-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--accent);
+    padding: 3px 7px;
+    border-radius: 6px;
+    background: rgba(137, 180, 250, 0.12);
+    border: 1px solid rgba(137, 180, 250, 0.25);
+    white-space: nowrap;
+}
+
+.event-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.event-title {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #ffffff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.event-sub {
+    font-size: 0.72rem;
+    opacity: 0.65;
+    margin-top: 2px;
+}
+
+/* Task Item on Arbeitstisch */
+.arbeitstisch-task-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition: all 0.2s;
+}
+
+.arbeitstisch-task-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.task-checkbox-custom {
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.task-checkbox-custom:hover {
+    border-color: var(--accent);
+    background: rgba(137, 180, 250, 0.1);
+}
+
+.task-checkbox-custom.completed {
+    background: #a6e3a1;
+    border-color: #a6e3a1;
+    color: #11111b;
+}
+
+.task-info {
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.task-title {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #cdd6f4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.task-sub {
+    font-size: 0.7rem;
+    opacity: 0.6;
+    margin-top: 1px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.in-planning-badge {
+    font-size: 0.65rem;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(203, 166, 247, 0.15);
+    color: #cba6f7;
+    border: 1px solid rgba(203, 166, 247, 0.3);
+    font-weight: 600;
+}
+
+/* Mail Preview Item on Arbeitstisch */
+.arbeitstisch-mail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.arbeitstisch-mail-item:hover {
+    background: rgba(250, 179, 135, 0.08);
+    border-color: rgba(250, 179, 135, 0.25);
+    transform: translateX(2px);
+}
+
+.mail-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.mail-sender {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #fab387;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mail-date {
+    font-size: 0.68rem;
+    opacity: 0.6;
+    flex-shrink: 0;
+}
+
+.mail-subject {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #ffffff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mail-snippet {
+    font-size: 0.72rem;
+    opacity: 0.65;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Timer Card on Arbeitstisch */
+.arbeitstisch-timer-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(166, 227, 161, 0.06);
+    border: 1px solid rgba(166, 227, 161, 0.2);
+    gap: 12px;
+}
+
+.timer-info-box {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.timer-item-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #cdd6f4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.timer-countdown-live {
+    font-family: monospace;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #a6e3a1;
+    letter-spacing: 1px;
+}
+
+.timer-quick-stop-btn {
+    background: rgba(243, 139, 168, 0.15);
+    border: 1px solid rgba(243, 139, 168, 0.35);
+    color: #f38ba8;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.timer-quick-stop-btn:hover {
+    background: rgba(243, 139, 168, 0.25);
+    border-color: #f38ba8;
+}
+
+/* ==========================================================================
+   CHAT CODE BLOCKS & COPY FUNCTIONALITY
+   ========================================================================== */
+
+.chat-code-block {
+    position: relative;
+    margin: 10px 0;
+    border-radius: 10px;
+    background: #181825;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+.chat-code-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.chat-code-lang {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: monospace;
+}
+
+.chat-code-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: #cdd6f4;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+}
+
+.chat-code-copy-btn:hover {
+    background: rgba(137, 180, 250, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.chat-code-copy-btn.copied {
+    background: rgba(166, 227, 161, 0.2) !important;
+    border-color: #a6e3a1 !important;
+    color: #a6e3a1 !important;
+}
+
+.chat-code-content {
+    margin: 0;
+    padding: 12px 14px;
+    overflow-x: auto;
+    font-family: "JetBrains Mono", Consolas, Menlo, Monaco, monospace;
+    font-size: 0.84rem;
+    line-height: 1.5;
+    color: #cdd6f4;
+    background: transparent;
+    tab-size: 2;
+}
+
+.chat-code-content code {
+    background: transparent !important;
+    padding: 0 !important;
+    border: none !important;
+    color: inherit !important;
+    font-family: inherit !important;
+    font-size: inherit !important;
+    white-space: pre;
+}
+
+/* Message copy button */
+.message-container-wrap {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.message-copy-btn {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    opacity: 0;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #cdd6f4;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 10;
+}
+
+.message:hover .message-copy-btn {
+    opacity: 0.8;
+}
+
+.message-copy-btn:hover {
+    opacity: 1 !important;
+    background: rgba(137, 180, 250, 0.25);
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: scale(1.05);
+}
+
+.message-copy-btn.copied {
+    opacity: 1 !important;
+    background: rgba(166, 227, 161, 0.25) !important;
+    border-color: #a6e3a1 !important;
+    color: #a6e3a1 !important;
+}
+
+/* ==========================================================================
+   SCROLL-BUG FIXES & RESPONSIVE CONTAINER CONSTRAINTS
+   ========================================================================== */
+
+/* Dynamic viewport height and safe area padding */
+html, body {
+    height: 100dvh;
+    min-height: -webkit-fill-available;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.top-panel {
+    min-height: 0;
+    max-height: 100dvh !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+    padding-bottom: 160px !important;
+}
+
+.chat-area {
+    min-height: 0;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+    padding-bottom: 160px !important;
+}
+
+#top-widgets-container {
+    width: 100%;
+    min-height: 0;
+    box-sizing: border-box;
+}
+
+/* Modal Content Scroll Fixes */
+.glass-card {
+    box-sizing: border-box;
+}
+
+.glass-card > div[style*="overflow-y"] {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
 
 
 

@@ -269,7 +269,8 @@ export async function getEventsForRange(start: Date, end: Date, prisma: any): Pr
       cancellationReason: e.cancellationReason || null,
       originalStart: e.originalStart ? e.originalStart.toISOString() : null,
       originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null,
-      fuzzyTime: e.fuzzyTime
+      fuzzyTime: e.fuzzyTime,
+      isPlanned: e.isPlanned
     })),
     ...occurrences.map((o: any) => ({
       id: o.id,
@@ -297,7 +298,8 @@ export async function getEventsForRange(start: Date, end: Date, prisma: any): Pr
       completed: t.completed,
       recurring: t.recurrence !== null && t.recurrence !== "none",
       recurrence: t.recurrence,
-      listTitle: t.listTitle
+      listTitle: t.listTitle,
+      isPlanned: t.isPlanned
     })),
     ...birthdayEvents
   ];
@@ -540,7 +542,8 @@ export const calendarPlugin: Plugin = {
             wiederkehrend: { type: SchemaType.BOOLEAN, description: "Ob der Termin sich wiederholt (optional)" },
             wiederholungsTyp: { type: SchemaType.STRING, description: "Typ der Wiederholung: 'DAILY', 'WEEKLY' oder 'MONTHLY' (optional)" },
             wiederholungsEnde: { type: SchemaType.STRING, description: "Enddatum der Wiederholung YYYY-MM-DD (optional)" },
-            tageszeit: { type: SchemaType.STRING, description: "Uhrzeit-Abschnitt, falls nicht minutengenau: 'morgens', 'vormittag', 'mittags', 'nachmittag' oder 'abends' (optional)" }
+            tageszeit: { type: SchemaType.STRING, description: "Uhrzeit-Abschnitt, falls nicht minutengenau: 'morgens', 'vormittag', 'mittags', 'nachmittag' oder 'abends' (optional)" },
+            inPlanung: { type: SchemaType.BOOLEAN, description: "Ob der Termin noch in Planung ist (noch nicht fest terminiert, optional)" }
           },
           required: ["titel", "datum"]
         } as any
@@ -583,7 +586,8 @@ export const calendarPlugin: Plugin = {
                 start,
                 end,
                 isAllDay,
-                fuzzyTime
+                fuzzyTime,
+                isPlanned: !!args.inPlanung
               }
             });
           }
@@ -799,7 +803,8 @@ export const calendarPlugin: Plugin = {
             ausgefallen: { type: SchemaType.BOOLEAN, description: "Ob das Event ausfällt (optional)" },
             ausfallGrund: { type: SchemaType.STRING, description: "Grund für den Ausfall (optional)" },
             geloescht: { type: SchemaType.BOOLEAN, description: "Ob der Termin an diesem Tag gelöscht werden soll (optional)" },
-            tageszeit: { type: SchemaType.STRING, description: "Uhrzeit-Abschnitt, falls nicht minutengenau: 'morgens', 'vormittag', 'mittags', 'nachmittag' oder 'abends' (optional)" }
+            tageszeit: { type: SchemaType.STRING, description: "Uhrzeit-Abschnitt, falls nicht minutengenau: 'morgens', 'vormittag', 'mittags', 'nachmittag' oder 'abends' (optional)" },
+            inPlanung: { type: SchemaType.BOOLEAN, description: "Ob der Termin noch in Planung ist (optional)" }
           },
           required: ["eventId", "datum"]
         } as any
@@ -841,6 +846,7 @@ export const calendarPlugin: Plugin = {
               if (args.ausgefallen !== undefined) data.isCancelled = !!args.ausgefallen;
               if (args.ausfallGrund !== undefined) data.cancellationReason = args.ausfallGrund;
               if (args.geloescht !== undefined) data.isDeleted = !!args.geloescht;
+              if (args.inPlanung !== undefined) data.isPlanned = !!args.inPlanung;
 
               if (args.tageszeit !== undefined) {
                 const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
@@ -896,6 +902,7 @@ export const calendarPlugin: Plugin = {
               if (args.ausgefallen !== undefined) data.isCancelled = !!args.ausgefallen;
               if (args.ausfallGrund !== undefined) data.cancellationReason = args.ausfallGrund;
               if (args.geloescht !== undefined) data.isDeleted = !!args.geloescht;
+              if (args.inPlanung !== undefined) data.isPlanned = !!args.inPlanung;
 
               if (args.tageszeit !== undefined) {
                 const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
@@ -960,6 +967,7 @@ export const calendarPlugin: Plugin = {
               if (args.ganztaegig !== undefined) data.isAllDay = !!args.ganztaegig;
               if (args.ausgefallen !== undefined) data.isCancelled = !!args.ausgefallen;
               if (args.ausfallGrund !== undefined) data.cancellationReason = args.ausfallGrund;
+              if (args.inPlanung !== undefined) data.isPlanned = !!args.inPlanung;
 
               if (args.tageszeit !== undefined) {
                 const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;

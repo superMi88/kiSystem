@@ -160,4 +160,38 @@ public class WidgetSettingsPlugin extends Plugin {
         ret.put("enabled", enabled);
         call.resolve(ret);
     }
+
+    @PluginMethod
+    public void cancelMailNotification(PluginCall call) {
+        Integer mailId = call.getInt("mailId", 0);
+        if (mailId != null && mailId != 0) {
+            MailNotificationHelper.cancelMailNotification(getContext(), mailId);
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void cancelAllMailNotifications(PluginCall call) {
+        MailNotificationHelper.cancelAllMailNotifications(getContext());
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void getLastNotifiedMailId(PluginCall call) {
+        SharedPreferences prefs = getContext().getSharedPreferences("WidgetStorage", Context.MODE_PRIVATE);
+        int id = prefs.getInt("last_notified_mail_id", 0);
+        JSObject ret = new JSObject();
+        ret.put("id", id);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void setLastNotifiedMailId(PluginCall call) {
+        Integer id = call.getInt("id", 0);
+        if (id != null) {
+            SharedPreferences prefs = getContext().getSharedPreferences("WidgetStorage", Context.MODE_PRIVATE);
+            prefs.edit().putInt("last_notified_mail_id", id).apply();
+        }
+        call.resolve();
+    }
 }

@@ -40,15 +40,24 @@ export const tasksPlugin: Plugin = {
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
-            zeigeGeloeschte: { type: SchemaType.BOOLEAN, description: "Wenn true, werden nur gelöschte Aufgaben zurückgegeben. Standard ist false." }
+            zeigeGeloeschte: { type: SchemaType.BOOLEAN, description: "Wenn true, werden nur gelöschte Aufgaben zurückgegeben. Standard ist false." },
+            nurInPlanung: { type: SchemaType.BOOLEAN, description: "Wenn true, werden nur Aufgaben zurückgegeben, die 'In Planung' sind." }
           }
         } as any
       },
       handler: async (args, { prisma }) => {
         const zeigeGeloeschte = !!args.zeigeGeloeschte;
+        const nurInPlanung = !!args.nurInPlanung;
+        const whereClause: any = zeigeGeloeschte
+          ? { isDeleted: true }
+          : { completed: false, isDeleted: false };
+        if (nurInPlanung && !zeigeGeloeschte) {
+          whereClause.isPlanned = true;
+        }
+
         const tasks = await prisma.task.findMany({
-          where: { completed: false, isDeleted: zeigeGeloeschte },
-          orderBy: { createdAt: "desc" }
+          where: whereClause,
+          orderBy: { updatedAt: "desc" }
         });
         return {
           status: "success",
@@ -59,7 +68,10 @@ export const tasksPlugin: Plugin = {
             faellig: t.due ? t.due.toISOString() : null,
             aufgabenlisteId: t.listTitle,
             aufgabenlisteTitel: t.listTitle,
-            wiederholung: t.recurrence || null
+            wiederholung: t.recurrence || null,
+            erledigt: t.completed,
+            geloescht: t.isDeleted,
+            inPlanung: t.isPlanned
           }))
         };
       }
@@ -76,7 +88,8 @@ export const tasksPlugin: Plugin = {
             datum: { type: SchemaType.STRING, description: "Fälligkeitsdatum im Format YYYY-MM-DD (optional)" },
             aufgabenlisteTitel: { type: SchemaType.STRING, description: "Die Aufgabenliste/Kategorie. Standardwert ist 'Standard' (optional)" },
             recurrence: { type: SchemaType.STRING, description: "Wiederholungsintervall: 'daily', 'weekly', 'monthly', 'yearly' oder 'none' (optional)" },
-            projectId: { type: SchemaType.INTEGER, description: "Die ID des Projekts, dem die Aufgabe zugeordnet ist (optional)" }
+            projectId: { type: SchemaType.INTEGER, description: "Die ID des Projekts, dem die Aufgabe zugeordnet ist (optional)" },
+            inPlanung: { type: SchemaType.BOOLEAN, description: "Ob die Aufgabe noch 'In Planung' ist (noch nicht fest terminiert, optional)" }
           },
           required: ["titel"]
         } as any
@@ -85,6 +98,7 @@ export const tasksPlugin: Plugin = {
         let due = args.datum ? new Date(args.datum) : undefined;
         const recurrence = args.recurrence && args.recurrence !== "none" ? args.recurrence.toLowerCase() : null;
         const projectId = args.projectId ? Number(args.projectId) : null;
+        const isPlanned = args.inPlanung !== undefined ? !!args.inPlanung : false;
         
         // If recurrence is set but no due date is provided, default to today
         if (recurrence && !due) {
@@ -100,7 +114,8 @@ export const tasksPlugin: Plugin = {
               due: due || null,
               listTitle: args.aufgabenlisteTitel || "Standard",
               recurrence: recurrence,
-              projectId: projectId
+              projectId: projectId,
+              isPlanned: isPlanned
             }
           });
           return {
@@ -113,7 +128,8 @@ export const tasksPlugin: Plugin = {
               faellig: task.due ? task.due.toISOString() : null,
               aufgabenlisteTitel: task.listTitle,
               recurrence: task.recurrence,
-              projectId: task.projectId
+              projectId: task.projectId,
+              inPlanung: task.isPlanned
             }
           };
         } catch (e: any) {
@@ -175,6 +191,33 @@ export const tasksPlugin: Plugin = {
               message: "Aufgabe erfolgreich als erledigt markiert."
             };
           }
+        } catch (e: any) {
+          return { status: "error", message: `Fehler: ${e.message}` };
+        }
+      }
+    },
+    {
+      definition: {
+        name: "wiedereroeffnen_aufgabe",
+        description: "Markiert eine erledigte Aufgabe wieder als unerledigt / offen.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            taskId: { type: SchemaType.STRING, description: "Die ID der Aufgabe" }
+          },
+          required: ["taskId"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        try {
+          await prisma.task.update({
+            where: { id: Number(args.taskId) },
+            data: { completed: false, completedAt: null }
+          });
+          return {
+            status: "success",
+            message: "Aufgabe erfolgreich wiedereröffnet (als offen markiert)."
+          };
         } catch (e: any) {
           return { status: "error", message: `Fehler: ${e.message}` };
         }
@@ -247,7 +290,8 @@ export const tasksPlugin: Plugin = {
             datum: { type: SchemaType.STRING, description: "Fälligkeitsdatum im Format YYYY-MM-DD (optional, 'null' zum Entfernen)" },
             aufgabenlisteTitel: { type: SchemaType.STRING, description: "Die Aufgabenliste/Kategorie (optional)" },
             recurrence: { type: SchemaType.STRING, description: "Neues Wiederholungsintervall: 'daily', 'weekly', 'monthly', 'yearly' oder 'none' (optional)" },
-            projectId: { type: SchemaType.INTEGER, description: "Die neue ID des Projekts oder 'null' zum Entfernen (optional)" }
+            projectId: { type: SchemaType.INTEGER, description: "Die neue ID des Projekts oder 'null' zum Entfernen (optional)" },
+            inPlanung: { type: SchemaType.BOOLEAN, description: "Ob die Aufgabe noch 'In Planung' ist (optional)" }
           },
           required: ["taskId"]
         } as any
@@ -261,6 +305,7 @@ export const tasksPlugin: Plugin = {
             updateData.due = args.datum && args.datum !== "null" ? new Date(args.datum) : null;
           }
           if (args.aufgabenlisteTitel !== undefined) updateData.listTitle = args.aufgabenlisteTitel || "Standard";
+          if (args.inPlanung !== undefined) updateData.isPlanned = !!args.inPlanung;
           if (args.recurrence !== undefined) {
             updateData.recurrence = args.recurrence === "none" ? null : args.recurrence.toLowerCase();
             // If recurrence is set but there's no due date, default to today
@@ -277,13 +322,20 @@ export const tasksPlugin: Plugin = {
             updateData.projectId = args.projectId === "null" || args.projectId === null ? null : Number(args.projectId);
           }
 
-          await prisma.task.update({
+          const updatedTask = await prisma.task.update({
             where: { id: Number(args.taskId) },
             data: updateData
           });
           return {
             status: "success",
-            message: "Aufgabe erfolgreich aktualisiert."
+            message: "Aufgabe erfolgreich aktualisiert.",
+            aufgabe: {
+              id: String(updatedTask.id),
+              titel: updatedTask.title,
+              notizen: updatedTask.notes || "",
+              faellig: updatedTask.due ? updatedTask.due.toISOString() : null,
+              inPlanung: updatedTask.isPlanned
+            }
           };
         } catch (e: any) {
           return { status: "error", message: `Fehler beim Aktualisieren: ${e.message}` };

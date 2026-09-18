@@ -129,4 +129,40 @@ public class MailNotificationHelper {
             "demo@kisystem.app"
         );
     }
+
+    public static void cancelMailNotification(Context context, int mailId) {
+        try {
+            NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return;
+            int notifId = mailId > 0 ? 10000 + mailId : 9999;
+            nm.cancel(notifId);
+            Log.d(TAG, "Cancelled mail notification for mailId " + mailId + " (notifId: " + notifId + ")");
+        } catch (Exception e) {
+            Log.e(TAG, "Error cancelling mail notification for mailId " + mailId, e);
+        }
+    }
+
+    public static void cancelAllMailNotifications(Context context) {
+        try {
+            NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return;
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                android.service.notification.StatusBarNotification[] activeNotifs = nm.getActiveNotifications();
+                if (activeNotifs != null) {
+                    for (android.service.notification.StatusBarNotification sbn : activeNotifs) {
+                        int id = sbn.getId();
+                        if (id >= 9999 && id < 1000000) {
+                            nm.cancel(id);
+                        }
+                    }
+                }
+            } else {
+                nm.cancel(9999);
+            }
+            Log.d(TAG, "Cancelled all mail notifications");
+        } catch (Exception e) {
+            Log.e(TAG, "Error cancelling all mail notifications", e);
+        }
+    }
 }

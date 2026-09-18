@@ -131,6 +131,7 @@ model Event {
   
   originalStart          DateTime?          // Ursprüngliche Startzeit (falls der Termin verschoben wurde)
   originalEnd            DateTime?          // Ursprüngliche Endzeit (falls der Termin verschoben wurde)
+  isPlanned              Boolean            @default(false) // Kennzeichnung 'In Planung' (noch nicht fest terminiert)
 
   createdAt              DateTime           @default(now()) // Erstellungszeitpunkt
   updatedAt              DateTime           @updatedAt // Letzte Aktualisierung
@@ -163,6 +164,7 @@ model Task {
   completedAt DateTime? // Zeitpunkt, an dem die Aufgabe tatsächlich erledigt wurde
   listTitle   String    @default("Standard") // Name der Aufgabenliste (z. B. "Standard", "Einkäufe")
   recurrence  String?   // Optionales Wiederholungsmuster als Freitext/Regel
+  isPlanned   Boolean   @default(false) // Kennzeichnung 'In Planung' (noch nicht fest terminiert)
   createdAt   DateTime  @default(now()) // Erstellungszeitpunkt
   updatedAt   DateTime  @updatedAt // Zeitpunkt der letzten Aktualisierung
   isDeleted   Boolean   @default(false) // Soft-Delete-Flag
@@ -244,6 +246,29 @@ model CachedEmail {
   createdAt      DateTime    @default(now()) // Abrufzeitpunkt
 
   @@unique([accountId, uid])
+}
+
+/// [Mail / Bahn Plugin] Repräsentiert eine aus einer DB-Buchungsmail extrahierte Zugfahrt zur Echtzeit-Überwachung.
+model TrainTrip {
+  id                      Int       @id @default(autoincrement())
+  bookingCode             String?   // Buchungscode / Auftragsnummer (z. B. "AB12CD")
+  trainNumber             String    // Zugnummer (z. B. "ICE 123", "RE 1")
+  originStation           String    // Startbahnhof (z. B. "Berlin Hbf")
+  originEva               String?   // EVA-Nummer des Startbahnhofs für iris API (z. B. "8011160")
+  destinationStation      String?   // Zielbahnhof (optional)
+  departureTime           DateTime  // Geplante Abfahrtszeit
+  realtimeDeparture       DateTime? // Tatsächliche / prognostizierte Abfahrtszeit
+  delayMinutes            Int       @default(0) // Aktuelle Verspätung in Minuten
+  platform                String?   // Geplantes Abfahrtsgleis
+  realtimePlatform        String?   // Tatsächliches Abfahrtsgleis (bei Gleiswechsel)
+  status                  String    @default("scheduled") // scheduled, monitoring, departed, cancelled
+  lastCheck               DateTime? // Zeitpunkt der letzten bahn.expert Abfrage
+  notificationSent        Boolean   @default(false) // Wurde bereits benachrichtigt
+  lastNotificationMessage String?   // Zuletzt gesendete Benachrichtigung
+  rawEmailId              Int?      // Optionale Verknüpfung zu CachedEmail
+  isDeleted               Boolean   @default(false)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 }
 
 

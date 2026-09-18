@@ -37,6 +37,11 @@ public class MailSyncWorker extends Worker {
                 return Result.success();
             }
 
+            boolean isForeground = MainActivity.isAppInForeground || prefs.getBoolean("is_app_in_foreground", false);
+            if (isForeground) {
+                Log.d(TAG, "App is in foreground. Skipping push notifications to avoid interrupting user.");
+            }
+
             String serverUrl = prefs.getString("server_url", "");
             if (serverUrl.isEmpty()) serverUrl = prefs.getString("serverUrl", "");
             if (serverUrl.isEmpty()) serverUrl = "https://ki.kleiner-wald-server.de";
@@ -100,20 +105,31 @@ public class MailSyncWorker extends Worker {
 
                     Log.d(TAG, "Mail check response: latestMailId=" + latestMailId + ", unreadCount=" + unreadCount + ", newEmailsCount=" + (newEmails != null ? newEmails.length() : 0));
 
-                    if (newEmails != null && newEmails.length() > 0) {
-                        // Wenn lastNotifiedMailId noch 0 ist (Erster Aufruf), benachrichtigen wir über bis zu 3 neuere ungelesene Mails
-                        int maxToNotify = (lastNotifiedMailId == 0) ? Math.min(3, newEmails.length()) : newEmails.length();
-                        for (int i = 0; i < maxToNotify; i++) {
-                            JSONObject mail = newEmails.getJSONObject(i);
-                            int mailId = mail.optInt("id", 0);
-                            String fromName = mail.optString("fromName", "");
-                            String from = mail.optString("from", "");
-                            String subject = mail.optString("subject", "(Kein Betreff)");
-                            String snippet = mail.optString("snippet", "");
-                            String accountEmail = mail.optString("accountEmail", "");
+                    if (lastNotifiedMailId == 0) {
+                        // Initialer Aufruf: Nur merken, keine alten Mails aufpoppen!
+                        int maxSeenId = latestMailId;
+                        if (newEmails != null) {
+                            for (int i = 0; i < newEmails.length(); i++) {
+                                int mid = newEmails.getJSONObject(i).optInt("id", 0);
+                                if (mid > maxSeenId) maxSeenId = mid;
+                            }
+                        }
+                        prefs.edit().putInt("last_notified_mail_id", maxSeenId).apply();
+                        Log.d(TAG, "Initialized last_notified_mail_id to " + maxSeenId + " without sending notifications.");
+                    } else if (newEmails != null && newEmails.length() > 0) {
+                        if (!isForeground) {
+                            for (int i = 0; i < newEmails.length(); i++) {
+                                JSONObject mail = newEmails.getJSONObject(i);
+                                int mailId = mail.optInt("id", 0);
+                                String fromName = mail.optString("fromName", "");
+                                String from = mail.optString("from", "");
+                                String subject = mail.optString("subject", "(Kein Betreff)");
+                                String snippet = mail.optString("snippet", "");
+                                String accountEmail = mail.optString("accountEmail", "");
 
-                            String displayName = (!fromName.isEmpty() && !fromName.equals("Unbekannt")) ? fromName : from;
-                            MailNotificationHelper.showMailNotification(context, displayName, subject, snippet, mailId, accountEmail);
+                                String displayName = (!fromName.isEmpty() && !fromName.equals("Unbekannt")) ? fromName : from;
+                                MailNotificationHelper.showMailNotification(context, displayName, subject, snippet, mailId, accountEmail);
+                            }
                         }
 
                         // Speichere die höchste gemeldete ID

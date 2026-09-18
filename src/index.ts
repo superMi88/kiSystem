@@ -19,6 +19,7 @@ import { getEventsForRange, getTimelineRangeData } from "./plugins/Calendar/inde
 import { calculateNextDueDate } from "./plugins/Tasks/index.js";
 import { getDaySummaryData, getRangeSummaryData, parseLocalDate } from "./plugins/Journal/index.js";
 import { MailService } from "./plugins/Mail/service.js";
+import { runTrainTripMonitor } from "./plugins/Mail/dbBahnService.js";
 
 dotenv.config();
 
@@ -1134,7 +1135,8 @@ app.post("/chat", async (req, res) => {
     const dateString = now.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     const timeString = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 
-    const modelName = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+    const userModel = getSettings().aiModel;
+    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
     const model = genAI.getGenerativeModel({
       model: modelName,
       tools: [{ functionDeclarations: pluginManager.getGeminiTools() } as any],
@@ -1161,10 +1163,14 @@ Du hast Zugriff auf ein Tagebuch (Journal) mit täglichen Einträgen, Kalenderte
 - Den Tagesablauf, Erlebnisse und erledigte Aufgaben eines Tages lesen per 'lies_tagebuch'.
 - Vergangene Tagebucheinträge semantisch per Vektorsuche durchsuchen per 'suche_im_tagebuch'.
 
-WICHTIGE VERHALTENSREGELN:
-- Die Biografie und die Fakten enthalten NICHT alle Informationen! Gehe nie davon aus, dass ein Profil vollständig ist.
-- Wenn der Benutzer nach einer Person fragt, rufe sowohl 'suche_im_gedaechtnis' als auch 'hole_person_info' auf.
-- Sei bei Antworten präzise, hilfsbereit und antworte auf Deutsch.` }]
+WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
+- Du darfst NIEMALS dem Benutzer behaupten, dass eine Aufgabe, ein Termin, ein Timer/Wecker, ein Projekt oder eine Notiz erstellt, geändert oder gelöscht wurde, wenn du das entsprechende Werkzeug NICHT aufgerufen hast ODER wenn der Aufruf fehlgeschlagen ist (status: 'error')!
+- Gib NIEMALS Scheinerfolgsmeldungen aus. Jede Erfolgsmeldung muss auf einer echten Rückmeldung des Werkzeugs basieren. Wenn ein Tool fehlschlägt, informiere den Benutzer ehrlich über den Fehler.
+- TRANSPARENTE ERSTELLUNGSBERICHTE: Wenn du etwas anlegst (Aufgabe, Termin, Timer/Wecker), berichte dem Benutzer detailliert und transparent, was genau erstellt wurde:
+  * Bei Aufgaben: Nenne Titel, Fälligkeitsdatum/Uhrzeit, Aufgabenliste/Projekt und ob sie 'In Planung' ist.
+  * Bei Terminen: Nenne Titel, Datum, Start- und Enduhrzeit sowie Wiederholung (falls vorhanden).
+  * Bei Timern/Weckern: Nenne Ablaufzeit bzw. Dauer und Bezeichnung.
+- Sei bei Antworten stets präzise, ehrlich, hilfsbereit und antworte auf Deutsch.` }]
       }
     });
 
@@ -1247,7 +1253,7 @@ WICHTIGE VERHALTENSREGELN:
     let aiText = "";
     let currentResponse = response;
     let widgetData: any = null;
-    const executedTools: { name: string; args: any }[] = [];
+    const executedTools: { name: string; args: any; status: "success" | "error" | "limit_reached"; message?: string }[] = [];
 
     // Schleife für Tool-Chaining
     let step = 0;
@@ -1264,12 +1270,18 @@ WICHTIGE VERHALTENSREGELN:
       const functionResponses = [];
       for (const call of calls) {
         let toolResult: any;
-        executedTools.push({ name: call.name, args: call.args });
+        const toolLog: { name: string; args: any; status: "success" | "error" | "limit_reached"; message?: string } = {
+          name: call.name,
+          args: call.args,
+          status: "success"
+        };
         activeTools.push({ name: call.name, args: call.args });
 
         // Wenn wir das Limit erreichen, verweigern wir weitere Aufrufe und zwingen das Modell zu einer Antwort
         if (step === MAX_STEPS - 1) {
           console.log(`  - Tool-Limit erreicht. Verweigere Ausführung für: ${call.name}`);
+          toolLog.status = "limit_reached";
+          toolLog.message = "Limit erreicht";
           toolResult = {
             status: "limit_reached",
             message: "Such-Limit für diese Runde erreicht. Bitte fasse alle bisher gesammelten Informationen kurz zusammen und antworte dem Benutzer direkt."
@@ -1280,14 +1292,22 @@ WICHTIGE VERHALTENSREGELN:
             toolResult = await pluginManager.executeTool(call.name, call.args);
             console.log("    Tool Ergebnis empfangen:", { name: call.name, hasWidget: !!toolResult?.type });
 
+            if (toolResult && toolResult.status === "error") {
+              toolLog.status = "error";
+              toolLog.message = toolResult.message || "Fehler";
+            }
+
             if (toolResult && toolResult.type) {
               widgetData = toolResult;
             }
-          } catch (err) {
+          } catch (err: any) {
             console.error("    Tool-Fehler:", err);
-            toolResult = { status: "error", message: "Interner Tool-Fehler." };
+            toolLog.status = "error";
+            toolLog.message = err.message || "Interner Tool-Fehler.";
+            toolResult = { status: "error", message: toolLog.message };
           }
         }
+        executedTools.push(toolLog);
 
         // Sende Tool-Ergebnis zurück an Gemini (ohne die riesigen Base64-Daten)
         let responseToGemini = toolResult;
@@ -1314,7 +1334,7 @@ WICHTIGE VERHALTENSREGELN:
       }
     }
 
-    // Prepend tool calls info to the message
+    // Prepend tool calls info with truthful execution status to the message
     if (executedTools.length > 0) {
       const toolSummaries = executedTools.map(t => {
         const argsStr = Object.entries(t.args || {})
@@ -1323,7 +1343,13 @@ WICHTIGE VERHALTENSREGELN:
             return `${k}: ${val}`;
           })
           .join(", ");
-        return `🔧 *Greife auf Tool zu:* \`${t.name}(${argsStr})\``;
+        if (t.status === "success") {
+          return `✅ *Aktion ausgeführt:* \`${t.name}(${argsStr})\``;
+        } else if (t.status === "error") {
+          return `❌ *Aktion fehlgeschlagen:* \`${t.name}\` (${t.message || 'Fehler'})`;
+        } else {
+          return `⚠️ *Aufruflimit erreicht:* \`${t.name}\``;
+        }
       }).join("\n");
       aiText = `${toolSummaries}\n\n${aiText}`;
     }
@@ -1361,6 +1387,17 @@ app.listen(PORT, async () => {
       console.warn("[Mail AutoSync] Hintergrund-Sync fehlgeschlagen:", err?.message || err);
     });
   }, 3 * 60 * 1000);
+
+  // Minütliche Echtzeit-Überwachung von anstehenden DB-Zugfahrten (60 Min vor Abfahrt)
+  setInterval(() => {
+    runTrainTripMonitor(prisma).then(res => {
+      if (res.notifications && res.notifications.length > 0) {
+        console.log(`[Bahn Monitor] 🚆 ${res.notifications.length} Fahrtwarnung(en):`, res.notifications);
+      }
+    }).catch(err => {
+      console.warn("[Bahn Monitor] Überwachungsfehler:", err?.message || err);
+    });
+  }, 60 * 1000);
 
   // Output local network IP addresses to let the user know what to enter in the mobile app settings
   const nets = os.networkInterfaces();

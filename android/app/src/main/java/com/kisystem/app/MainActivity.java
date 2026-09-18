@@ -47,10 +47,10 @@ public class MainActivity extends BridgeActivity {
         requestNotificationPermission();
         MailNotificationHelper.createNotificationChannel(this);
         schedulePeriodicMailSync(this);
-        triggerImmediateMailSync(this);
         handleMailIntent(getIntent());
     }
 
+    public static volatile boolean isAppInForeground = false;
     private static int pendingOpenMailId = 0;
 
     public void requestNotificationPermission() {
@@ -75,6 +75,8 @@ public class MainActivity extends BridgeActivity {
             pendingOpenMailId = mailId;
             Log.d("MainActivity", "Handling mail intent for mailId: " + mailId);
             
+            MailNotificationHelper.cancelMailNotification(this, mailId);
+
             // Mehrstufig ausführen, um sowohl bei bereits geladener App als auch beim Kaltstart zuverlässig zu öffnen
             long[] delays = new long[]{300, 1000, 2200};
             for (long delay : delays) {
@@ -98,8 +100,22 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onResume() {
         super.onResume();
+        isAppInForeground = true;
+        try {
+            SharedPreferences prefs = getSharedPreferences("WidgetStorage", Context.MODE_PRIVATE);
+            prefs.edit().putBoolean("is_app_in_foreground", true).apply();
+        } catch (Exception ignored) {}
         syncLocalStorageToWidgetStorage();
-        triggerImmediateMailSync(this);
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        isAppInForeground = false;
+        try {
+            SharedPreferences prefs = getSharedPreferences("WidgetStorage", Context.MODE_PRIVATE);
+            prefs.edit().putBoolean("is_app_in_foreground", false).apply();
+        } catch (Exception ignored) {}
     }
 
     public static void schedulePeriodicMailSync(Context context) {
@@ -338,6 +354,16 @@ public class MainActivity extends BridgeActivity {
             int id = pendingOpenMailId;
             pendingOpenMailId = 0;
             return id;
+        }
+
+        @JavascriptInterface
+        public void cancelMailNotification(int mailId) {
+            MailNotificationHelper.cancelMailNotification(mContext, mailId);
+        }
+
+        @JavascriptInterface
+        public void cancelAllMailNotifications() {
+            MailNotificationHelper.cancelAllMailNotifications(mContext);
         }
     }
 }

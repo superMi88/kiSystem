@@ -3,6 +3,8 @@ import { simpleParser, ParsedMail } from "mailparser";
 import nodemailer from "nodemailer";
 import xss, { IFilterXSSOptions } from "xss";
 import { PrismaClient, MailAccount } from "@prisma/client";
+import { parseDbBookingEmail, lookupStationEva } from "./dbBahnService.js";
+import { processEmailForActionItems } from "./actionItemService.js";
 
 /**
  * Sichere HTML-Bereinigung für E-Mail-Inhalte.
@@ -218,12 +220,13 @@ export class MailService {
         const seqRange = `${startSeq}:${total}`;
 
         let processedCount = 0;
+        // 1. Zuerst nur Metadaten abrufen (extrem schnell, kein Download von Megabytes an E-Mail-Bodies)
+        const newUids: number[] = [];
 
         for await (const message of client.fetch(seqRange, {
           uid: true,
           flags: true,
-          envelope: true,
-          source: true
+          envelope: true
         })) {
           try {
             const uidNum = Number(message.uid);
@@ -262,70 +265,147 @@ export class MailService {
               continue;
             }
 
-            // Neue E-Mail parsen
-            if (!message.source) continue;
-
-            const parsed: ParsedMail = await simpleParser(message.source);
-            const rawSubject = parsed.subject || "(Kein Betreff)";
-            const rawFrom = parsed.from?.text || account.email;
-            const fromName = parsed.from?.value?.[0]?.name || parsed.from?.text || "Unbekannt";
-            
-            let toStr = account.email;
-            if (parsed.to) {
-              if (Array.isArray(parsed.to)) {
-                toStr = parsed.to.map(t => t.text).join(", ");
-              } else {
-                toStr = parsed.to.text || account.email;
-              }
-            }
-
-            const mailDate = parsed.date || (message.envelope?.date ? new Date(message.envelope.date) : new Date());
-            const rawBodyText = parsed.text || "";
-            const rawHtml = parsed.html || parsed.textAsHtml || "";
-            const cleanHtml = sanitizeEmailHtml(rawHtml);
-            const snippet = rawBodyText.replace(/\s+/g, " ").trim().slice(0, 160);
-            const isRead = isSeenOnServer;
-            const hasAttachments = !!(parsed.attachments && parsed.attachments.length > 0);
-            const matchedPersonId = findMatchingPersonId(rawFrom, fromName);
-
-            const createdMail = await prisma.cachedEmail.create({
-              data: {
-                accountId: account.id,
-                uid: uidNum,
-                messageId: parsed.messageId || null,
-                subject: rawSubject,
-                from: rawFrom,
-                fromName: fromName,
-                to: toStr,
-                date: mailDate,
-                bodyText: rawBodyText,
-                bodyHtml: cleanHtml,
-                snippet: snippet,
-                isRead: isRead,
-                hasAttachments: hasAttachments,
-                category: null,
-                personId: matchedPersonId
-              }
-            });
-
-            if (!isRead) {
-              newEmails.push({
-                id: createdMail.id,
-                accountId: account.id,
-                accountName: account.name,
-                accountEmail: account.email,
-                accountColor: account.color,
-                from: rawFrom,
-                fromName: fromName,
-                subject: rawSubject,
-                snippet: snippet,
-                date: mailDate.toISOString()
-              });
-            }
-
-            processedCount++;
+            // Neues Element merken
+            newUids.push(uidNum);
           } catch (itemErr) {
-            console.error(`[MailService] Fehler beim Parsen einer E-Mail (UID: ${message.uid}):`, itemErr);
+            console.error(`[MailService] Fehler bei Metadaten-Prüfung (UID: ${message.uid}):`, itemErr);
+          }
+        }
+
+        // 2. Nur für tatsächlich neue E-Mails gezielt Quelltext laden
+        if (newUids.length > 0) {
+          for await (const message of client.fetch(newUids, {
+            uid: true,
+            flags: true,
+            envelope: true,
+            source: true
+          }, { uid: true })) {
+            try {
+              const uidNum = Number(message.uid);
+              const isSeenOnServer = message.flags ? message.flags.has("\\Seen") : false;
+
+              if (!message.source) continue;
+
+              const parsed: ParsedMail = await simpleParser(message.source);
+              const rawSubject = parsed.subject || "(Kein Betreff)";
+              const rawFrom = parsed.from?.text || account.email;
+              const fromName = parsed.from?.value?.[0]?.name || parsed.from?.text || "Unbekannt";
+              
+              let toStr = account.email;
+              if (parsed.to) {
+                if (Array.isArray(parsed.to)) {
+                  toStr = parsed.to.map(t => t.text).join(", ");
+                } else {
+                  toStr = parsed.to.text || account.email;
+                }
+              }
+
+              const mailDate = parsed.date || (message.envelope?.date ? new Date(message.envelope.date) : new Date());
+              const rawBodyText = parsed.text || "";
+              const rawHtml = parsed.html || parsed.textAsHtml || "";
+              const cleanHtml = sanitizeEmailHtml(rawHtml);
+              const snippet = rawBodyText.replace(/\s+/g, " ").trim().slice(0, 160);
+              const isRead = isSeenOnServer;
+              const hasAttachments = !!(parsed.attachments && parsed.attachments.length > 0);
+              const matchedPersonId = findMatchingPersonId(rawFrom, fromName);
+
+              const createdMail = await prisma.cachedEmail.create({
+                data: {
+                  accountId: account.id,
+                  uid: uidNum,
+                  messageId: parsed.messageId || null,
+                  subject: rawSubject,
+                  from: rawFrom,
+                  fromName: fromName,
+                  to: toStr,
+                  date: mailDate,
+                  bodyText: rawBodyText,
+                  bodyHtml: cleanHtml,
+                  snippet: snippet,
+                  isRead: isRead,
+                  hasAttachments: hasAttachments,
+                  category: null,
+                  personId: matchedPersonId
+                }
+              });
+
+              // 1. Automatische DB-Buchungsmail-Erkennung & Zugfahrt anlegen
+              try {
+                const dbTrip = parseDbBookingEmail(rawSubject, rawBodyText, rawHtml);
+                if (dbTrip) {
+                  const originStation = dbTrip.originStation || "Unbekannter Bahnhof";
+                  console.log(`[MailService] 🚆 DB-Buchung erkannt: ${dbTrip.trainNumber} ab ${originStation}`);
+                  const eva = await lookupStationEva(originStation);
+                  const departureTime = dbTrip.departureTime || new Date();
+                  await (prisma as any).trainTrip.create({
+                    data: {
+                      bookingCode: dbTrip.bookingCode || null,
+                      trainNumber: dbTrip.trainNumber,
+                      originStation: originStation,
+                      originEva: eva,
+                      destinationStation: dbTrip.destinationStation || null,
+                      departureTime: departureTime,
+                      platform: dbTrip.platform || null,
+                      rawEmailId: createdMail.id,
+                      status: "scheduled"
+                    }
+                  });
+
+                  // Kalendereintrag erstellen falls gewünscht
+                  try {
+                    const eventStart = departureTime;
+                    const eventEnd = new Date(eventStart.getTime() + 2 * 60 * 60 * 1000);
+                    await prisma.event.create({
+                      data: {
+                        title: `🚆 ${dbTrip.trainNumber}: ${originStation}${dbTrip.destinationStation ? ' nach ' + dbTrip.destinationStation : ''}`,
+                        description: `Deutsche Bahn Fahrt\nBuchung: ${dbTrip.bookingCode || 'Keine Angabe'}\nGeplantes Gleis: ${dbTrip.platform || 'Unbekannt'}`,
+                        start: eventStart,
+                        end: eventEnd,
+                        isPlanned: false
+                      }
+                    });
+                    console.log(`[MailService] 📅 Kalendereintrag für Zugfahrt ${dbTrip.trainNumber} angelegt.`);
+                  } catch (calErr) {
+                    console.error("[MailService] Fehler beim Kalendereintrag für Zugfahrt:", calErr);
+                  }
+                }
+              } catch (dbErr) {
+                console.error("[MailService] Fehler bei DB-Buchungsanalyse:", dbErr);
+              }
+
+              // 2. E-Mail auf Handlungsbedarf prüfen und ggf. automatisch Aufgabe erstellen
+              try {
+                await processEmailForActionItems({
+                  id: createdMail.id,
+                  subject: rawSubject,
+                  bodyText: rawBodyText,
+                  from: rawFrom,
+                  fromName: fromName,
+                  snippet: snippet
+                }, prisma);
+              } catch (actionErr) {
+                console.error("[MailService] Fehler bei Action-Item-Erkennung:", actionErr);
+              }
+
+              if (!isRead) {
+                newEmails.push({
+                  id: createdMail.id,
+                  accountId: account.id,
+                  accountName: account.name,
+                  accountEmail: account.email,
+                  accountColor: account.color,
+                  from: rawFrom,
+                  fromName: fromName,
+                  subject: rawSubject,
+                  snippet: snippet,
+                  date: mailDate.toISOString()
+                });
+              }
+
+              processedCount++;
+            } catch (itemErr) {
+              console.error(`[MailService] Fehler beim Parsen einer E-Mail (UID: ${message.uid}):`, itemErr);
+            }
           }
         }
 
@@ -333,66 +413,152 @@ export class MailService {
         return { count: processedCount, newEmails };
       } finally {
         lock.release();
-        await client.logout();
       }
-    } catch (err: any) {
-      console.error(`[MailService] Fehler beim Abrufen der E-Mails für ${account.email}:`, err);
-      return { count: 0, newEmails: [], error: err.message };
+    } catch (e: any) {
+      console.error(`[MailService] Fehler beim Synchronisieren von Konto ${account.email}:`, e);
+      return {
+        count: 0,
+        newEmails,
+        error: e.message || "Unbekannter Synchronisierungsfehler"
+      };
+    } finally {
+      if (client) {
+        try {
+          await client.logout();
+        } catch (_) {}
+      }
     }
   }
 
   /**
-   * Synchronisiert alle aktiven Mail-Konten parallel.
+   * Prüft schnell über IMAP die \\Seen-Flags für eine Liste gecachter E-Mails.
+   * Wenn eine Mail auf dem Server gelesen wurde, wird sie in der Datenbank aktualisiert
+   * und deren ID zurückgegeben.
+   */
+  static async verifySeenFlagsForCachedEmails(
+    prisma: PrismaClient,
+    emails: { id: number; uid: number; accountId: number }[]
+  ): Promise<Set<number>> {
+    const readMailIds = new Set<number>();
+    if (!emails || emails.length === 0) return readMailIds;
+
+    const accountIds = Array.from(new Set(emails.map(e => e.accountId)));
+    const accounts = await prisma.mailAccount.findMany({
+      where: { id: { in: accountIds }, isDeleted: false }
+    });
+    const accountMap = new Map<number, MailAccount>();
+    accounts.forEach(acc => accountMap.set(acc.id, acc));
+
+    for (const accId of accountIds) {
+      const account = accountMap.get(accId);
+      if (!account) continue;
+
+      const accEmails = emails.filter(e => e.accountId === accId);
+      const uids = accEmails.map(e => e.uid).filter(Boolean);
+      if (uids.length === 0) continue;
+
+      let client: ImapFlow | null = null;
+      try {
+        client = new ImapFlow({
+          host: account.imapHost,
+          port: account.imapPort,
+          secure: account.imapTls,
+          auth: {
+            user: account.email,
+            pass: account.password
+          },
+          logger: false,
+          connectionTimeout: 2500,
+          greetingTimeout: 2500
+        });
+
+        await client.connect();
+        const lock = await client.getMailboxLock("INBOX");
+        try {
+          for await (const msg of client.fetch(uids, { uid: true, flags: true }, { uid: true })) {
+            if (msg.flags && msg.flags.has("\\Seen")) {
+              const matched = accEmails.find(e => e.uid === Number(msg.uid));
+              if (matched) {
+                readMailIds.add(matched.id);
+              }
+            }
+          }
+        } finally {
+          lock.release();
+        }
+      } catch (err) {
+        console.warn(`[verifySeenFlags] IMAP-Flag-Check für Konto ${account.email} übersprungen:`, (err as any)?.message || err);
+      } finally {
+        if (client) {
+          try {
+            await client.logout();
+          } catch (_) {}
+        }
+      }
+    }
+
+    if (readMailIds.size > 0) {
+      const idsArray = Array.from(readMailIds);
+      await prisma.cachedEmail.updateMany({
+        where: { id: { in: idsArray } },
+        data: { isRead: true }
+      });
+      console.log(`[verifySeenFlags] ${idsArray.length} E-Mail(s) wurden auf dem Server als gelesen erkannt und aktualisiert.`);
+    }
+
+    return readMailIds;
+  }
+
+  /**
+   * Synchronisiert alle aktiven E-Mail-Konten nacheinander.
    */
   static async syncAllAccounts(
     prisma: PrismaClient,
     options?: { fullSync?: boolean }
-  ): Promise<{
-    totalSynced: number;
-    newEmails: any[];
-    results: { accountId: number; name: string; email: string; count: number; error?: string }[];
-  }> {
+  ) {
     const accounts = await prisma.mailAccount.findMany({
       where: { isDeleted: false }
     });
 
-    if (accounts.length === 0) {
-      return { totalSynced: 0, newEmails: [], results: [] };
-    }
-
+    const results = [];
     const allNewEmails: any[] = [];
-    const promises = accounts.map(async account => {
+
+    for (const account of accounts) {
       try {
         const res = await this.syncAccountEmails(account, prisma, options);
-        if (res.newEmails && res.newEmails.length > 0) {
-          allNewEmails.push(...res.newEmails);
-        }
-        return {
+        results.push({
           accountId: account.id,
           name: account.name,
           email: account.email,
           count: res.count,
           error: res.error
-        };
-      } catch (err: any) {
-        return {
+        });
+        if (res.newEmails && res.newEmails.length > 0) {
+          allNewEmails.push(...res.newEmails);
+        }
+      } catch (accErr) {
+        console.error(`[MailService] Unerwarteter Fehler bei Konto ${account.email}:`, accErr);
+        results.push({
           accountId: account.id,
           name: account.name,
           email: account.email,
           count: 0,
-          error: err.message || "Unbekannter Sync-Fehler"
-        };
+          error: (accErr as any)?.message || "Unbekannter Fehler"
+        });
       }
-    });
+    }
 
-    const results = await Promise.all(promises);
-    const totalSynced = results.reduce((acc, curr) => acc + curr.count, 0);
-    return { totalSynced, newEmails: allNewEmails, results };
+    return {
+      totalSynced: results.reduce((acc, r) => acc + (r.count || 0), 0),
+      newEmails: allNewEmails,
+      results
+    };
   }
 
   /**
    * Holt die neuesten ungelesenen E-Mails für Push-Benachrichtigungen.
    * Unterstützt optional sinceId, um nur E-Mails zurückzugeben, die neuer als diese ID sind.
+   * Verifiziert vorab IMAP-Gelesen-Flags, damit bereits extern gelesene Mails nicht benachrichtigt werden!
    */
   static async getLatestUnreadEmails(
     prisma: PrismaClient,
@@ -410,7 +576,7 @@ export class MailService {
       where.id = { gt: sinceId };
     }
 
-    const [emails, unreadCount, latestMail] = await Promise.all([
+    let [emails, unreadCount, latestMail] = await Promise.all([
       prisma.cachedEmail.findMany({
         where,
         orderBy: { id: "desc" },
@@ -437,6 +603,16 @@ export class MailService {
         select: { id: true }
       })
     ]);
+
+    // Wenn Kandidaten vorhanden sind: Schnell prüfen, ob sie inzwischen auf dem IMAP-Server als gelesen (\\Seen) markiert wurden!
+    if (emails.length > 0) {
+      const candidates = emails.map(e => ({ id: e.id, uid: e.uid, accountId: e.accountId }));
+      const readIds = await this.verifySeenFlagsForCachedEmails(prisma, candidates);
+      if (readIds.size > 0) {
+        emails = emails.filter(m => !readIds.has(m.id));
+        unreadCount = Math.max(0, unreadCount - readIds.size);
+      }
+    }
 
     const latestMailId = latestMail?.id || 0;
 

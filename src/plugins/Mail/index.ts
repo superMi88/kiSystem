@@ -1,6 +1,7 @@
-import { Plugin } from "../types.js";
+import { Plugin, PluginAlert } from "../types.js";
 import { SchemaType } from "@google/generative-ai";
 import { MailService } from "./service.js";
+import { checkTripRealtime, lookupStationEva } from "./dbBahnService.js";
 
 export const mailPlugin: Plugin = {
   name: "Mail",
@@ -327,8 +328,117 @@ export const mailPlugin: Plugin = {
 
         throw new Error(`Unbekannte Aktion: ${args.aktion}`);
       }
+    },
+    {
+      definition: {
+        name: "pruefe_zug_status",
+        description: "Prüft den Live-Fahrplan, Verspätung und das Abfahrtsgleis eines Zugs an einem bestimmten Bahnhof über die bahn.expert-Echtzeit-API.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            zugnummer: { type: SchemaType.STRING, description: "Die Zugnummer (z. B. 'ICE 593' oder 'RE 1')" },
+            startbahnhof: { type: SchemaType.STRING, description: "Name des Bahnhofs (z. B. 'Berlin Hbf' oder 'München Hbf')" },
+            uhrzeit: { type: SchemaType.STRING, description: "Optionale Abfahrtszeit im Format YYYY-MM-DDTHH:mm:ss" }
+          },
+          required: ["zugnummer", "startbahnhof"]
+        } as any
+      },
+      handler: async (args) => {
+        const departureTime = args.uhrzeit ? new Date(args.uhrzeit) : new Date();
+        const rt = await checkTripRealtime({
+          trainNumber: args.zugnummer,
+          originStation: args.startbahnhof,
+          departureTime
+        });
+
+        if (!rt.found) {
+          return {
+            status: "not_found",
+            message: `Für Zug '${args.zugnummer}' ab '${args.startbahnhof}' konnten aktuell keine Echtzeit-Abfahrten gefunden werden.`
+          };
+        }
+
+        return {
+          status: "success",
+          zugnummer: rt.trainNumber,
+          geplanteAbfahrt: rt.scheduledDeparture.toISOString(),
+          tatsaechlicheAbfahrt: rt.realtimeDeparture ? rt.realtimeDeparture.toISOString() : null,
+          verspaetungMinuten: rt.delayMinutes,
+          geplantesGleis: rt.scheduledPlatform || "Unbekannt",
+          tatsaechlichesGleis: rt.realtimePlatform || rt.scheduledPlatform || "Unbekannt",
+          gleiswechsel: rt.isPlatformChanged,
+          ausfall: rt.isCancelled,
+          hinweis: rt.message || (rt.delayMinutes > 0 ? `+${rt.delayMinutes} Min. Verspätung` : "Pünktlich")
+        };
+      }
+    },
+    {
+      definition: {
+        name: "hole_aktive_zugfahrten",
+        description: "Ruft alle im System hinterlegten DB-Zugfahrten aus Buchungs-E-Mails ab und liefert deren aktuellen Echtzeit-Status.",
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {}
+        } as any
+      },
+      handler: async (_args, { prisma }) => {
+        const trips = await (prisma as any).trainTrip.findMany({
+          where: { isDeleted: false },
+          orderBy: { departureTime: "asc" }
+        });
+
+        return {
+          status: "success",
+          fahrten: trips.map((t: any) => ({
+            id: t.id,
+            auftrag: t.bookingCode,
+            zug: t.trainNumber,
+            von: t.originStation,
+            nach: t.destinationStation,
+            abfahrt: t.departureTime.toISOString(),
+            verspaetung: t.delayMinutes,
+            gleis: t.realtimePlatform || t.platform,
+            gleiswechsel: t.realtimePlatform && t.platform && t.realtimePlatform !== t.platform,
+            status: t.status,
+            meldung: t.lastNotificationMessage
+          }))
+        };
+      }
     }
   ],
+
+  getAlerts: async ({ prisma }) => {
+    const alerts: PluginAlert[] = [];
+    try {
+      const now = new Date();
+      const activeTrips = await (prisma as any).trainTrip.findMany({
+        where: {
+          isDeleted: false,
+          status: { in: ["monitoring", "scheduled"] },
+          departureTime: {
+            gte: new Date(now.getTime() - 30 * 60 * 1000),
+            lte: new Date(now.getTime() + 90 * 60 * 1000)
+          }
+        },
+        orderBy: { departureTime: "asc" }
+      });
+
+      for (const trip of activeTrips) {
+        if (trip.lastNotificationMessage) {
+          alerts.push({
+            id: `train-trip-${trip.id}`,
+            type: trip.status === "cancelled" || trip.delayMinutes >= 15 ? "error" : "warning",
+            message: trip.lastNotificationMessage,
+            actionLabel: "Fahrplan",
+            actionUrl: `https://bahn.expert/${encodeURIComponent(trip.originStation)}`
+          });
+        }
+      }
+    } catch (err) {
+      console.error("[MailPlugin] Fehler bei getAlerts:", err);
+    }
+    return alerts;
+  },
 
   getTopWidgets: async ({ prisma }) => {
     const accounts = await prisma.mailAccount.findMany({

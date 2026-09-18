@@ -24,7 +24,7 @@ export function getSettings(): Settings {
     hotkey: "Ctrl+Shift+Space",
     disabledPlugins: [],
     autostart: false,
-    aiModel: "gemini-1.5-flash"
+    aiModel: "gemini-3.5-flash-lite"
   };
   
   // Datei erstellen, falls sie nicht existiert
