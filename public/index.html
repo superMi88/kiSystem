@@ -1073,26 +1073,8 @@
 
                 <div class="input-area">
                     <!-- Floating Mobile Plugins Bar (merged inside input-area for mobile) -->
-                    <div id="view-toggle-container" class="mobile-only">
-                        <div id="normal-nav-buttons" class="main-tabs-container">
-                            <button class="main-tab-btn" id="btn-nav-dashboard" onclick="focusWidget('dashboard')" title="Arbeitstisch">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="3" y="3" width="7" height="9"></rect>
-                                    <rect x="14" y="3" width="7" height="5"></rect>
-                                    <rect x="14" y="12" width="7" height="9"></rect>
-                                    <rect x="3" y="16" width="7" height="5"></rect>
-                                </svg>
-                                <span>Arbeitstisch</span>
-                                <span class="badge" id="badge-dashboard" style="display: none;">0</span>
-                            </button>
-
-                            <button class="main-tab-btn" id="btn-nav-chat" onclick="switchMobileView('chat')" title="Chat">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                                </svg>
-                                <span>Chat</span>
-                            </button>
-                        </div>
+                    <div id="view-toggle-container" class="mobile-only" style="display: none;">
+                        <div id="normal-nav-buttons" class="main-tabs-container" style="display: none;"></div>
 
                         <!-- Universal Multi-Selection Action Bar (Replaces nav-buttons dynamically for any selected entity) -->
                         <div id="universal-selection-action-bar" class="universal-selection-bar" style="display: none;">
@@ -1124,6 +1106,11 @@
                         </button>
                         <button id="send-btn" style="display: none;">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                        </button>
+                        <button id="view-switch-btn" type="button" class="view-switch-btn" onclick="toggleDashboardChat()" title="Zum Chat wechseln" aria-label="Zum Chat wechseln">
+                            <svg id="view-switch-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
                         </button>
                     </div>
                 </div>
@@ -1644,6 +1631,21 @@
                 }
             }
 
+            // Update view switch button icon & title (Down arrow on dashboard to switch to Chat, Up arrow in Chat to switch to dashboard)
+            const switchBtn = document.getElementById('view-switch-btn');
+            const switchIcon = document.getElementById('view-switch-icon');
+            if (switchBtn && switchIcon) {
+                if (viewName === 'dashboard') {
+                    switchIcon.innerHTML = '<polyline points="6 9 12 15 18 9"></polyline>';
+                    switchBtn.title = 'Zum Chat wechseln';
+                    switchBtn.setAttribute('aria-label', 'Zum Chat wechseln');
+                } else {
+                    switchIcon.innerHTML = '<polyline points="18 15 12 9 6 15"></polyline>';
+                    switchBtn.title = 'Zum Arbeitstisch wechseln';
+                    switchBtn.setAttribute('aria-label', 'Zum Arbeitstisch wechseln');
+                }
+            }
+
             // Scroll chat to bottom so newest messages are visible
             const chatBoxEl = document.getElementById('chat-box');
             if (chatBoxEl) {
@@ -1653,6 +1655,15 @@
             }
         }
         window.switchMobileView = switchMobileView;
+
+        function toggleDashboardChat() {
+            if (document.body.classList.contains('view-dashboard')) {
+                switchMobileView('chat');
+            } else {
+                switchMobileView('dashboard');
+            }
+        }
+        window.toggleDashboardChat = toggleDashboardChat;
 
         function openMobileSettings() {
             loadSettings();
@@ -1752,7 +1763,7 @@
 
         const SWIPE_LINK_THRESHOLD = 60; // px threshold to trigger linking
         const SWIPE_MAX_OFFSET = 110; // maximum visual pull distance
-        const LONG_PRESS_DURATION = 380; // ms to trigger context menu
+        const LONG_PRESS_DURATION = 650; // ms to trigger context menu
 
         function closeContextMenu() {
             if (activeContextMenuEl) {
@@ -2208,7 +2219,7 @@
             const target = e.target;
 
             // Only ignore when interacting directly with explicit form elements or clickable tags
-            if (target.closest('button, input, select, textarea, a, .clickable-tag, .reply-cancel-btn')) {
+            if (target.closest('button, input, select, textarea, a, .clickable-tag, .reply-cancel-btn, .task-checkbox')) {
                 return;
             }
 
@@ -2222,6 +2233,7 @@
                 swipeMsgStartY = touch.clientY;
                 isMsgSwipeActive = false;
                 msgSwipeThresholdCrossed = false;
+                isScrollLockedOut = false;
 
                 if (e.type === 'mousedown') {
                     document.addEventListener('mousemove', handleSwipeMove, { passive: false });
@@ -2259,6 +2271,8 @@
         }
 
         function handleSwipeMove(e) {
+            if (!activeSwipeMessage && !activeSwipeItem) return;
+
             const touch = e.touches ? e.touches[0] : e;
 
             // 1. Message Swipe-to-Reply Handling
@@ -2266,11 +2280,12 @@
                 const deltaX = touch.clientX - swipeMsgStartX;
                 const deltaY = touch.clientY - swipeMsgStartY;
 
+                // If user moves vertically even slightly (> 5px), lock out swipe immediately for smooth native scroll
                 if (!isMsgSwipeActive) {
-                    if (Math.abs(deltaY) > 8 && Math.abs(deltaY) >= Math.abs(deltaX)) {
+                    if (Math.abs(deltaY) > 5) {
                         activeSwipeMessage = null;
                         return;
-                    } else if (deltaX < -8 && Math.abs(deltaX) > Math.abs(deltaY)) {
+                    } else if (deltaX < -28 && Math.abs(deltaX) > Math.abs(deltaY) * 2.5) {
                         isMsgSwipeActive = true;
                         activeSwipeMessage.classList.add('swiping');
                     }
@@ -2306,8 +2321,8 @@
             const deltaX = swipeCurrentX - swipeStartX;
             const deltaY = swipeCurrentY - swipeStartY;
 
-            // If user moves beyond 8px, cancel long-press
-            if (Math.hypot(deltaX, deltaY) > 8) {
+            // If user moves beyond 4px in any direction, cancel long-press immediately
+            if (Math.hypot(deltaX, deltaY) > 4) {
                 if (longPressTimer) {
                     clearTimeout(longPressTimer);
                     longPressTimer = null;
@@ -2319,10 +2334,12 @@
 
             // Determine if gesture is horizontal swipe or vertical scroll
             if (!isSwipeGestureActive && !isScrollLockedOut) {
-                if (Math.abs(deltaY) > 8 && Math.abs(deltaY) >= Math.abs(deltaX)) {
+                // If user moves vertically > 5px, it is definitely a vertical scroll! Lock out swipe completely.
+                if (Math.abs(deltaY) > 5) {
                     isScrollLockedOut = true;
+                    activeSwipeItem = null;
                     return;
-                } else if (deltaX < -8 && Math.abs(deltaX) > Math.abs(deltaY)) {
+                } else if (deltaX < -28 && Math.abs(deltaX) > Math.abs(deltaY) * 2.5) {
                     isSwipeGestureActive = true;
                     activeSwipeItem.classList.add('swiping');
                 }
@@ -2371,7 +2388,7 @@
                 const msgTriggered = msgSwipeThresholdCrossed;
 
                 msg.classList.remove('swiping');
-                msg.style.transform = 'translateX(0px)';
+                msg.style.transform = '';
 
                 const indicator = msg.querySelector('.message-swipe-reply-indicator');
                 if (indicator) indicator.classList.remove('active');
@@ -2387,11 +2404,15 @@
                 activeSwipeMessage = null;
                 isMsgSwipeActive = false;
                 msgSwipeThresholdCrossed = false;
+                isScrollLockedOut = false;
                 return;
             }
 
             // 2. End Swipe-to-Link
-            if (!activeSwipeItem) return;
+            if (!activeSwipeItem) {
+                isScrollLockedOut = false;
+                return;
+            }
 
             const item = activeSwipeItem;
             const wrapper = activeSwipeWrapper;
@@ -2400,7 +2421,7 @@
             const triggered = swipeThresholdCrossed;
 
             item.classList.remove('swiping');
-            item.style.transform = 'translateX(0px)';
+            item.style.transform = '';
 
             if (wasSwiping || isLongPressActive) {
                 lastSwipeTime = Date.now();
@@ -5758,21 +5779,22 @@
                 });
             }
 
-            // 3. Mail: Unread & Recent Mails
+            // 3. Mail: Only unread / new emails
             const mailWidget = widgets.find(w => w.pluginName === 'Mail' || (w.data && w.data.emails));
-            let allMails = [];
             let unreadMails = [];
             if (mailWidget && mailWidget.data) {
-                allMails = mailWidget.data.emails || [];
+                const allMails = mailWidget.data.emails || [];
                 unreadMails = allMails.filter(m => !m.isRead);
             }
 
-            // 4. Timers: Active timers
+            // 4. Timers: Active timers and alarms
             const timerWidget = widgets.find(w => w.type === 'timer_list');
             let activeTimers = [];
             if (timerWidget && timerWidget.data) {
                 activeTimers = timerWidget.data.timers || [];
             }
+
+            const hasAnyContent = todayEvents.length > 0 || overdueTasks.length > 0 || unreadMails.length > 0 || activeTimers.length > 0;
 
             // --- HTML RENDERING ---
             let html = `
@@ -5789,178 +5811,178 @@
                     </div>
 
                     <div class="arbeitstisch-grid">
-                        <!-- Widget 1: Heutige Termine -->
+            `;
+
+            if (!hasAnyContent) {
+                html += `
+                    <div class="arbeitstisch-card" style="text-align: center; padding: 32px 20px; grid-column: 1 / -1;">
+                        <div style="font-size: 2rem; margin-bottom: 8px;">✨</div>
+                        <div style="font-size: 1rem; font-weight: 700; color: #ffffff; margin-bottom: 6px;">Alles erledigt!</div>
+                        <div style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.65); max-width: 380px; margin: 0 auto;">Keine offenen Aufgaben, heutigen Termine oder neuen E-Mails vorhanden. Entspann dich! 🎉</div>
+                    </div>
+                `;
+            } else {
+                // 1. Heutige Termine (nur anzeigen wenn Termine vorhanden)
+                if (todayEvents.length > 0) {
+                    html += `
                         <div class="arbeitstisch-card">
                             <div class="arbeitstisch-card-header">
                                 <div class="arbeitstisch-card-title">
                                     <span>📅</span>
                                     <h4>Heutige Termine</h4>
-                                    <span class="arbeitstisch-badge">${todayEvents.length}</span>
                                 </div>
                                 <button type="button" onclick="focusWidget('calendar')" class="arbeitstisch-card-link" title="Zum Kalender">Kalender ➔</button>
                             </div>
                             <div class="arbeitstisch-card-body">
-            `;
-
-            if (todayEvents.length === 0) {
-                html += `<div class="arbeitstisch-empty">Keine Termine für heute eingetragen. Entspann dich! 🎉</div>`;
-            } else {
-                todayEvents.forEach(ev => {
-                    const escTitle = escapeHtml(ev.title || 'Termin');
-                    const timeBadge = getEventTimeBadge(ev);
-                    const descText = ev.description ? `<div style="font-size: 0.7rem; opacity: 0.6; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(ev.description)}</div>` : '';
-                    html += `
-                        <div class="arbeitstisch-item" onclick="handleEntityClick(event, 'event', '${ev.id}')" style="cursor: pointer;">
-                            <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1;">
-                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                    <strong style="font-size: 0.82rem; color: #ffffff;">${escTitle}</strong>
-                                    ${timeBadge}
-                                    ${ev.isPlanned ? `<span style="font-size: 0.65rem; color: #f9e2af; font-weight: bold; background: rgba(249, 226, 175, 0.15); border: 1px solid rgba(249, 226, 175, 0.3); padding: 1px 5px; border-radius: 4px;">🟡 In Planung</span>` : ''}
+                    `;
+                    todayEvents.forEach(ev => {
+                        const escTitle = escapeHtml(ev.title || 'Termin');
+                        const timeBadge = getEventTimeBadge(ev);
+                        const descText = ev.description ? `<div style="font-size: 0.7rem; opacity: 0.6; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(ev.description)}</div>` : '';
+                        html += `
+                            <div class="arbeitstisch-item" onclick="handleEntityClick(event, 'event', '${ev.id}')" style="cursor: pointer;">
+                                <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1;">
+                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                        <strong style="font-size: 0.82rem; color: #ffffff;">${escTitle}</strong>
+                                        ${timeBadge}
+                                        ${ev.isPlanned ? `<span style="font-size: 0.65rem; color: #f9e2af; font-weight: bold; background: rgba(249, 226, 175, 0.15); border: 1px solid rgba(249, 226, 175, 0.3); padding: 1px 5px; border-radius: 4px;">🟡 In Planung</span>` : ''}
+                                    </div>
+                                    ${descText}
                                 </div>
-                                ${descText}
+                            </div>
+                        `;
+                    });
+                    html += `
                             </div>
                         </div>
                     `;
-                });
-            }
+                }
 
-            html += `
-                            </div>
-                        </div>
-
-                        <!-- Widget 2: Dringende & heutige Aufgaben -->
+                // 2. Dringende & heutige Aufgaben (nur anzeigen wenn Aufgaben vorhanden)
+                if (overdueTasks.length > 0) {
+                    html += `
                         <div class="arbeitstisch-card">
                             <div class="arbeitstisch-card-header">
                                 <div class="arbeitstisch-card-title">
                                     <span>⚡</span>
-                                    <h4>Dringende Aufgaben</h4>
-                                    ${overdueTasks.length > 0 ? `<span class="arbeitstisch-badge urgent">${overdueTasks.length} offen</span>` : `<span class="arbeitstisch-badge">0 offen</span>`}
+                                    <h4>Aufgaben</h4>
                                 </div>
                                 <button type="button" onclick="focusWidget('projects')" class="arbeitstisch-card-link" title="Zu den Projekten">Projekte ➔</button>
                             </div>
                             <div class="arbeitstisch-card-body">
-            `;
-
-            if (overdueTasks.length === 0) {
-                html += `<div class="arbeitstisch-empty">Alles erledigt für heute! Keine offenen Aufgaben. 💪</div>`;
-            } else {
-                overdueTasks.slice(0, 8).forEach(t => {
-                    const rawId = String(t.id).replace('task-', '');
-                    const escTitle = escapeHtml(t.title || 'Aufgabe');
-                    const listTitle = escapeHtml(t.listTitle || t.tasklistId || 'Standard');
-                    const dueObj = t.due ? new Date(t.due) : (t.time ? new Date(t.time) : null);
-                    let dueBadge = '';
-                    if (dueObj && !isNaN(dueObj.getTime())) {
-                        const dueDateStr = dueObj.toISOString().split('T')[0];
-                        if (dueDateStr < todayStr) {
-                            dueBadge = `<span style="font-size: 0.65rem; color: var(--off); font-weight: bold; background: rgba(243, 139, 168, 0.15); padding: 1px 5px; border-radius: 4px;">⚠️ Überfällig</span>`;
-                        } else if (dueDateStr === todayStr) {
-                            dueBadge = `<span style="font-size: 0.65rem; color: var(--accent); font-weight: bold; background: rgba(137, 180, 250, 0.15); padding: 1px 5px; border-radius: 4px;">📅 Heute</span>`;
+                    `;
+                    overdueTasks.slice(0, 10).forEach(t => {
+                        const rawId = String(t.id).replace('task-', '');
+                        const escTitle = escapeHtml(t.title || 'Aufgabe');
+                        const listTitle = escapeHtml(t.listTitle || t.tasklistId || 'Standard');
+                        const dueObj = t.due ? new Date(t.due) : (t.time ? new Date(t.time) : null);
+                        let dueBadge = '';
+                        if (dueObj && !isNaN(dueObj.getTime())) {
+                            const dueDateStr = dueObj.toISOString().split('T')[0];
+                            if (dueDateStr < todayStr) {
+                                dueBadge = `<span style="font-size: 0.65rem; color: var(--off); font-weight: bold; background: rgba(243, 139, 168, 0.15); padding: 1px 5px; border-radius: 4px;">⚠️ Überfällig</span>`;
+                            } else if (dueDateStr === todayStr) {
+                                dueBadge = `<span style="font-size: 0.65rem; color: var(--accent); font-weight: bold; background: rgba(137, 180, 250, 0.15); padding: 1px 5px; border-radius: 4px;">📅 Heute</span>`;
+                            }
                         }
-                    }
 
-                    html += `
-                        <div class="arbeitstisch-item" style="gap: 8px;">
-                            <input type="checkbox" class="task-checkbox" data-task-id="${rawId}" data-tasklist-id="${listTitle}" onchange="completeTask(this)" style="margin-top: 2px;">
-                            <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; cursor: pointer;" onclick="handleEntityClick(event, 'task', '${rawId}')">
-                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                    <span style="font-size: 0.8rem; font-weight: 500; color: #ffffff; line-height: 1.3;">${escTitle}</span>
-                                    ${dueBadge}
-                                    ${t.isPlanned ? `<span style="font-size: 0.65rem; color: #f9e2af; font-weight: bold; background: rgba(249, 226, 175, 0.15); border: 1px solid rgba(249, 226, 175, 0.3); padding: 1px 5px; border-radius: 4px;">🟡 In Planung</span>` : ''}
+                        html += `
+                            <div class="arbeitstisch-item" style="gap: 8px;">
+                                <input type="checkbox" class="task-checkbox" data-task-id="${rawId}" data-tasklist-id="${listTitle}" onchange="completeTask(this)" style="margin-top: 2px;">
+                                <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; cursor: pointer;" onclick="handleEntityClick(event, 'task', '${rawId}')">
+                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                        <span style="font-size: 0.8rem; font-weight: 500; color: #ffffff; line-height: 1.3;">${escTitle}</span>
+                                        ${dueBadge}
+                                        ${t.isPlanned ? `<span style="font-size: 0.65rem; color: #f9e2af; font-weight: bold; background: rgba(249, 226, 175, 0.15); border: 1px solid rgba(249, 226, 175, 0.3); padding: 1px 5px; border-radius: 4px;">🟡 In Planung</span>` : ''}
+                                    </div>
                                 </div>
+                            </div>
+                        `;
+                    });
+                    html += `
                             </div>
                         </div>
                     `;
-                });
-            }
+                }
 
-            html += `
-                            </div>
-                        </div>
-
-                        <!-- Widget 3: Neue E-Mails -->
+                // 3. Neue E-Mails (nur anzeigen wenn ungelesene Mails vorhanden)
+                if (unreadMails.length > 0) {
+                    html += `
                         <div class="arbeitstisch-card">
                             <div class="arbeitstisch-card-header">
                                 <div class="arbeitstisch-card-title">
                                     <span>📬</span>
                                     <h4>Neue E-Mails</h4>
-                                    ${unreadMails.length > 0 ? `<span class="arbeitstisch-badge unread">${unreadMails.length} neu</span>` : `<span class="arbeitstisch-badge">0 neu</span>`}
                                 </div>
                                 <button type="button" onclick="focusWidget('mail')" class="arbeitstisch-card-link" title="Zum Posteingang">Posteingang ➔</button>
                             </div>
                             <div class="arbeitstisch-card-body">
-            `;
+                    `;
+                    unreadMails.slice(0, 6).forEach(m => {
+                        const escSubject = escapeHtml(m.subject || '(Kein Betreff)');
+                        const escFrom = escapeHtml(m.fromName || m.from || 'Unbekannt');
+                        const mailDate = new Date(m.date);
+                        const timeStr = getLocalDateString(mailDate) === todayStr
+                            ? mailDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr'
+                            : mailDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
 
-            const mailsToShow = unreadMails.length > 0 ? unreadMails.slice(0, 5) : allMails.slice(0, 4);
-            if (mailsToShow.length === 0) {
-                html += `<div class="arbeitstisch-empty">Keine neuen E-Mails im Postfach. ✉️</div>`;
-            } else {
-                mailsToShow.forEach(m => {
-                    const escSubject = escapeHtml(m.subject || '(Kein Betreff)');
-                    const escFrom = escapeHtml(m.fromName || m.from || 'Unbekannt');
-                    const unreadDot = !m.isRead ? `<span style="width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0;"></span>` : '';
-                    const mailDate = new Date(m.date);
-                    const timeStr = getLocalDateString(mailDate) === todayStr
-                        ? mailDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr'
-                        : mailDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-
-                    html += `
-                        <div class="arbeitstisch-item" onclick="openMailReadModal(${m.id})" style="cursor: pointer;">
-                            <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
-                                    <div style="display: flex; align-items: center; gap: 5px; min-width: 0;">
-                                        ${unreadDot}
-                                        <strong style="font-size: 0.78rem; color: ${m.isRead ? 'var(--text)' : '#ffffff'}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escFrom}</strong>
+                        html += `
+                            <div class="arbeitstisch-item" onclick="openMailReadModal(${m.id})" style="cursor: pointer;">
+                                <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+                                        <div style="display: flex; align-items: center; gap: 5px; min-width: 0;">
+                                            <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0;"></span>
+                                            <strong style="font-size: 0.78rem; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escFrom}</strong>
+                                        </div>
+                                        <span style="font-size: 0.65rem; opacity: 0.5; flex-shrink: 0;">${timeStr}</span>
                                     </div>
-                                    <span style="font-size: 0.65rem; opacity: 0.45; flex-shrink: 0;">${timeStr}</span>
+                                    <span style="font-size: 0.75rem; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escSubject}</span>
                                 </div>
-                                <span style="font-size: 0.75rem; color: ${m.isRead ? 'rgba(255,255,255,0.6)' : '#ffffff'}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escSubject}</span>
+                            </div>
+                        `;
+                    });
+                    html += `
                             </div>
                         </div>
                     `;
-                });
-            }
+                }
 
-            html += `
-                            </div>
-                        </div>
-
-                        <!-- Widget 4: Aktive Timer & Wecker -->
+                // 4. Wecker & Timer (nur anzeigen wenn aktive Timer oder Wecker vorhanden)
+                if (activeTimers.length > 0) {
+                    html += `
                         <div class="arbeitstisch-card">
                             <div class="arbeitstisch-card-header">
                                 <div class="arbeitstisch-card-title">
                                     <span>⏱️</span>
-                                    <h4>Aktive Timer</h4>
-                                    <span class="arbeitstisch-badge">${activeTimers.length}</span>
+                                    <h4>Wecker & Timer</h4>
                                 </div>
                                 <button type="button" onclick="openTimerModal()" class="arbeitstisch-card-link" title="Neuen Timer erstellen">+ Neuer Timer</button>
                             </div>
                             <div class="arbeitstisch-card-body">
-            `;
-
-            if (activeTimers.length === 0) {
-                html += `<div class="arbeitstisch-empty">Keine laufenden Timer oder Wecker. ⏱️</div>`;
-            } else {
-                activeTimers.forEach(t => {
-                    const escTitle = escapeHtml(t.title || 'Timer');
-                    html += `
-                        <div class="timer-card" id="timer-card-${t.id}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" onclick="openTimerDetailModal('${t.id}', '${escTitle}', '${t.createdAt}', '${t.expiresAt}')" style="padding: 10px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); width: 100%; position: relative; cursor: pointer;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                <span style="font-size: 0.82rem; font-weight: bold; color: var(--text);">${escTitle}</span>
-                                <span style="font-size: 0.65rem; opacity: 0.5;">Bis ${new Date(t.expiresAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
+                    `;
+                    activeTimers.forEach(t => {
+                        const escTitle = escapeHtml(t.title || 'Timer');
+                        html += `
+                            <div class="timer-card" id="timer-card-${t.id}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" onclick="openTimerDetailModal('${t.id}', '${escTitle}', '${t.createdAt}', '${t.expiresAt}')" style="padding: 10px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); width: 100%; position: relative; cursor: pointer;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <span style="font-size: 0.82rem; font-weight: bold; color: var(--text);">${escTitle}</span>
+                                    <span style="font-size: 0.65rem; opacity: 0.5;">Bis ${new Date(t.expiresAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                                <div class="timer-countdown" style="font-family: monospace; font-size: 1.15rem; font-weight: bold; color: var(--accent); margin-bottom: 4px;">--:--:--</div>
+                                <div class="timer-progress-bg" style="width: 100%; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden;">
+                                    <div class="timer-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--on)); border-radius: 2px; transition: width 0.5s linear;"></div>
+                                </div>
                             </div>
-                            <div class="timer-countdown" style="font-family: monospace; font-size: 1.15rem; font-weight: bold; color: var(--accent); margin-bottom: 4px;">--:--:--</div>
-                            <div class="timer-progress-bg" style="width: 100%; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden;">
-                                <div class="timer-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--on)); border-radius: 2px; transition: width 0.5s linear;"></div>
+                        `;
+                    });
+                    html += `
                             </div>
                         </div>
                     `;
-                });
+                }
             }
 
             html += `
-                            </div>
-                        </div>
                     </div>
                 </div>
             `;

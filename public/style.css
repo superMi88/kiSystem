@@ -16,7 +16,10 @@ html, body {
     margin: 0;
     padding: 0;
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     color: var(--text);
 }
@@ -446,7 +449,7 @@ input:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--acc
     outline: none;
 }
 
-#plus-btn, #mic-btn, #send-btn {
+#plus-btn, #mic-btn, #send-btn, #view-switch-btn {
     background: transparent !important;
     border: none !important;
     width: 36px;
@@ -464,12 +467,22 @@ input:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--acc
     margin-bottom: 2px;
 }
 
-#plus-btn:hover, #mic-btn:hover, #send-btn:hover {
+#plus-btn:hover, #mic-btn:hover, #send-btn:hover, #view-switch-btn:hover {
     background: rgba(255, 255, 255, 0.08) !important;
 }
 
-#plus-btn:active, #mic-btn:active, #send-btn:active {
+#plus-btn:active, #mic-btn:active, #send-btn:active, #view-switch-btn:active {
     transform: scale(0.92);
+}
+
+#view-switch-btn svg {
+    stroke: var(--accent);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.2s;
+}
+
+#view-switch-btn:hover svg {
+    stroke: #ffffff;
+    transform: scale(1.1);
 }
 
 /* Attachment Preview Area */
@@ -928,9 +941,10 @@ body.mobile-mode .mobile-only {
     display: inline-flex !important;
 }
 #view-toggle-container.mobile-only {
-    display: none;
+    display: none !important;
 }
-body.mobile-mode #view-toggle-container.mobile-only {
+body.mobile-mode.entity-selection-active #view-toggle-container.mobile-only,
+body.mobile-mode.mail-selection-active #view-toggle-container.mobile-only {
     display: flex !important;
     position: static !important;
     left: auto !important;
@@ -945,17 +959,17 @@ body.mobile-mode #view-toggle-container.mobile-only {
     transition: none !important;
     justify-content: space-around !important;
     align-items: center !important;
-    gap: 12px !important;
+    gap: 8px !important;
     width: 100% !important;
     bottom: auto !important;
 }
 
 /* Adjust bottom padding to prevent items from being cut off by the floating bar */
 body.mobile-mode.view-chat #chat-box {
-    padding-bottom: 145px !important;
+    padding-bottom: 180px !important;
 }
 body.mobile-mode:not(.view-chat) .top-panel {
-    padding-bottom: 145px !important;
+    padding-bottom: 240px !important;
 }
 
 /* 1. Pure Chat view on Mobile (100% Fullscreen Chat) */
@@ -967,12 +981,20 @@ body.mobile-mode.view-chat .side-panel-container {
     grid-template-columns: 1fr !important;
     grid-template-rows: 1fr !important;
     transform: translateX(0) !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
 }
 body.mobile-mode.view-chat .right-column {
     grid-column: 1 !important;
     grid-row: 1 !important;
     padding-top: 60px !important;
     height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
     display: flex !important;
     background: transparent !important;
 }
@@ -982,11 +1004,19 @@ body.mobile-mode .top-panel {
     grid-column: 1 !important;
     grid-row: 1 !important;
     padding-top: 70px !important;
+    padding-bottom: 240px !important;
     height: 100vh !important;
+    height: 100dvh !important;
     max-height: 100vh !important;
+    max-height: 100dvh !important;
     overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior-y: contain !important;
     display: flex !important;
+    flex-direction: column !important;
     border-bottom: none !important;
+    box-sizing: border-box !important;
+    touch-action: pan-y !important;
 }
 body.mobile-mode.view-chat .top-panel,
 body.mobile-mode.view-history .top-panel,
@@ -999,6 +1029,9 @@ body.mobile-mode .right-column {
     grid-row: 1 !important;
     padding-top: 60px !important;
     height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
     display: flex !important;
     transition: background 0.3s;
 }
@@ -1492,31 +1525,33 @@ body.mobile-mode.modal-active #attachments-bar {
 /* Fixed Message Input & Attachments for Mobile */
 body.mobile-mode .input-area {
     position: fixed;
-    bottom: 15px;
-    left: 15px;
-    right: 15px;
+    bottom: 12px;
+    left: 12px;
+    right: 12px;
     z-index: 999;
     border-radius: 20px;
     background: rgba(30, 30, 46, 0.95);
     backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.45);
-    padding: 12px 16px;
+    padding: 8px 10px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 6px;
     height: auto;
-    max-height: 220px;
+    max-height: 200px;
     transform: translateY(0) !important;
     opacity: 1 !important;
     pointer-events: auto !important;
+    box-sizing: border-box;
 }
 
 body.mobile-mode #attachments-bar {
     position: fixed;
-    bottom: 155px; /* Sits directly above the merged bottom bar */
-    left: 15px;
-    right: 15px;
+    bottom: 75px; /* Sits directly above the slimmed bottom bar */
+    left: 12px;
+    right: 12px;
     z-index: 999;
     border-radius: 8px;
     background: rgba(30, 30, 46, 0.95);
@@ -2431,6 +2466,7 @@ input:checked + .slider:before {
     gap: 16px;
     width: 100%;
     box-sizing: border-box;
+    padding-bottom: 60px;
 }
 
 .arbeitstisch-header {
@@ -2506,7 +2542,7 @@ input:checked + .slider:before {
 }
 
 @media (min-width: 820px) {
-    .arbeitstisch-grid {
+    body:not(.mobile-mode) .arbeitstisch-grid {
         grid-template-columns: 1fr 1fr;
     }
 }
@@ -2601,6 +2637,11 @@ input:checked + .slider:before {
     overflow-y: auto;
     padding-right: 2px;
     overscroll-behavior: contain;
+}
+
+body.mobile-mode .arbeitstisch-card-body {
+    max-height: none !important;
+    overflow-y: visible !important;
 }
 
 .arbeitstisch-empty-hint {
