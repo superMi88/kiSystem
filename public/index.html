@@ -1108,8 +1108,8 @@
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                         </button>
                         <button id="view-switch-btn" type="button" class="view-switch-btn" onclick="toggleDashboardChat()" title="Zum Chat wechseln" aria-label="Zum Chat wechseln">
-                            <svg id="view-switch-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="6 9 12 15 18 9"></polyline>
+                            <svg id="view-switch-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                             </svg>
                         </button>
                     </div>
@@ -1631,16 +1631,16 @@
                 }
             }
 
-            // Update view switch button icon & title (Down arrow on dashboard to switch to Chat, Up arrow in Chat to switch to dashboard)
+            // Update view switch button icon & title (Chat-Icon auf dem Arbeitstisch, Arbeitstisch-Icon im Chat)
             const switchBtn = document.getElementById('view-switch-btn');
             const switchIcon = document.getElementById('view-switch-icon');
             if (switchBtn && switchIcon) {
                 if (viewName === 'dashboard') {
-                    switchIcon.innerHTML = '<polyline points="6 9 12 15 18 9"></polyline>';
+                    switchIcon.innerHTML = '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>';
                     switchBtn.title = 'Zum Chat wechseln';
                     switchBtn.setAttribute('aria-label', 'Zum Chat wechseln');
                 } else {
-                    switchIcon.innerHTML = '<polyline points="18 15 12 9 6 15"></polyline>';
+                    switchIcon.innerHTML = '<rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect>';
                     switchBtn.title = 'Zum Arbeitstisch wechseln';
                     switchBtn.setAttribute('aria-label', 'Zum Arbeitstisch wechseln');
                 }
