@@ -1024,7 +1024,7 @@
 
         <!-- Linke Spalte: Plugins & Dashboard -->
         <div class="top-panel glass-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; width: 100%;">
+            <div class="top-panel-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; width: 100%;">
                 <h3 id="plugin-view-title" style="margin: 0; font-size: 0.85rem; text-transform: uppercase; color: var(--accent); letter-spacing: 1px; text-align: left; font-weight: 700;">Plugins & Dashboard</h3>
                 <button onclick="toggleMobileView()" class="nav-btn mobile-only" style="margin: 0; max-width: 140px; padding: 6px 12px; font-size: 0.75rem; border-radius: 20px; border-color: var(--accent); color: var(--accent); font-weight: bold; background: rgba(137, 180, 250, 0.1);">
                     ➔ Chat anzeigen
@@ -5104,6 +5104,7 @@
             } else if (eventTime) {
                 const startStr = new Date(eventTime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
                 const endStr = eventEndTime ? new Date(eventEndTime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+                const timeDisplay = endStr ? `${startStr} - ${endStr}` : startStr;
                 timeBadge = `<span style="background: rgba(137, 180, 250, 0.15); color: var(--accent); font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold;">${timeDisplay}</span>`;
             }
             return timeBadge;
@@ -5805,26 +5806,15 @@
             // --- HTML RENDERING ---
             let html = `
                 <div class="arbeitstisch-dashboard">
-                    <div class="arbeitstisch-header">
-                        <div class="arbeitstisch-title-wrap">
-                            <h2 class="arbeitstisch-title">🛠️ Arbeitstisch</h2>
-                            <div class="arbeitstisch-date-badge">📅 ${dateFormatted}</div>
-                        </div>
-                        <div class="arbeitstisch-quick-actions">
-                            <button type="button" onclick="openTaskModal()" class="arbeitstisch-action-btn" title="Neue Aufgabe erstellen">+ Aufgabe</button>
-                            <button type="button" onclick="openTimerModal()" class="arbeitstisch-action-btn" title="Neuen Timer erstellen">+ Timer</button>
-                        </div>
-                    </div>
-
                     <div class="arbeitstisch-grid">
             `;
 
             if (!hasAnyContent) {
                 html += `
-                    <div class="arbeitstisch-card" style="text-align: center; padding: 32px 20px; grid-column: 1 / -1;">
-                        <div style="font-size: 2rem; margin-bottom: 8px;">✨</div>
-                        <div style="font-size: 1rem; font-weight: 700; color: #ffffff; margin-bottom: 6px;">Alles erledigt!</div>
-                        <div style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.65); max-width: 380px; margin: 0 auto;">Keine offenen Aufgaben, heutigen Termine oder neuen E-Mails vorhanden. Entspann dich! 🎉</div>
+                    <div class="arbeitstisch-card" style="text-align: center; padding: 28px 16px; grid-column: 1 / -1;">
+                        <div style="font-size: 1.8rem; margin-bottom: 6px;">✨</div>
+                        <div style="font-size: 0.95rem; font-weight: 700; color: #ffffff; margin-bottom: 4px;">Alles erledigt!</div>
+                        <div style="font-size: 0.8rem; color: rgba(255, 255, 255, 0.65); max-width: 320px; margin: 0 auto;">Keine offenen Aufgaben, heutigen Termine oder neuen E-Mails vorhanden. Entspann dich! 🎉</div>
                     </div>
                 `;
             } else {
@@ -5835,7 +5825,7 @@
                             <div class="arbeitstisch-card-header">
                                 <div class="arbeitstisch-card-title">
                                     <span>📅</span>
-                                    <h4>Heutige Termine</h4>
+                                    <h4>Termine</h4>
                                 </div>
                                 <button type="button" onclick="focusWidget('calendar')" class="arbeitstisch-card-link" title="Zum Kalender">Kalender ➔</button>
                             </div>
@@ -5846,10 +5836,10 @@
                         const timeBadge = getEventTimeBadge(ev);
                         const descText = ev.description ? `<div style="font-size: 0.7rem; opacity: 0.6; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(ev.description)}</div>` : '';
                         html += `
-                            <div class="arbeitstisch-item" onclick="handleEntityClick(event, 'event', '${ev.id}')" style="cursor: pointer;">
-                                <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1;">
+                            <div class="arbeitstisch-item" onclick="handleEntityClick(event, 'event', '${ev.id}')">
+                                <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;">
                                     <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                        <strong style="font-size: 0.82rem; color: #ffffff;">${escTitle}</strong>
+                                        <strong style="font-size: 0.82rem; color: #ffffff; overflow: hidden; text-overflow: ellipsis;">${escTitle}</strong>
                                         ${timeBadge}
                                         ${ev.isPlanned ? `<span style="font-size: 0.65rem; color: #f9e2af; font-weight: bold; background: rgba(249, 226, 175, 0.15); border: 1px solid rgba(249, 226, 175, 0.3); padding: 1px 5px; border-radius: 4px;">🟡 In Planung</span>` : ''}
                                     </div>
@@ -5893,14 +5883,12 @@
                         }
 
                         html += `
-                            <div class="arbeitstisch-item" style="gap: 8px;">
-                                <input type="checkbox" class="task-checkbox" data-task-id="${rawId}" data-tasklist-id="${listTitle}" onchange="completeTask(this)" style="margin-top: 2px;">
-                                <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; cursor: pointer;" onclick="handleEntityClick(event, 'task', '${rawId}')">
-                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                        <span style="font-size: 0.8rem; font-weight: 500; color: #ffffff; line-height: 1.3;">${escTitle}</span>
-                                        ${dueBadge}
-                                        ${t.isPlanned ? `<span style="font-size: 0.65rem; color: #f9e2af; font-weight: bold; background: rgba(249, 226, 175, 0.15); border: 1px solid rgba(249, 226, 175, 0.3); padding: 1px 5px; border-radius: 4px;">🟡 In Planung</span>` : ''}
-                                    </div>
+                            <div class="arbeitstisch-item">
+                                <input type="checkbox" class="task-checkbox" data-task-id="${rawId}" data-tasklist-id="${listTitle}" onchange="completeTask(this)" onclick="event.stopPropagation()">
+                                <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; flex-wrap: wrap;" onclick="handleEntityClick(event, 'task', '${rawId}')">
+                                    <span style="font-size: 0.82rem; font-weight: 500; color: #ffffff; line-height: 1.3; word-break: break-word;">${escTitle}</span>
+                                    ${dueBadge}
+                                    ${t.isPlanned ? `<span style="font-size: 0.65rem; color: #f9e2af; font-weight: bold; background: rgba(249, 226, 175, 0.15); border: 1px solid rgba(249, 226, 175, 0.3); padding: 1px 5px; border-radius: 4px;">🟡 In Planung</span>` : ''}
                                 </div>
                             </div>
                         `;
@@ -5918,7 +5906,7 @@
                             <div class="arbeitstisch-card-header">
                                 <div class="arbeitstisch-card-title">
                                     <span>📬</span>
-                                    <h4>Neue E-Mails</h4>
+                                    <h4>E-Mails</h4>
                                 </div>
                                 <button type="button" onclick="focusWidget('mail')" class="arbeitstisch-card-link" title="Zum Posteingang">Posteingang ➔</button>
                             </div>
@@ -5933,16 +5921,16 @@
                             : mailDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
 
                         html += `
-                            <div class="arbeitstisch-item" onclick="openMailReadModal(${m.id})" style="cursor: pointer;">
+                            <div class="arbeitstisch-item" onclick="openMailReadModal(${m.id})">
                                 <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;">
                                     <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
-                                        <div style="display: flex; align-items: center; gap: 5px; min-width: 0;">
+                                        <div style="display: flex; align-items: center; gap: 5px; min-width: 0; flex: 1;">
                                             <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0;"></span>
                                             <strong style="font-size: 0.78rem; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escFrom}</strong>
                                         </div>
                                         <span style="font-size: 0.65rem; opacity: 0.5; flex-shrink: 0;">${timeStr}</span>
                                     </div>
-                                    <span style="font-size: 0.75rem; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escSubject}</span>
+                                    <span style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.85); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escSubject}</span>
                                 </div>
                             </div>
                         `;
@@ -5960,21 +5948,21 @@
                             <div class="arbeitstisch-card-header">
                                 <div class="arbeitstisch-card-title">
                                     <span>⏱️</span>
-                                    <h4>Wecker & Timer</h4>
+                                    <h4>Timer</h4>
                                 </div>
-                                <button type="button" onclick="openTimerModal()" class="arbeitstisch-card-link" title="Neuen Timer erstellen">+ Neuer Timer</button>
+                                <button type="button" onclick="openTimerModal()" class="arbeitstisch-card-link" title="Neuen Timer erstellen">+ Timer</button>
                             </div>
                             <div class="arbeitstisch-card-body">
                     `;
                     activeTimers.forEach(t => {
                         const escTitle = escapeHtml(t.title || 'Timer');
                         html += `
-                            <div class="timer-card" id="timer-card-${t.id}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" onclick="openTimerDetailModal('${t.id}', '${escTitle}', '${t.createdAt}', '${t.expiresAt}')" style="padding: 10px 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); width: 100%; position: relative; cursor: pointer;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                    <span style="font-size: 0.82rem; font-weight: bold; color: var(--text);">${escTitle}</span>
-                                    <span style="font-size: 0.65rem; opacity: 0.5;">Bis ${new Date(t.expiresAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
+                            <div class="timer-card" id="timer-card-${t.id}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" onclick="openTimerDetailModal('${t.id}', '${escTitle}', '${t.createdAt}', '${t.expiresAt}')" style="padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); width: 100%; min-width: 0; box-sizing: border-box; position: relative; cursor: pointer;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 6px;">
+                                    <span style="font-size: 0.82rem; font-weight: bold; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escTitle}</span>
+                                    <span style="font-size: 0.65rem; opacity: 0.5; flex-shrink: 0;">Bis ${new Date(t.expiresAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
                                 </div>
-                                <div class="timer-countdown" style="font-family: monospace; font-size: 1.15rem; font-weight: bold; color: var(--accent); margin-bottom: 4px;">--:--:--</div>
+                                <div class="timer-countdown" style="font-family: monospace; font-size: 1.05rem; font-weight: bold; color: var(--accent); margin-bottom: 4px;">--:--:--</div>
                                 <div class="timer-progress-bg" style="width: 100%; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden;">
                                     <div class="timer-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--on)); border-radius: 2px; transition: width 0.5s linear;"></div>
                                 </div>
