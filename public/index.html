@@ -2238,6 +2238,8 @@
                 if (e.type === 'mousedown') {
                     document.addEventListener('mousemove', handleSwipeMove, { passive: false });
                     document.addEventListener('mouseup', handleSwipeEnd);
+                } else if (e.type === 'touchstart') {
+                    window.addEventListener('touchmove', handleSwipeMove, { passive: false });
                 }
                 return;
             }
@@ -2267,6 +2269,8 @@
             if (e.type === 'mousedown') {
                 document.addEventListener('mousemove', handleSwipeMove, { passive: false });
                 document.addEventListener('mouseup', handleSwipeEnd);
+            } else if (e.type === 'touchstart') {
+                window.addEventListener('touchmove', handleSwipeMove, { passive: false });
             }
         }
 
@@ -2284,6 +2288,7 @@
                 if (!isMsgSwipeActive) {
                     if (Math.abs(deltaY) > 5) {
                         activeSwipeMessage = null;
+                        window.removeEventListener('touchmove', handleSwipeMove);
                         return;
                     } else if (deltaX < -28 && Math.abs(deltaX) > Math.abs(deltaY) * 2.5) {
                         isMsgSwipeActive = true;
@@ -2338,6 +2343,7 @@
                 if (Math.abs(deltaY) > 5) {
                     isScrollLockedOut = true;
                     activeSwipeItem = null;
+                    window.removeEventListener('touchmove', handleSwipeMove);
                     return;
                 } else if (deltaX < -28 && Math.abs(deltaX) > Math.abs(deltaY) * 2.5) {
                     isSwipeGestureActive = true;
@@ -2371,6 +2377,7 @@
         }
 
         function handleSwipeEnd(e) {
+            window.removeEventListener('touchmove', handleSwipeMove);
             if (longPressTimer) {
                 clearTimeout(longPressTimer);
                 longPressTimer = null;
@@ -2533,7 +2540,6 @@
         window.addEventListener('scroll', () => closeContextMenu(), true);
 
         window.addEventListener('touchstart', handleSwipeStart, { passive: true });
-        window.addEventListener('touchmove', handleSwipeMove, { passive: false });
         window.addEventListener('touchend', handleSwipeEnd, { passive: true });
         window.addEventListener('touchcancel', handleSwipeEnd, { passive: true });
         window.addEventListener('mousedown', handleSwipeStart);
@@ -8876,19 +8882,28 @@
             // Scroll-Listener für bidirektionales Infinite Scroll in der Kalender- & Tagebuch-Timeline
             const topPanel = document.querySelector('.top-panel');
             if (topPanel) {
+                let lastScrollTop = topPanel.scrollTop;
                 topPanel.addEventListener('scroll', () => {
+                    const isCalendarView = document.body.classList.contains('view-calendar');
+                    if (!isCalendarView) return;
+
                     const widgetCalendar = document.getElementById('widget-calendar');
-                    if (widgetCalendar) {
-                        // Nach oben scrollen -> Vergangenheit laden
-                        if (topPanel.scrollTop < 80 && !isTimelineLoadingPast && timelineCanScrollPast) {
-                            loadMorePastTimelineDays();
-                        }
-                        // Nach unten scrollen -> Zukunft laden
-                        if (topPanel.scrollHeight - topPanel.scrollTop - topPanel.clientHeight < 120 && !isTimelineLoadingFuture && timelineCanScrollFuture) {
-                            loadMoreFutureTimelineDays();
-                        }
+                    if (!widgetCalendar || widgetCalendar.offsetParent === null) return;
+
+                    const currentScrollTop = topPanel.scrollTop;
+                    const isScrollingUp = currentScrollTop < lastScrollTop;
+                    const isScrollingDown = currentScrollTop > lastScrollTop;
+                    lastScrollTop = currentScrollTop;
+
+                    // Nach oben scrollen -> Vergangenheit laden
+                    if (isScrollingUp && currentScrollTop < 80 && !isTimelineLoadingPast && timelineCanScrollPast) {
+                        loadMorePastTimelineDays();
                     }
-                });
+                    // Nach unten scrollen -> Zukunft laden
+                    if (isScrollingDown && topPanel.scrollHeight - currentScrollTop - topPanel.clientHeight < 120 && !isTimelineLoadingFuture && timelineCanScrollFuture) {
+                        loadMoreFutureTimelineDays();
+                    }
+                }, { passive: true });
             }
             requestNotificationPermissions();
             checkMailNotificationsForeground(true);
