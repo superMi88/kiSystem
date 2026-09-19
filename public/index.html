@@ -1062,7 +1062,7 @@
                 </div>
 
                 <!-- Mail Body Container (Sicher bereinigtes HTML / Text mit Auto-Fit & Dark Mode) -->
-                <div id="mail-read-body" class="mail-body-container" style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; touch-action: pan-y; padding: 14px; background: #14141e; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); font-size: 0.92rem; line-height: 1.6; color: #cdd6f4; user-select: text; word-break: break-word;">
+                <div id="mail-read-body" class="mail-body-container" style="width: 100%; padding: 10px 4px; background: #14141e; font-size: 0.92rem; line-height: 1.6; color: #cdd6f4; box-sizing: border-box;">
                     <div id="mail-read-content" class="mail-read-content">
                         <!-- Mail Inhalt -->
                     </div>
@@ -6871,8 +6871,14 @@
                     const c = parseEmailColor(el.getAttribute('bgcolor'));
                     const m = getEmailColorMetrics(c);
                     if (m.brightness > 140 || (m.brightness > 115 && m.saturation < 0.35)) {
-                        el.setAttribute('bgcolor', 'transparent');
-                        el.style.backgroundColor = 'transparent';
+                        const hasRadius = (el.style.borderRadius && parseFloat(el.style.borderRadius) > 0) || (el.getAttribute('style') && el.getAttribute('style').includes('border-radius'));
+                        if (hasRadius) {
+                            el.setAttribute('bgcolor', '#1e1e28');
+                            el.style.backgroundColor = '#1e1e28';
+                        } else {
+                            el.setAttribute('bgcolor', 'transparent');
+                            el.style.backgroundColor = 'transparent';
+                        }
                     }
                 }
 
@@ -6882,10 +6888,14 @@
                     const c = parseEmailColor(bgStr);
                     const m = getEmailColorMetrics(c);
                     if (!m.isTransparent) {
-                        if (m.brightness > 145 || (m.brightness > 115 && m.saturation < 0.35)) {
-                            const isCardElement = ['TABLE', 'TD', 'TH', 'DIV', 'SECTION'].includes(el.tagName);
-                            const hasBorder = el.style.border && el.style.border !== 'none';
-                            el.style.backgroundColor = (isCardElement && hasBorder) ? 'rgba(255, 255, 255, 0.03)' : 'transparent';
+                        if (m.brightness > 140 || (m.brightness > 115 && m.saturation < 0.35)) {
+                            // Check if this is a card with rounded corners
+                            const hasRadius = (el.style.borderRadius && parseFloat(el.style.borderRadius) > 0) || (el.getAttribute('style') && el.getAttribute('style').includes('border-radius'));
+                            if (hasRadius) {
+                                el.style.backgroundColor = '#1e1e28';
+                            } else {
+                                el.style.backgroundColor = 'transparent';
+                            }
                         }
                     }
                 }
@@ -6921,13 +6931,15 @@
                     }
                 }
 
-                // 5. Borders Adaptation
-                if (el.style.borderColor || el.style.border) {
-                    const bColor = el.style.borderColor || el.style.border;
-                    const c = parseEmailColor(bColor);
+                // 5. Borders: NEVER add borders to layout elements!
+                if (el.getAttribute('border') === '0') {
+                    el.style.border = 'none';
+                    el.style.borderColor = 'transparent';
+                } else if (el.style.borderColor) {
+                    const c = parseEmailColor(el.style.borderColor);
                     const m = getEmailColorMetrics(c);
-                    if (!m.isTransparent && (m.brightness > 140 || (m.brightness < 80 && m.saturation < 0.2))) {
-                        el.style.borderColor = 'rgba(255, 255, 255, 0.12)';
+                    if (!m.isTransparent && m.brightness > 160) {
+                        el.style.borderColor = 'rgba(255, 255, 255, 0.1)';
                     }
                 }
             });
@@ -6939,28 +6951,18 @@
             const contentEl = document.getElementById('mail-read-content');
             if (!bodyEl || !contentEl) return;
 
-            // Reset zoom & transform to measure natural content width
             contentEl.style.zoom = '';
             contentEl.style.transform = '';
-            contentEl.style.transformOrigin = 'top left';
             contentEl.style.width = '';
 
-            const computed = window.getComputedStyle(bodyEl);
-            const padLeft = parseFloat(computed.paddingLeft) || 0;
-            const padRight = parseFloat(computed.paddingRight) || 0;
-            const availableWidth = bodyEl.clientWidth - padLeft - padRight;
+            const availableWidth = bodyEl.clientWidth;
             const contentWidth = contentEl.scrollWidth;
 
-            if (availableWidth > 0 && contentWidth > availableWidth + 1) {
+            // Only scale if the content is genuinely wider than the screen (e.g. 600px+ fixed tables)
+            if (availableWidth > 50 && contentWidth > availableWidth + 4) {
                 const scale = Math.floor((availableWidth / contentWidth) * 1000) / 1000;
-                if (scale < 1 && scale > 0.05) {
-                    if (CSS.supports && CSS.supports('zoom', scale)) {
-                        contentEl.style.zoom = scale;
-                    } else {
-                        contentEl.style.transform = `scale(${scale})`;
-                        contentEl.style.transformOrigin = 'top left';
-                        contentEl.style.width = `${(100 / scale)}%`;
-                    }
+                if (scale < 1 && scale > 0.3) {
+                    contentEl.style.zoom = scale;
                 }
             }
         }

@@ -1739,59 +1739,39 @@ body.mobile-mode .top-panel > div:first-child {
     color: #cdd6f4;
     line-height: 1.6;
     background: #14141e;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    touch-action: pan-y !important;
-    overscroll-behavior-x: none !important;
-    overscroll-behavior-y: contain !important;
-    -webkit-overflow-scrolling: touch !important;
-    box-sizing: border-box !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    word-break: break-word !important;
-    overflow-wrap: anywhere !important;
-}
-
-/* Force all email elements to respect the viewport width and never push horizontally */
-.mail-body-container * {
-    max-width: 100% !important;
-    min-width: 0 !important;
-    box-sizing: border-box !important;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    word-break: normal;
+    overflow: visible !important;
+    touch-action: auto !important;
 }
 
 .mail-read-content {
     width: 100%;
     max-width: 100%;
-    transform-origin: top left;
-    transition: transform 0.15s ease-out;
+    margin: 0 auto;
+    box-sizing: border-box;
 }
 
-.mail-body-container a {
-    color: var(--accent);
-    text-decoration: underline;
-    word-break: break-word;
-    overflow-wrap: anywhere;
-}
-
-.mail-body-container p {
-    margin: 0.5em 0;
-}
-
-.mail-body-container table {
-    border-collapse: collapse;
+/* Ensure top-level email wrapper tables fit screen width without distorting inner columns */
+.mail-read-content > table,
+.mail-read-content > div > table,
+.mail-read-content > center > table {
     width: 100% !important;
     max-width: 100% !important;
-    table-layout: auto !important;
-    margin: 0.5em 0;
 }
 
+.mail-read-content table {
+    max-width: 100% !important;
+    border-collapse: collapse;
+}
+
+/* NEVER force borders, padding, or margins on layout cells */
 .mail-body-container td,
 .mail-body-container th {
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 6px 10px;
-    max-width: 100% !important;
-    word-break: break-word !important;
-    overflow-wrap: anywhere !important;
+    word-break: normal;
+    overflow-wrap: break-word;
 }
 
 .mail-body-container img,
@@ -1801,15 +1781,19 @@ body.mobile-mode .top-panel > div:first-child {
     max-width: 100% !important;
     height: auto !important;
     object-fit: contain;
-    border-radius: 6px;
     display: inline-block;
+}
+
+.mail-body-container a {
+    color: var(--accent, #89b4fa);
+    text-decoration: underline;
+    word-break: break-word;
 }
 
 .mail-body-container pre,
 .mail-body-container code {
     white-space: pre-wrap !important;
     word-break: break-word !important;
-    overflow-wrap: anywhere !important;
     font-family: inherit;
 }
 
@@ -1828,17 +1812,6 @@ body.mobile-mode .top-panel > div:first-child {
 
 .mail-body-container.original-theme a {
     color: #0969da !important;
-}
-
-.mail-body-container.original-theme td,
-.mail-body-container.original-theme th {
-    border-color: #d0d7de !important;
-    color: #1f2328 !important;
-}
-
-.mail-body-container.original-theme pre,
-.mail-body-container.original-theme code {
-    color: #1f2328 !important;
 }
 
 /* ==========================================================================
@@ -2988,9 +2961,10 @@ body.mail-read-active #mail-read-modal {
         padding: 0 0 40px 0;
     }
     #mail-read-body {
-        overflow-y: visible !important;
+        overflow: visible !important;
         height: auto !important;
         max-height: none !important;
+        touch-action: auto !important;
     }
 }
 
