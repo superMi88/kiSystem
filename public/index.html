@@ -6968,21 +6968,80 @@
                     }
                 }
 
-                // 6. Font size normalization: Ensure no tiny text inside email
+                // 6. Font size normalization: Ensure no tiny text inside email, but preserve zero-pixel spacers
                 if (el.style.fontSize) {
                     const fs = el.style.fontSize.trim().toLowerCase();
                     const val = parseFloat(fs);
-                    if ((fs.endsWith('px') && val < 14) || (fs.endsWith('pt') && val < 10.5) || (fs.endsWith('rem') && val < 0.9)) {
-                        el.style.fontSize = '14.5px';
+                    if (val >= 4 && ((fs.endsWith('px') && val < 13) || (fs.endsWith('pt') && val < 9.5) || (fs.endsWith('rem') && val < 0.8))) {
+                        el.style.fontSize = '13.5px';
                     }
                 }
-                if (el.tagName === 'FONT' && el.getAttribute('size') && parseInt(el.getAttribute('size')) <= 2) {
-                    el.removeAttribute('size');
-                    el.style.fontSize = '14.5px';
+                if (el.tagName === 'FONT' && el.getAttribute('size')) {
+                    const sizeVal = parseInt(el.getAttribute('size'), 10);
+                    if (sizeVal > 0 && sizeVal <= 2) {
+                        el.removeAttribute('size');
+                        el.style.fontSize = '13.5px';
+                    }
                 }
             });
         }
         window.applyEmailDarkMode = applyEmailDarkMode;
+
+        function normalizeEmailDimensions(containerEl, availableWidth) {
+            if (!containerEl || !availableWidth || availableWidth <= 50) return;
+
+            // 1. Images: Guarantee they never exceed viewport width and keep natural proportions
+            containerEl.querySelectorAll('img').forEach(img => {
+                img.style.maxWidth = '100%';
+                img.style.height = 'auto';
+                img.style.boxSizing = 'border-box';
+                if (img.style.minWidth && parseFloat(img.style.minWidth) > availableWidth) {
+                    img.style.minWidth = '0';
+                }
+                const attrW = img.getAttribute('width');
+                if (attrW && !attrW.includes('%') && parseInt(attrW, 10) > availableWidth) {
+                    img.setAttribute('width', '100%');
+                }
+                if (img.style.width && img.style.width.endsWith('px') && parseFloat(img.style.width) > availableWidth) {
+                    img.style.width = '100%';
+                }
+            });
+
+            // 2. Tables: Prevent desktop fixed-width tables (e.g. 600px/640px) from overflowing
+            containerEl.querySelectorAll('table').forEach(tbl => {
+                tbl.style.maxWidth = '100%';
+                tbl.style.boxSizing = 'border-box';
+                const attrW = tbl.getAttribute('width');
+                if (attrW && !attrW.includes('%') && parseInt(attrW, 10) > availableWidth) {
+                    tbl.setAttribute('width', '100%');
+                }
+                if (tbl.style.width && tbl.style.width.endsWith('px') && parseFloat(tbl.style.width) > availableWidth) {
+                    tbl.style.width = '100%';
+                }
+                if (tbl.style.minWidth && parseFloat(tbl.style.minWidth) > availableWidth) {
+                    tbl.style.minWidth = '0';
+                }
+            });
+
+            // 3. Divs, cells and centers
+            containerEl.querySelectorAll('div, td, th, center').forEach(el => {
+                el.style.boxSizing = 'border-box';
+                if (el.style.minWidth && parseFloat(el.style.minWidth) > availableWidth) {
+                    el.style.minWidth = '0';
+                }
+                if (el.style.width && el.style.width.endsWith('px') && parseFloat(el.style.width) > availableWidth) {
+                    el.style.width = '100%';
+                    el.style.maxWidth = '100%';
+                }
+                if ((el.tagName === 'TD' || el.tagName === 'TH') && el.parentElement && el.parentElement.children.length === 1) {
+                    const attrW = el.getAttribute('width');
+                    if (attrW && !attrW.includes('%') && parseInt(attrW, 10) > availableWidth) {
+                        el.setAttribute('width', '100%');
+                    }
+                }
+            });
+        }
+        window.normalizeEmailDimensions = normalizeEmailDimensions;
 
         function autoFitEmailContent() {
             const bodyEl = document.getElementById('mail-read-body');
@@ -6991,22 +7050,23 @@
 
             contentEl.style.zoom = '';
             contentEl.style.transform = '';
-            contentEl.style.width = '';
+            contentEl.style.transformOrigin = '0 0';
 
             const availableWidth = bodyEl.clientWidth;
+            if (availableWidth <= 50) return;
+
+            // Normalize layout elements first so responsive and single-column emails adapt naturally
+            normalizeEmailDimensions(contentEl, availableWidth);
+
             const contentWidth = contentEl.scrollWidth;
 
-            // Only scale if the content is genuinely wider than the screen (e.g. 600px+ fixed tables)
-            if (availableWidth > 50 && contentWidth > availableWidth + 4) {
+            // Only scale down if stubbornly wide multi-column tables still exceed screen width
+            if (contentWidth > availableWidth + 2) {
                 const scale = Math.floor((availableWidth / contentWidth) * 1000) / 1000;
-                // Never scale down below 0.88 to prevent text from becoming unreadably tiny.
-                // Wide tables can be smoothly scrolled horizontally if needed.
-                const safeScale = Math.max(scale, 0.88);
-                if (safeScale < 1) {
-                    contentEl.style.zoom = safeScale;
+                if (scale < 1 && scale > 0.2) {
+                    contentEl.style.zoom = scale;
                 }
-                bodyEl.style.overflowX = 'auto';
-                bodyEl.style.webkitOverflowScrolling = 'touch';
+                bodyEl.style.overflowX = 'hidden';
             } else {
                 bodyEl.style.overflowX = 'visible';
             }

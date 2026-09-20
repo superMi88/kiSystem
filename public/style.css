@@ -1737,8 +1737,8 @@ body.mobile-mode .top-panel > div:first-child {
 .mail-body-container {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     color: #cdd6f4;
-    font-size: 1.05rem !important;
-    line-height: 1.65 !important;
+    font-size: 1rem;
+    line-height: 1.6;
     background: #14141e;
     box-sizing: border-box;
     width: 100%;
@@ -1753,10 +1753,12 @@ body.mobile-mode .top-panel > div:first-child {
 .mail-read-content {
     width: 100%;
     max-width: 100%;
-    margin: 0 auto;
+    margin: 0 !important;
+    padding: 0 !important;
     box-sizing: border-box;
-    font-size: 1.05rem !important;
-    line-height: 1.65 !important;
+    font-size: 1rem;
+    line-height: 1.6;
+    text-align: left;
 }
 
 .mail-read-content p,
@@ -1765,8 +1767,9 @@ body.mobile-mode .top-panel > div:first-child {
 .mail-read-content th,
 .mail-read-content span,
 .mail-read-content li {
-    font-size: max(0.98rem, inherit);
+    font-size: max(0.95rem, inherit);
     line-height: 1.6;
+    box-sizing: border-box;
 }
 
 /* Ensure top-level email wrapper tables fit screen width without distorting inner columns */
@@ -1775,21 +1778,31 @@ body.mobile-mode .top-panel > div:first-child {
 .mail-read-content > center > table {
     width: 100% !important;
     max-width: 100% !important;
+    box-sizing: border-box;
 }
 
 .mail-read-content table {
     max-width: 100% !important;
-    border-collapse: collapse;
+    box-sizing: border-box;
+}
+
+.mail-read-content center {
+    text-align: left;
+    margin: 0;
 }
 
 /* NEVER force borders, padding, or margins on layout cells */
 .mail-body-container td,
-.mail-body-container th {
+.mail-body-container th,
+.mail-read-content td,
+.mail-read-content th {
     word-break: normal;
     overflow-wrap: break-word;
+    box-sizing: border-box;
 }
 
 .mail-body-container img,
+.mail-read-content img,
 .mail-body-container svg,
 .mail-body-container video,
 .mail-body-container canvas {
@@ -1797,6 +1810,7 @@ body.mobile-mode .top-panel > div:first-child {
     height: auto !important;
     object-fit: contain;
     display: inline-block;
+    box-sizing: border-box;
 }
 
 .mail-body-container a {
