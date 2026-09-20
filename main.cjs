@@ -145,6 +145,8 @@ function createWindow() {
   
   console.log('Erstelle beide Fenster...');
 
+  const appIconPath = path.join(__dirname, 'public/icon.png');
+
   // 1. Chat-Fenster (Rechts, 450px)
   mainWindow = new BrowserWindow({
     width: 450,
@@ -156,6 +158,7 @@ function createWindow() {
     alwaysOnTop: true,
     skipTaskbar: false,
     show: false,
+    icon: appIconPath,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
@@ -173,6 +176,7 @@ function createWindow() {
     alwaysOnTop: true,
     skipTaskbar: false,
     show: false,
+    icon: appIconPath,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false

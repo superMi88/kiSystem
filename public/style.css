@@ -458,7 +458,7 @@ input:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--acc
     outline: none;
 }
 
-#plus-btn, #mic-btn, #send-btn {
+#plus-btn, #mic-btn, #send-btn, #tab-btn-chat, #tab-btn-dashboard {
     background: transparent !important;
     border: none !important;
     width: 36px;
@@ -468,7 +468,7 @@ input:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--acc
     justify-content: center;
     align-items: center;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     flex-shrink: 0;
     outline: none;
     padding: 0;
@@ -476,76 +476,33 @@ input:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--acc
     margin-bottom: 2px;
 }
 
-#plus-btn:hover, #mic-btn:hover, #send-btn:hover {
+#plus-btn:hover, #mic-btn:hover, #send-btn:hover, #tab-btn-chat:hover:not(.active), #tab-btn-dashboard:hover:not(.active) {
     background: rgba(255, 255, 255, 0.08) !important;
 }
 
-#plus-btn:active, #mic-btn:active, #send-btn:active {
+#plus-btn:active, #mic-btn:active, #send-btn:active, #tab-btn-chat:active, #tab-btn-dashboard:active {
     transform: scale(0.92);
 }
 
-/* Bottom Navigation Tabs: 2 Buttons nebeneinander (Chat & Arbeitsbereich) */
-.bottom-nav-tabs {
-    display: flex;
-    gap: 8px;
-    width: 100%;
-    margin-top: 4px;
-    padding: 2px 0 0 0;
-    box-sizing: border-box;
+#tab-btn-chat svg, #tab-btn-dashboard svg {
+    stroke: var(--accent);
+    transition: transform 0.2s, stroke 0.2s;
 }
 
-.bottom-nav-tab {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 8px 14px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.04);
-    color: rgba(205, 214, 244, 0.7);
-    font-size: 0.88rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    outline: none;
-    user-select: none;
-    -webkit-user-select: none;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
-}
-
-.bottom-nav-tab svg {
-    stroke: rgba(205, 214, 244, 0.7);
-    transition: stroke 0.2s, transform 0.2s;
-    flex-shrink: 0;
-}
-
-.bottom-nav-tab:hover:not(.active) {
-    background: rgba(255, 255, 255, 0.08);
-    color: #ffffff;
-    border-color: rgba(255, 255, 255, 0.15);
-}
-
-.bottom-nav-tab:hover:not(.active) svg {
+#tab-btn-chat:hover:not(.active) svg, #tab-btn-dashboard:hover:not(.active) svg {
     stroke: #ffffff;
-    transform: scale(1.08);
+    transform: scale(1.1);
 }
 
-.bottom-nav-tab:active {
-    transform: scale(0.97);
+/* Active Highlight for selected view (Chat vs Arbeitsbereich) */
+#tab-btn-chat.active, #tab-btn-dashboard.active {
+    background: var(--accent) !important;
+    box-shadow: 0 0 12px rgba(137, 180, 250, 0.45) !important;
 }
 
-.bottom-nav-tab.active {
-    background: var(--accent);
-    color: #11111b;
-    border-color: var(--accent);
-    font-weight: 750;
-    box-shadow: 0 2px 10px rgba(137, 180, 250, 0.35);
-}
-
-.bottom-nav-tab.active svg {
-    stroke: #11111b;
+#tab-btn-chat.active svg, #tab-btn-dashboard.active svg {
+    stroke: #11111b !important;
+    transform: scale(1.05);
 }
 
 /* Attachment Preview Area */
@@ -1607,7 +1564,7 @@ body.mobile-mode .input-area {
     flex-direction: column;
     gap: 6px;
     height: auto;
-    max-height: 240px;
+    max-height: 200px;
     transform: translateY(0) !important;
     opacity: 1 !important;
     pointer-events: auto !important;
@@ -1616,7 +1573,7 @@ body.mobile-mode .input-area {
 
 body.mobile-mode #attachments-bar {
     position: fixed;
-    bottom: 98px; /* Sits directly above the bottom bar with tabs */
+    bottom: 75px; /* Sits directly above the slimmed bottom bar */
     left: 12px;
     right: 12px;
     z-index: 999;

@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#11111b">
     <title>kiSystem</title>
-    <link rel="icon" type="image/svg+xml" href="/logo.svg">
-    <link rel="alternate icon" type="image/png" href="/icon.png">
-    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="logo.svg">
+    <link rel="alternate icon" type="image/png" href="icon.png">
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="manifest" href="manifest.json">
     <script src="env-config.js"></script>
     <style>
         html, body { background: #11111b !important; color: #cdd6f4; }
@@ -20,7 +21,7 @@
     <div id="mobile-drawer" class="drawer">
         <div class="drawer-header" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.06);">
             <div style="display: flex; align-items: center; gap: 10px;">
-                <img src="/logo.svg" alt="kiSystem Logo" style="width: 32px; height: 32px; border-radius: 9px; filter: drop-shadow(0 0 8px rgba(137, 180, 250, 0.45)); flex-shrink: 0;">
+                <img src="logo.svg" onerror="this.onerror=null; this.src='icon.png'" alt="kiSystem Logo" style="width: 32px; height: 32px; border-radius: 9px; filter: drop-shadow(0 0 8px rgba(137, 180, 250, 0.45)); flex-shrink: 0;">
                 <h3 style="margin: 0; font-size: 1.15rem; font-weight: 750; background: linear-gradient(135deg, #89b4fa, #cba6f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">kiSystem</h3>
             </div>
             <button class="close-drawer-btn" onclick="closeMobileDrawer()">
@@ -103,7 +104,7 @@
                     <line x1="3" y1="18" x2="21" y2="18"></line>
                 </svg>
             </button>
-            <img src="/logo.svg" alt="kiSystem Logo" onclick="toggleMobileDrawer()" style="width: 26px; height: 26px; border-radius: 7px; filter: drop-shadow(0 0 6px rgba(137, 180, 250, 0.4)); cursor: pointer; flex-shrink: 0;" title="Menü öffnen">
+            <img src="logo.svg" onerror="this.onerror=null; this.src='icon.png'" alt="kiSystem Logo" onclick="toggleMobileDrawer()" style="width: 26px; height: 26px; border-radius: 7px; filter: drop-shadow(0 0 6px rgba(137, 180, 250, 0.4)); cursor: pointer; flex-shrink: 0;" title="Menü öffnen">
         </div>
         <div id="header-context-container" class="header-context-container">
             <!-- Dashboard Context Header -->
@@ -144,12 +145,20 @@
 
             <!-- Projects Context Header -->
             <div id="header-context-projects" class="header-context">
-                <div style="font-size: 0.95rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 6px;">
-                    <span>📁 Projekte</span>
+                <div id="header-projects-title-container" style="font-size: 0.95rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden;">
+                    <span id="header-projects-title">📁 Projekte</span>
                 </div>
-                <button type="button" onclick="openProjectModal()" class="header-action-btn primary" title="Neues Projekt erstellen">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                </button>
+                <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                    <button type="button" id="header-project-edit-btn" class="header-action-btn" title="Projekt bearbeiten" style="display: none;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 20h9"></path>
+                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                        </svg>
+                    </button>
+                    <button type="button" id="header-project-add-btn" onclick="openProjectModal()" class="header-action-btn primary" title="Neues Projekt erstellen">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    </button>
+                </div>
             </div>
 
             <!-- Memory Context Header -->
@@ -1155,23 +1164,18 @@
                         <button id="send-btn" style="display: none;">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                         </button>
-                    </div>
-
-                    <div class="bottom-nav-tabs">
-                        <button type="button" id="tab-btn-chat" class="bottom-nav-tab" onclick="switchMobileView('chat')" title="Zum Chat wechseln" aria-label="Zum Chat wechseln">
-                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <button id="tab-btn-chat" type="button" class="row-switch-btn active" onclick="switchMobileView('chat')" title="Zum Chat wechseln" aria-label="Zum Chat wechseln">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                             </svg>
-                            <span>Chat</span>
                         </button>
-                        <button type="button" id="tab-btn-dashboard" class="bottom-nav-tab active" onclick="switchMobileView('dashboard')" title="Zum Arbeitsbereich wechseln" aria-label="Zum Arbeitsbereich wechseln">
-                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <button id="tab-btn-dashboard" type="button" class="row-switch-btn" onclick="switchMobileView('dashboard')" title="Zum Arbeitsbereich wechseln" aria-label="Zum Arbeitsbereich wechseln">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <rect x="3" y="3" width="7" height="9"></rect>
                                 <rect x="14" y="3" width="7" height="5"></rect>
                                 <rect x="14" y="12" width="7" height="9"></rect>
                                 <rect x="3" y="16" width="7" height="5"></rect>
                             </svg>
-                            <span>Arbeitsbereich</span>
                         </button>
                     </div>
                 </div>
@@ -1263,7 +1267,7 @@
     <div id="login-section" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 999999; flex-direction: column; overflow: hidden; align-items: center; justify-content: center; background: #11111b;">
         <div style="width: 90%; max-width: 400px; padding: 30px; background: #1e1e2e; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); display: flex; flex-direction: column; gap: 20px;">
             <div style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px;">
-                <img src="/logo.svg" alt="kiSystem Logo" style="width: 64px; height: 64px; border-radius: 18px; filter: drop-shadow(0 0 16px rgba(137, 180, 250, 0.45)); margin-bottom: 4px;">
+                <img src="logo.svg" onerror="this.onerror=null; this.src='icon.png'" alt="kiSystem Logo" style="width: 64px; height: 64px; border-radius: 18px; filter: drop-shadow(0 0 16px rgba(137, 180, 250, 0.45)); margin-bottom: 4px;">
                 <h2 style="margin: 0; font-size: 1.5rem; color: var(--accent); font-weight: bold;">Anmeldung</h2>
                 <p style="margin: 0; font-size: 0.85rem; color: #a6adc8;">Bitte gib deine Zugangsdaten ein, um dich zu verbinden.</p>
             </div>
@@ -1330,6 +1334,10 @@
                 if (searchBar && defaultBar && !personSearchQuery) {
                     searchBar.style.display = 'none';
                     defaultBar.style.display = 'flex';
+                }
+            } else if (viewName === 'projects') {
+                if (typeof updateProjectsHeader === 'function' && !window.activeProjectDetailId) {
+                    updateProjectsHeader(null);
                 }
             }
         }
@@ -1712,11 +1720,11 @@
             const tabChat = document.getElementById('tab-btn-chat');
             const tabDashboard = document.getElementById('tab-btn-dashboard');
             if (tabChat && tabDashboard) {
+                tabChat.classList.remove('active');
+                tabDashboard.classList.remove('active');
                 if (viewName === 'chat') {
                     tabChat.classList.add('active');
-                    tabDashboard.classList.remove('active');
-                } else {
-                    tabChat.classList.remove('active');
+                } else if (viewName === 'dashboard') {
                     tabDashboard.classList.add('active');
                 }
             }
@@ -5913,22 +5921,6 @@
             // --- HTML RENDERING ---
             let html = `
                 <div class="arbeitstisch-dashboard">
-                    <!-- Quick Bar with Projects button -->
-                    <div class="arbeitstisch-quick-bar">
-                        <button type="button" onclick="navigateToProjects()" class="arbeitstisch-quick-btn" style="background: rgba(137, 180, 250, 0.15); border-color: var(--accent); color: var(--accent); font-weight: 700;">
-                            📁 Zu den Projekten ➔
-                        </button>
-                        <button type="button" onclick="focusWidget('calendar')" class="arbeitstisch-quick-btn">
-                            📅 Kalender ➔
-                        </button>
-                        <button type="button" onclick="focusWidget('mail')" class="arbeitstisch-quick-btn">
-                            📬 Posteingang ➔
-                        </button>
-                        <button type="button" onclick="openTaskModal()" class="arbeitstisch-quick-btn" style="margin-left: auto;">
-                            ➕ Neue Aufgabe
-                        </button>
-                    </div>
-
                     <div class="arbeitstisch-grid">
             `;
 
@@ -6009,9 +6001,8 @@
                 });
             } else {
                 html += `
-                    <div style="padding: 12px 10px; background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.1); border-radius: 8px; text-align: center;">
-                        <div style="font-size: 0.78rem; color: rgba(255, 255, 255, 0.6); margin-bottom: 6px;">Keine Projekte mit ⭐ markiert.</div>
-                        <button type="button" onclick="navigateToProjects()" class="nav-btn" style="font-size: 0.72rem; padding: 4px 10px;">📁 Zu den Projekten</button>
+                    <div style="padding: 14px 10px; background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.1); border-radius: 8px; text-align: center; color: rgba(255, 255, 255, 0.6); font-size: 0.78rem;">
+                        <span>⭐ Keine Projekte markiert – Markiere Projekte mit einem Stern, um sie hier zu sehen.</span>
                     </div>
                 `;
             }
@@ -6172,6 +6163,50 @@
 
         window.activeProjectDetailId = null;
 
+        function updateProjectsHeader(activeProject) {
+            const titleContainer = document.getElementById('header-projects-title-container');
+            const editBtn = document.getElementById('header-project-edit-btn');
+            const addBtn = document.getElementById('header-project-add-btn');
+
+            if (!activeProject) {
+                if (titleContainer) {
+                    titleContainer.innerHTML = '<span id="header-projects-title">📁 Projekte</span>';
+                }
+                if (editBtn) {
+                    editBtn.style.display = 'none';
+                    editBtn.onclick = null;
+                }
+                if (addBtn) {
+                    addBtn.title = 'Neues Projekt erstellen';
+                    addBtn.onclick = () => openProjectModal();
+                }
+            } else {
+                const escName = escapeHtml(activeProject.name || 'Projekt');
+                if (titleContainer) {
+                    titleContainer.innerHTML = `
+                        <span style="cursor: pointer; opacity: 0.8; transition: opacity 0.2s; white-space: nowrap;" onclick="closeProjectDetail()" title="Zurück zu allen Projekten">📁 Projekte</span>
+                        <span style="opacity: 0.4; font-size: 0.85rem; margin: 0 2px;">&gt;</span>
+                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; color: #ffffff;" title="${escName}">${escName}</span>
+                    `;
+                }
+                if (editBtn) {
+                    if (activeProject.isUnassigned) {
+                        editBtn.style.display = 'none';
+                        editBtn.onclick = null;
+                    } else {
+                        editBtn.style.display = 'inline-flex';
+                        editBtn.title = 'Projekt bearbeiten';
+                        editBtn.onclick = () => openProjectModal(activeProject.id, activeProject.name, !!activeProject.isStarred);
+                    }
+                }
+                if (addBtn) {
+                    addBtn.title = 'Neue Aufgabe erstellen';
+                    addBtn.onclick = () => openTaskModalForProject(activeProject.isUnassigned ? null : activeProject.id, 'in_progress');
+                }
+            }
+        }
+        window.updateProjectsHeader = updateProjectsHeader;
+
         window.openProjectDetailPage = function(id) {
             window.activeProjectDetailId = id;
             if (typeof focusWidget === 'function') {
@@ -6182,11 +6217,13 @@
 
         window.closeProjectDetail = function() {
             window.activeProjectDetailId = null;
+            updateProjectsHeader(null);
             loadTopWidgets();
         };
 
         window.navigateToProjects = function() {
             window.activeProjectDetailId = null;
+            updateProjectsHeader(null);
             if (typeof focusWidget === 'function') {
                 focusWidget('projects');
             }
@@ -6269,6 +6306,9 @@
             } else if (activeId !== null && activeId !== undefined) {
                 activeProject = projects.find(p => String(p.id) === String(activeId));
             }
+
+            // Sync Header with current project state (Breadcrumbs & Actions)
+            updateProjectsHeader(activeProject);
 
             // --- 1. DEDICATED PROJECT DETAIL PAGE (3 COLUMNS) ---
             if (activeProject) {
@@ -6373,27 +6413,10 @@
 
                 let html = `
                     <div class="project-detail-container">
-                        <div class="project-detail-header">
-                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                                <button type="button" class="project-back-btn" onclick="closeProjectDetail()" title="Zurück zur Übersicht">
-                                    ← Alle Projekte
-                                </button>
-                                <h3 style="margin: 0; font-size: 1.05rem; color: #ffffff; display: flex; align-items: center; gap: 8px;">
-                                    ${escName}
-                                    ${!p.isUnassigned ? `<button type="button" class="star-btn ${p.isStarred ? 'is-starred' : ''}" onclick="toggleProjectStar(${p.id}, event)" title="Projekt anheften">⭐</button>` : ''}
-                                </h3>
-                            </div>
-                            <div style="display: flex; gap: 6px; align-items: center;">
-                                ${!p.isUnassigned ? `<button type="button" class="task-action-btn" onclick="openProjectModal(${p.id}, '${escName.replace(/'/g, "\\'")}', ${!!p.isStarred})" title="Projekt bearbeiten">✏️ Projekt</button>` : ''}
-                                <button type="button" class="nav-btn" onclick="openTaskModalForProject(${p.isUnassigned ? 'null' : p.id}, 'in_progress')" style="font-size: 0.78rem; padding: 6px 12px;">
-                                    ➕ Neue Aufgabe
-                                </button>
-                            </div>
-                        </div>
                 `;
 
                 if (p.description) {
-                    html += `<div style="font-size: 0.8rem; color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">${escapeHtml(p.description)}</div>`;
+                    html += `<div style="font-size: 0.8rem; color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 8px;">${escapeHtml(p.description)}</div>`;
                 }
 
                 // 3 COLUMNS
@@ -6477,17 +6500,7 @@
 
             // --- 2. PROJECTS OVERVIEW GRID (WHEN NO PROJECT OPENED) ---
             let html = `
-                <div style="text-align: left; padding: 0 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 12px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: 1.1rem;">📁</span>
-                            <h3 style="margin: 0; font-size: 1rem; color: #ffffff; font-weight: 700;">Projekte & Aufgaben</h3>
-                        </div>
-                        <div style="display: flex; gap: 6px;">
-                            <button type="button" class="nav-btn" onclick="openProjectModal()" style="font-size: 0.78rem; padding: 5px 10px;">➕ Neues Projekt</button>
-                            <button type="button" class="nav-btn" onclick="openTaskModal()" style="font-size: 0.78rem; padding: 5px 10px;">➕ Neue Aufgabe</button>
-                        </div>
-                    </div>
+                <div style="text-align: left; padding: 0 0 15px 0;">
             `;
 
             if (projects.length === 0 && unassignedTasks.length === 0 && unassignedNotes.length === 0) {
