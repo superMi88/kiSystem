@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1e2e" />
+      <stop offset="50%" stop-color="#181825" />
+      <stop offset="100%" stop-color="#11111b" />
+    </linearGradient>
+
+    <!-- Border Glow Gradient -->
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#89b4fa" stop-opacity="0.8" />
+      <stop offset="50%" stop-color="#cba6f7" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#89b4fa" stop-opacity="0.1" />
+    </linearGradient>
+
+    <!-- Primary Neon Gradient -->
+    <linearGradient id="neonCyanPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#89dceb" />
+      <stop offset="40%" stop-color="#89b4fa" />
+      <stop offset="80%" stop-color="#b4befe" />
+      <stop offset="100%" stop-color="#cba6f7" />
+    </linearGradient>
+
+    <!-- Glowing Accent Gradient -->
+    <linearGradient id="sparkGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#89b4fa" />
+      <stop offset="50%" stop-color="#cba6f7" />
+      <stop offset="100%" stop-color="#f5c2e7" />
+    </linearGradient>
+
+    <!-- Soft Ambient Glow Filter -->
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3.5" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <!-- Intense Core Glow Filter -->
+    <filter id="coreGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2" result="blur1" />
+      <feGaussianBlur stdDeviation="5" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Squircle Base with Glass Effect -->
+  <rect x="4" y="4" width="92" height="92" rx="26" ry="26" fill="url(#bgGrad)" stroke="url(#borderGrad)" stroke-width="2" />
+
+  <!-- Inner Ambient Aura -->
+  <circle cx="50" cy="50" r="28" fill="url(#neonCyanPurple)" opacity="0.12" filter="url(#softGlow)" />
+
+  <!-- Background Circuit & Synapse Traces (Subtle tech backdrop) -->
+  <g opacity="0.35" stroke="url(#neonCyanPurple)" stroke-width="1.2" stroke-linecap="round">
+    <path d="M 22 28 L 22 42 L 30 50" fill="none" />
+    <circle cx="22" cy="28" r="1.8" fill="#89dceb" />
+    
+    <path d="M 78 72 L 78 58 L 70 50" fill="none" />
+    <circle cx="78" cy="72" r="1.8" fill="#cba6f7" />
+
+    <path d="M 50 18 L 50 26" fill="none" stroke-dasharray="2 3" />
+    <circle cx="50" cy="18" r="1.5" fill="#89b4fa" />
+    
+    <path d="M 50 82 L 50 74" fill="none" stroke-dasharray="2 3" />
+    <circle cx="50" cy="82" r="1.5" fill="#b4befe" />
+  </g>
+
+  <!-- Glowing Emblem: Futuristic "KI" Neural Monogram -->
+  <g filter="url(#coreGlow)">
+    <!-- Letter 'K' Structure -->
+    <!-- Vertical stem with rounded ends -->
+    <line x1="33" y1="29" x2="33" y2="71" stroke="url(#neonCyanPurple)" stroke-width="6.5" stroke-linecap="round" />
+    
+    <!-- Upper Diagonal arm -->
+    <line x1="33" y1="50" x2="52" y2="31" stroke="url(#neonCyanPurple)" stroke-width="6" stroke-linecap="round" />
+    
+    <!-- Lower Diagonal arm -->
+    <line x1="33" y1="50" x2="52" y2="69" stroke="url(#neonCyanPurple)" stroke-width="6" stroke-linecap="round" />
+
+    <!-- Letter 'i' Structure -->
+    <!-- Stem of 'i' -->
+    <line x1="67" y1="42" x2="67" y2="71" stroke="url(#sparkGrad)" stroke-width="6.5" stroke-linecap="round" />
+    
+    <!-- Glowing Dot of 'i' (Diamond-Spark Neural Node) -->
+    <circle cx="67" cy="29" r="4.2" fill="#f5c2e7" />
+    <polygon points="67,23 70,29 67,35 64,29" fill="#ffffff" opacity="0.9" />
+
+    <!-- Central Neural Fusion Spark (at intersection of K arms) -->
+    <circle cx="33" cy="50" r="3" fill="#ffffff" />
+    <circle cx="52" cy="31" r="2.5" fill="#89dceb" />
+    <circle cx="52" cy="69" r="2.5" fill="#cba6f7" />
+  </g>
+
+  <!-- Dynamic Energy Arcs (Connecting K and i) -->
+  <path d="M 52 46 Q 59.5 42, 67 46" fill="none" stroke="url(#sparkGrad)" stroke-width="2" stroke-linecap="round" opacity="0.85" filter="url(#softGlow)" />
+  <circle cx="59.5" cy="44" r="1.6" fill="#ffffff" />
+</svg>

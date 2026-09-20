@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#11111b">
     <title>kiSystem</title>
+    <link rel="icon" type="image/svg+xml" href="/logo.svg">
+    <link rel="alternate icon" type="image/png" href="/icon.png">
     <link rel="manifest" href="/manifest.json">
     <script src="env-config.js"></script>
     <style>
@@ -16,8 +18,11 @@
     <!-- Mobile Side Drawer & Overlay -->
     <div id="mobile-drawer-overlay" class="drawer-overlay" onclick="closeMobileDrawer()"></div>
     <div id="mobile-drawer" class="drawer">
-        <div class="drawer-header">
-            <h3>kiSystem</h3>
+        <div class="drawer-header" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.06);">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <img src="/logo.svg" alt="kiSystem Logo" style="width: 32px; height: 32px; border-radius: 9px; filter: drop-shadow(0 0 8px rgba(137, 180, 250, 0.45)); flex-shrink: 0;">
+                <h3 style="margin: 0; font-size: 1.15rem; font-weight: 750; background: linear-gradient(135deg, #89b4fa, #cba6f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">kiSystem</h3>
+            </div>
             <button class="close-drawer-btn" onclick="closeMobileDrawer()">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -90,13 +95,16 @@
 
     <!-- Dynamic Top Header Bar -->
     <div id="mobile-top-bar" class="mobile-only">
-        <button id="mobile-burger-btn" class="burger-btn" onclick="toggleMobileDrawer()" title="Menü">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="3" y1="12" x2="21" y2="12"></line>
-                <line x1="3" y1="6" x2="21" y2="6"></line>
-                <line x1="3" y1="18" x2="21" y2="18"></line>
-            </svg>
-        </button>
+        <div style="display: flex; align-items: center; gap: 6px;">
+            <button id="mobile-burger-btn" class="burger-btn" onclick="toggleMobileDrawer()" title="Menü">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+            <img src="/logo.svg" alt="kiSystem Logo" onclick="toggleMobileDrawer()" style="width: 26px; height: 26px; border-radius: 7px; filter: drop-shadow(0 0 6px rgba(137, 180, 250, 0.4)); cursor: pointer; flex-shrink: 0;" title="Menü öffnen">
+        </div>
         <div id="header-context-container" class="header-context-container">
             <!-- Dashboard Context Header -->
             <div id="header-context-dashboard" class="header-context">
@@ -1254,9 +1262,10 @@
     <!-- Login Overlay (außerhalb des side-panel-containers) -->
     <div id="login-section" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 999999; flex-direction: column; overflow: hidden; align-items: center; justify-content: center; background: #11111b;">
         <div style="width: 90%; max-width: 400px; padding: 30px; background: #1e1e2e; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); display: flex; flex-direction: column; gap: 20px;">
-            <div style="text-align: center;">
+            <div style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                <img src="/logo.svg" alt="kiSystem Logo" style="width: 64px; height: 64px; border-radius: 18px; filter: drop-shadow(0 0 16px rgba(137, 180, 250, 0.45)); margin-bottom: 4px;">
                 <h2 style="margin: 0; font-size: 1.5rem; color: var(--accent); font-weight: bold;">Anmeldung</h2>
-                <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: #a6adc8;">Bitte gib deine Zugangsdaten ein, um dich zu verbinden.</p>
+                <p style="margin: 0; font-size: 0.85rem; color: #a6adc8;">Bitte gib deine Zugangsdaten ein, um dich zu verbinden.</p>
             </div>
             
             <div style="display: flex; flex-direction: column; gap: 12px;">
