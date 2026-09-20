@@ -26,19 +26,6 @@
             </button>
         </div>
         <div class="drawer-body">
-            <button class="drawer-item" onclick="handleDrawerNewChat()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                Neuer Chat
-            </button>
-            <button class="drawer-item" onclick="handleDrawerDashboard()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="3" width="7" height="9"></rect>
-                    <rect x="14" y="3" width="7" height="5"></rect>
-                    <rect x="14" y="12" width="7" height="9"></rect>
-                    <rect x="3" y="16" width="7" height="5"></rect>
-                </svg>
-                Arbeitstisch
-            </button>
             <button class="drawer-item" onclick="handleDrawerCalendar()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -546,9 +533,21 @@
                     <option value="yearly">Jährlich</option>
                 </select>
             </div>
+            <div class="settings-group" style="text-align: left; margin-bottom: 15px;">
+                <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Status / Spalte</label>
+                <select id="task-status-input" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.88rem; color-scheme: dark;">
+                    <option value="suggestion">💡 Vorschlag (Idee / In Planung)</option>
+                    <option value="in_progress" selected>⏳ In Arbeit</option>
+                    <option value="done">✅ Fertig</option>
+                </select>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 15px;">
+                <input type="checkbox" id="task-is-starred-input" style="cursor: pointer; width: 16px; height: 16px;">
+                <label for="task-is-starred-input" style="font-size: 0.85rem; color: #f9e2af; cursor: pointer;">⭐ Im Arbeitstisch anzeigen (Stern)</label>
+            </div>
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 15px;">
                 <input type="checkbox" id="task-is-planned-input" style="cursor: pointer; width: 16px; height: 16px;">
-                <label for="task-is-planned-input" style="font-size: 0.85rem; color: #f9e2af; cursor: pointer;">🟡 Als 'In Planung' markieren (noch nicht fest terminiert)</label>
+                <label for="task-is-planned-input" style="font-size: 0.85rem; color: #f9e2af; cursor: pointer;">🟡 Als 'In Planung' markieren</label>
             </div>
             <div class="modal-btns" style="display: flex; gap: 10px;">
                 <button class="cancel" onclick="closeTaskModal()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Abbrechen</button>
@@ -560,9 +559,13 @@
         <div id="project-modal" class="glass-card" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 25px; border-radius: 12px; z-index: 300; width: 85%; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px);">
             <input type="hidden" id="project-id-input">
             <h3 id="project-modal-title" style="color: var(--accent); margin-top: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 20px;">Projekt erstellen</h3>
-            <div class="settings-group" style="text-align: left; margin-bottom: 20px;">
+            <div class="settings-group" style="text-align: left; margin-bottom: 15px;">
                 <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Projektname</label>
                 <input type="text" id="project-name-input" placeholder="Z.B. Einkaufsliste..." style="width: 100%;">
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 20px;">
+                <input type="checkbox" id="project-is-starred-input" style="cursor: pointer; width: 16px; height: 16px;">
+                <label for="project-is-starred-input" style="font-size: 0.85rem; color: #f9e2af; cursor: pointer;">⭐ Im Arbeitstisch anzeigen (Stern)</label>
             </div>
             <div class="modal-btns" style="display: flex; gap: 10px;">
                 <button class="cancel" onclick="closeProjectModal()" style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Abbrechen</button>
@@ -1144,10 +1147,23 @@
                         <button id="send-btn" style="display: none;">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                         </button>
-                        <button id="view-switch-btn" type="button" class="view-switch-btn" onclick="toggleDashboardChat()" title="Zum Chat wechseln" aria-label="Zum Chat wechseln">
-                            <svg id="view-switch-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    </div>
+
+                    <div class="bottom-nav-tabs">
+                        <button type="button" id="tab-btn-chat" class="bottom-nav-tab" onclick="switchMobileView('chat')" title="Zum Chat wechseln" aria-label="Zum Chat wechseln">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                             </svg>
+                            <span>Chat</span>
+                        </button>
+                        <button type="button" id="tab-btn-dashboard" class="bottom-nav-tab active" onclick="switchMobileView('dashboard')" title="Zum Arbeitsbereich wechseln" aria-label="Zum Arbeitsbereich wechseln">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="7" height="9"></rect>
+                                <rect x="14" y="3" width="7" height="5"></rect>
+                                <rect x="14" y="12" width="7" height="9"></rect>
+                                <rect x="3" y="16" width="7" height="5"></rect>
+                            </svg>
+                            <span>Arbeitsbereich</span>
                         </button>
                     </div>
                 </div>
@@ -1182,10 +1198,10 @@
                     <div class="settings-group">
                         <label>KI-Modell</label>
                         <select id="settings-ai-model" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.88rem; color-scheme: dark;">
-                            <option value="gemini-1.5-flash" selected>Gemini 1.5 Flash (Standard)</option>
-                            <option value="gemini-2.5-pro" disabled style="opacity: 0.4;">Gemini 2.5 Pro (Demnächst)</option>
+                            <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash (Empfohlen, schnell & Werkzeug-Support)</option>
+                            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Sehr leicht & schnell)</option>
                         </select>
-                        <span class="hotkey-tip">Standard-Modell für Chat & KI-Aktionen.</span>
+                        <span class="hotkey-tip">Standard-Modell für Chat & KI-Werkzeuge.</span>
                     </div>
 
                     <!-- Hotkey -->
@@ -1683,18 +1699,16 @@
                 }
             }
 
-            // Update view switch button icon & title (Chat-Icon auf dem Arbeitstisch, Arbeitstisch-Icon im Chat)
-            const switchBtn = document.getElementById('view-switch-btn');
-            const switchIcon = document.getElementById('view-switch-icon');
-            if (switchBtn && switchIcon) {
-                if (viewName === 'dashboard') {
-                    switchIcon.innerHTML = '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>';
-                    switchBtn.title = 'Zum Chat wechseln';
-                    switchBtn.setAttribute('aria-label', 'Zum Chat wechseln');
+            // Update bottom navigation tabs (Chat & Arbeitsbereich)
+            const tabChat = document.getElementById('tab-btn-chat');
+            const tabDashboard = document.getElementById('tab-btn-dashboard');
+            if (tabChat && tabDashboard) {
+                if (viewName === 'chat') {
+                    tabChat.classList.add('active');
+                    tabDashboard.classList.remove('active');
                 } else {
-                    switchIcon.innerHTML = '<rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect>';
-                    switchBtn.title = 'Zum Arbeitstisch wechseln';
-                    switchBtn.setAttribute('aria-label', 'Zum Arbeitstisch wechseln');
+                    tabChat.classList.remove('active');
+                    tabDashboard.classList.add('active');
                 }
             }
 
@@ -3882,7 +3896,7 @@
                 
                 const modelSelect = document.getElementById('settings-ai-model');
                 if (modelSelect) {
-                    modelSelect.value = settings.aiModel || 'gemini-1.5-flash';
+                    modelSelect.value = settings.aiModel || 'gemini-2.5-flash';
                 }
 
                 try {
@@ -4014,7 +4028,7 @@
             const autostart = autostartCheckbox ? autostartCheckbox.checked : false;
 
             const modelSelect = document.getElementById('settings-ai-model');
-            const aiModel = modelSelect ? modelSelect.value : 'gemini-1.5-flash';
+            const aiModel = modelSelect ? modelSelect.value : 'gemini-2.5-flash';
             
             try {
                 const res = await fetch(getApiUrl('/settings'), {
@@ -5804,54 +5818,75 @@
         function renderArbeitstischWidget(widgets, container) {
             const todayStr = getLocalDateString();
             const todayDateObj = new Date();
-            const dateFormatted = todayDateObj.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 
             // 1. Calendar: Today's Appointments & Tasks
             const calendarWidget = widgets.find(w => w.type === 'calendar_overview');
             let todayEvents = [];
-            let overdueTasks = [];
+            let calTasks = [];
             if (calendarWidget && calendarWidget.data) {
                 const days = calendarWidget.data.timeline || calendarWidget.data.days || [];
                 const todayDay = days.find(d => d.date === todayStr);
                 if (todayDay) {
                     todayEvents = (todayDay.events || []).filter(e => !e.isTask);
-                    (todayDay.overdueTasks || []).forEach(ot => {
-                        const rawId = String(ot.id).replace('task-', '');
-                        if (!overdueTasks.some(t => String(t.id).replace('task-', '') === rawId)) {
-                            overdueTasks.push(ot);
-                        }
-                    });
-                    const todayTasks = (todayDay.events || []).filter(e => e.isTask);
-                    todayTasks.forEach(tt => {
-                        const rawId = String(tt.id).replace('task-', '');
-                        if (!overdueTasks.some(t => String(t.id).replace('task-', '') === rawId)) {
-                            overdueTasks.push(tt);
-                        }
-                    });
+                    (todayDay.events || []).filter(e => e.isTask).forEach(t => calTasks.push(t));
+                    (todayDay.overdueTasks || []).forEach(t => calTasks.push(t));
                 }
             }
 
-            // 2. Projects: Collect any uncompleted tasks due today or earlier
-            const projectWidget = widgets.find(w => w.type === 'custom' && w.data && w.data.widgetType === 'projects_list');
+            // 2. Projects & Starred Items
+            const projectWidget = widgets.find(w => (w.pluginName === 'Projects' || (w.data && w.data.widgetType === 'projects_list')));
+            let allProjects = [];
+            let starredProjects = [];
+            let allProjectTasks = [];
             if (projectWidget && projectWidget.data) {
-                const allProjectTasks = [...(projectWidget.data.unassignedTasks || [])];
-                (projectWidget.data.projects || []).forEach(p => {
+                allProjects = projectWidget.data.projects || [];
+                starredProjects = allProjects.filter(p => p.isStarred);
+                (projectWidget.data.unassignedTasks || []).forEach(t => allProjectTasks.push(t));
+                allProjects.forEach(p => {
                     if (p.tasks) allProjectTasks.push(...p.tasks);
-                });
-                allProjectTasks.forEach(t => {
-                    if (!t.completed && t.due) {
-                        const dueStr = new Date(t.due).toISOString().split('T')[0];
-                        if (dueStr <= todayStr) {
-                            const rawId = String(t.id).replace('task-', '');
-                            if (!overdueTasks.some(ot => String(ot.id).replace('task-', '') === rawId)) {
-                                overdueTasks.push(t);
-                            }
-                        }
-                    }
                 });
             }
 
-            // 3. Mail: Only unread / new emails
+            // Merge & deduplicate all tasks for Arbeitstisch
+            const taskMap = new Map();
+            allProjectTasks.forEach(t => {
+                const rawId = String(t.id).replace('task-', '');
+                const isDone = !!t.completed || t.status === 'done';
+                if (!isDone) {
+                    taskMap.set(rawId, { ...t, id: rawId });
+                }
+            });
+            calTasks.forEach(t => {
+                const rawId = String(t.id).replace('task-', '');
+                if (!taskMap.has(rawId)) {
+                    taskMap.set(rawId, { ...t, id: rawId });
+                }
+            });
+
+            // Filter relevant tasks for Arbeitstisch:
+            // 1. Starred tasks (always shown on Arbeitstisch)
+            // 2. Overdue tasks
+            // 3. Tasks due today
+            const allActiveTasks = Array.from(taskMap.values());
+            const relevantTasks = allActiveTasks.filter(t => {
+                if (t.isStarred) return true;
+                if (t.due) {
+                    const dueStr = new Date(t.due).toISOString().split('T')[0];
+                    if (dueStr <= todayStr) return true;
+                }
+                return false;
+            });
+
+            // Sort: Starred first, then overdue, then today
+            relevantTasks.sort((a, b) => {
+                if (a.isStarred && !b.isStarred) return -1;
+                if (!a.isStarred && b.isStarred) return 1;
+                const dueA = a.due || '9999';
+                const dueB = b.due || '9999';
+                return dueA.localeCompare(dueB);
+            });
+
+            // 3. Mail: All unread emails
             const mailWidget = widgets.find(w => w.pluginName === 'Mail' || (w.data && w.data.emails));
             let unreadMails = [];
             if (mailWidget && mailWidget.data) {
@@ -5859,186 +5894,263 @@
                 unreadMails = allMails.filter(m => !m.isRead);
             }
 
-            // 4. Timers: Active timers and alarms
+            // 4. Timers
             const timerWidget = widgets.find(w => w.type === 'timer_list');
             let activeTimers = [];
             if (timerWidget && timerWidget.data) {
                 activeTimers = timerWidget.data.timers || [];
             }
 
-            const hasAnyContent = todayEvents.length > 0 || overdueTasks.length > 0 || unreadMails.length > 0 || activeTimers.length > 0;
-
             // --- HTML RENDERING ---
             let html = `
                 <div class="arbeitstisch-dashboard">
+                    <!-- Quick Bar with Projects button -->
+                    <div class="arbeitstisch-quick-bar">
+                        <button type="button" onclick="navigateToProjects()" class="arbeitstisch-quick-btn" style="background: rgba(137, 180, 250, 0.15); border-color: var(--accent); color: var(--accent); font-weight: 700;">
+                            📁 Zu den Projekten ➔
+                        </button>
+                        <button type="button" onclick="focusWidget('calendar')" class="arbeitstisch-quick-btn">
+                            📅 Kalender ➔
+                        </button>
+                        <button type="button" onclick="focusWidget('mail')" class="arbeitstisch-quick-btn">
+                            📬 Posteingang ➔
+                        </button>
+                        <button type="button" onclick="openTaskModal()" class="arbeitstisch-quick-btn" style="margin-left: auto;">
+                            ➕ Neue Aufgabe
+                        </button>
+                    </div>
+
                     <div class="arbeitstisch-grid">
             `;
 
-            if (!hasAnyContent) {
+            // 1. Heutige Termine
+            html += `
+                <div class="arbeitstisch-card">
+                    <div class="arbeitstisch-card-header">
+                        <div class="arbeitstisch-card-title">
+                            <span>📅</span>
+                            <h4>Heutige Termine</h4>
+                        </div>
+                        <button type="button" onclick="focusWidget('calendar')" class="arbeitstisch-card-link" title="Zum Kalender">Kalender ➔</button>
+                    </div>
+                    <div class="arbeitstisch-card-body">
+            `;
+            if (todayEvents.length > 0) {
+                todayEvents.forEach(ev => {
+                    const escTitle = escapeHtml(ev.title || 'Termin');
+                    const timeBadge = getEventTimeBadge(ev);
+                    const descText = ev.description ? `<div style="font-size: 0.7rem; opacity: 0.6; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(ev.description)}</div>` : '';
+                    html += `
+                        <div class="arbeitstisch-item" onclick="handleEntityClick(event, 'event', '${ev.id}')">
+                            <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;">
+                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                    <strong style="font-size: 0.82rem; color: #ffffff; overflow: hidden; text-overflow: ellipsis;">${escTitle}</strong>
+                                    ${timeBadge}
+                                    ${ev.isPlanned ? `<span style="font-size: 0.65rem; color: #f9e2af; font-weight: bold; background: rgba(249, 226, 175, 0.15); border: 1px solid rgba(249, 226, 175, 0.3); padding: 1px 5px; border-radius: 4px;">🟡 In Planung</span>` : ''}
+                                </div>
+                                ${descText}
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
                 html += `
-                    <div class="arbeitstisch-card" style="text-align: center; padding: 28px 16px; grid-column: 1 / -1;">
-                        <div style="font-size: 1.8rem; margin-bottom: 6px;">✨</div>
-                        <div style="font-size: 0.95rem; font-weight: 700; color: #ffffff; margin-bottom: 4px;">Alles erledigt!</div>
-                        <div style="font-size: 0.8rem; color: rgba(255, 255, 255, 0.65); max-width: 320px; margin: 0 auto;">Keine offenen Aufgaben, heutigen Termine oder neuen E-Mails vorhanden. Entspann dich! 🎉</div>
+                    <div style="padding: 14px 10px; background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.1); border-radius: 8px; text-align: center; color: rgba(255, 255, 255, 0.6); font-size: 0.78rem;">
+                        <span>✨ Keine Termine für heute – Dein Kalender ist frei.</span>
                     </div>
                 `;
+            }
+            html += `
+                    </div>
+                </div>
+            `;
+
+            // 2. Markierte Projekte
+            html += `
+                <div class="arbeitstisch-card">
+                    <div class="arbeitstisch-card-header">
+                        <div class="arbeitstisch-card-title">
+                            <span>⭐</span>
+                            <h4>Markierte Projekte</h4>
+                        </div>
+                        <button type="button" onclick="navigateToProjects()" class="arbeitstisch-card-link" title="Zu allen Projekten">Alle Projekte ➔</button>
+                    </div>
+                    <div class="arbeitstisch-card-body">
+            `;
+            if (starredProjects.length > 0) {
+                starredProjects.forEach(p => {
+                    const escPName = escapeHtml(p.name);
+                    const pTasks = p.tasks || [];
+                    const sugCount = pTasks.filter(t => !t.completed && (t.status === 'suggestion' || t.isPlanned)).length;
+                    const inProgCount = pTasks.filter(t => !t.completed && t.status !== 'suggestion' && !t.isPlanned && t.status !== 'done').length;
+                    html += `
+                        <div class="arbeitstisch-item" onclick="openProjectDetailPage(${p.id})">
+                            <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+                                    <strong style="font-size: 0.85rem; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">📁 ${escPName}</strong>
+                                    <button type="button" class="star-btn is-starred" onclick="toggleProjectStar(${p.id}, event)" title="Aus Favoriten entfernen">⭐</button>
+                                </div>
+                                <div style="display: flex; gap: 6px; font-size: 0.7rem;">
+                                    <span style="color: #f9e2af;">💡 ${sugCount} Vorschläge</span>
+                                    <span style="color: #89b4fa;">⏳ ${inProgCount} in Arbeit</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
             } else {
-                // 1. Heutige Termine (nur anzeigen wenn Termine vorhanden)
-                if (todayEvents.length > 0) {
-                    html += `
-                        <div class="arbeitstisch-card">
-                            <div class="arbeitstisch-card-header">
-                                <div class="arbeitstisch-card-title">
-                                    <span>📅</span>
-                                    <h4>Termine</h4>
-                                </div>
-                                <button type="button" onclick="focusWidget('calendar')" class="arbeitstisch-card-link" title="Zum Kalender">Kalender ➔</button>
-                            </div>
-                            <div class="arbeitstisch-card-body">
-                    `;
-                    todayEvents.forEach(ev => {
-                        const escTitle = escapeHtml(ev.title || 'Termin');
-                        const timeBadge = getEventTimeBadge(ev);
-                        const descText = ev.description ? `<div style="font-size: 0.7rem; opacity: 0.6; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(ev.description)}</div>` : '';
-                        html += `
-                            <div class="arbeitstisch-item" onclick="handleEntityClick(event, 'event', '${ev.id}')">
-                                <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;">
-                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                        <strong style="font-size: 0.82rem; color: #ffffff; overflow: hidden; text-overflow: ellipsis;">${escTitle}</strong>
-                                        ${timeBadge}
-                                        ${ev.isPlanned ? `<span style="font-size: 0.65rem; color: #f9e2af; font-weight: bold; background: rgba(249, 226, 175, 0.15); border: 1px solid rgba(249, 226, 175, 0.3); padding: 1px 5px; border-radius: 4px;">🟡 In Planung</span>` : ''}
-                                    </div>
-                                    ${descText}
-                                </div>
-                            </div>
-                        `;
-                    });
-                    html += `
-                            </div>
-                        </div>
-                    `;
-                }
+                html += `
+                    <div style="padding: 12px 10px; background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.1); border-radius: 8px; text-align: center;">
+                        <div style="font-size: 0.78rem; color: rgba(255, 255, 255, 0.6); margin-bottom: 6px;">Keine Projekte mit ⭐ markiert.</div>
+                        <button type="button" onclick="navigateToProjects()" class="nav-btn" style="font-size: 0.72rem; padding: 4px 10px;">📁 Zu den Projekten</button>
+                    </div>
+                `;
+            }
+            html += `
+                    </div>
+                </div>
+            `;
 
-                // 2. Dringende & heutige Aufgaben (nur anzeigen wenn Aufgaben vorhanden)
-                if (overdueTasks.length > 0) {
-                    html += `
-                        <div class="arbeitstisch-card">
-                            <div class="arbeitstisch-card-header">
-                                <div class="arbeitstisch-card-title">
-                                    <span>⚡</span>
-                                    <h4>Aufgaben</h4>
-                                </div>
-                                <button type="button" onclick="focusWidget('projects')" class="arbeitstisch-card-link" title="Zu den Projekten">Projekte ➔</button>
-                            </div>
-                            <div class="arbeitstisch-card-body">
-                    `;
-                    overdueTasks.slice(0, 10).forEach(t => {
-                        const rawId = String(t.id).replace('task-', '');
-                        const escTitle = escapeHtml(t.title || 'Aufgabe');
-                        const listTitle = escapeHtml(t.listTitle || t.tasklistId || 'Standard');
-                        const dueObj = t.due ? new Date(t.due) : (t.time ? new Date(t.time) : null);
-                        let dueBadge = '';
-                        if (dueObj && !isNaN(dueObj.getTime())) {
-                            const dueDateStr = dueObj.toISOString().split('T')[0];
-                            if (dueDateStr < todayStr) {
-                                dueBadge = `<span style="font-size: 0.65rem; color: var(--off); font-weight: bold; background: rgba(243, 139, 168, 0.15); padding: 1px 5px; border-radius: 4px;">⚠️ Überfällig</span>`;
-                            } else if (dueDateStr === todayStr) {
-                                dueBadge = `<span style="font-size: 0.65rem; color: var(--accent); font-weight: bold; background: rgba(137, 180, 250, 0.15); padding: 1px 5px; border-radius: 4px;">📅 Heute</span>`;
-                            }
+            // 3. Aufgaben (Markierte ⭐ & Heutige/Überfällige)
+            html += `
+                <div class="arbeitstisch-card">
+                    <div class="arbeitstisch-card-header">
+                        <div class="arbeitstisch-card-title">
+                            <span>⚡</span>
+                            <h4>Aufgaben (${relevantTasks.length})</h4>
+                        </div>
+                        <button type="button" onclick="navigateToProjects()" class="arbeitstisch-card-link" title="Zu den Projekten">Projekte ➔</button>
+                    </div>
+                    <div class="arbeitstisch-card-body">
+            `;
+            if (relevantTasks.length > 0) {
+                relevantTasks.slice(0, 10).forEach(t => {
+                    const rawId = String(t.id).replace('task-', '');
+                    const escTitle = escapeHtml(t.title || 'Aufgabe');
+                    const listTitle = escapeHtml(t.listTitle || t.tasklistId || 'Standard');
+                    const dueObj = t.due ? new Date(t.due) : (t.time ? new Date(t.time) : null);
+                    let dueBadge = '';
+                    if (dueObj && !isNaN(dueObj.getTime())) {
+                        const dueDateStr = dueObj.toISOString().split('T')[0];
+                        if (dueDateStr < todayStr) {
+                            dueBadge = `<span style="font-size: 0.65rem; color: var(--off); font-weight: bold; background: rgba(243, 139, 168, 0.15); padding: 1px 5px; border-radius: 4px;">⚠️ Überfällig</span>`;
+                        } else if (dueDateStr === todayStr) {
+                            dueBadge = `<span style="font-size: 0.65rem; color: var(--accent); font-weight: bold; background: rgba(137, 180, 250, 0.15); padding: 1px 5px; border-radius: 4px;">📅 Heute</span>`;
                         }
+                    }
 
-                        html += `
-                            <div class="arbeitstisch-item">
-                                <input type="checkbox" class="task-checkbox" data-task-id="${rawId}" data-tasklist-id="${listTitle}" onchange="completeTask(this)" onclick="event.stopPropagation()">
-                                <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; flex-wrap: wrap;" onclick="handleEntityClick(event, 'task', '${rawId}')">
-                                    <span style="font-size: 0.82rem; font-weight: 500; color: #ffffff; line-height: 1.3; word-break: break-word;">${escTitle}</span>
-                                    ${dueBadge}
-                                    ${t.isPlanned ? `<span style="font-size: 0.65rem; color: #f9e2af; font-weight: bold; background: rgba(249, 226, 175, 0.15); border: 1px solid rgba(249, 226, 175, 0.3); padding: 1px 5px; border-radius: 4px;">🟡 In Planung</span>` : ''}
-                                </div>
-                            </div>
-                        `;
-                    });
+                    const starClass = t.isStarred ? 'is-starred' : '';
+
                     html += `
+                        <div class="arbeitstisch-item">
+                            <input type="checkbox" class="task-checkbox" data-task-id="${rawId}" data-tasklist-id="${listTitle}" onchange="completeTask(this)" onclick="event.stopPropagation()">
+                            <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; flex-wrap: wrap;" onclick="handleEntityClick(event, 'task', '${rawId}')">
+                                <span style="font-size: 0.82rem; font-weight: 500; color: #ffffff; line-height: 1.3; word-break: break-word;">${escTitle}</span>
+                                ${dueBadge}
+                                ${t.isPlanned || t.status === 'suggestion' ? `<span style="font-size: 0.65rem; color: #f9e2af; font-weight: bold; background: rgba(249, 226, 175, 0.15); border: 1px solid rgba(249, 226, 175, 0.3); padding: 1px 5px; border-radius: 4px;">💡 Vorschlag</span>` : ''}
                             </div>
+                            <button type="button" class="star-btn ${starClass}" onclick="toggleTaskStar('${rawId}', event)" title="Aufgabe mit Stern markieren" style="margin-left: auto;">
+                                ⭐
+                            </button>
                         </div>
                     `;
-                }
+                });
+            } else {
+                html += `
+                    <div style="padding: 14px 10px; background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.1); border-radius: 8px; text-align: center; color: rgba(255, 255, 255, 0.6); font-size: 0.78rem;">
+                        <span>✨ Keine anstehenden oder markierten Aufgaben.</span>
+                    </div>
+                `;
+            }
+            html += `
+                    </div>
+                </div>
+            `;
 
-                // 3. Neue E-Mails (nur anzeigen wenn ungelesene Mails vorhanden)
-                if (unreadMails.length > 0) {
+            // 4. E-Mails (Ungelesene oder Haken bei allen gelesen)
+            html += `
+                <div class="arbeitstisch-card">
+                    <div class="arbeitstisch-card-header">
+                        <div class="arbeitstisch-card-title">
+                            <span>📬</span>
+                            <h4>E-Mails</h4>
+                        </div>
+                        <button type="button" onclick="focusWidget('mail')" class="arbeitstisch-card-link" title="Zum Posteingang">Posteingang ➔</button>
+                    </div>
+                    <div class="arbeitstisch-card-body">
+            `;
+            if (unreadMails.length > 0) {
+                unreadMails.slice(0, 6).forEach(m => {
+                    const escSubject = escapeHtml(m.subject || '(Kein Betreff)');
+                    const escFrom = escapeHtml(m.fromName || m.from || 'Unbekannt');
+                    const mailDate = new Date(m.date);
+                    const timeStr = getLocalDateString(mailDate) === todayStr
+                        ? mailDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr'
+                        : mailDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+
                     html += `
-                        <div class="arbeitstisch-card">
-                            <div class="arbeitstisch-card-header">
-                                <div class="arbeitstisch-card-title">
-                                    <span>📬</span>
-                                    <h4>E-Mails</h4>
-                                </div>
-                                <button type="button" onclick="focusWidget('mail')" class="arbeitstisch-card-link" title="Zum Posteingang">Posteingang ➔</button>
-                            </div>
-                            <div class="arbeitstisch-card-body">
-                    `;
-                    unreadMails.slice(0, 6).forEach(m => {
-                        const escSubject = escapeHtml(m.subject || '(Kein Betreff)');
-                        const escFrom = escapeHtml(m.fromName || m.from || 'Unbekannt');
-                        const mailDate = new Date(m.date);
-                        const timeStr = getLocalDateString(mailDate) === todayStr
-                            ? mailDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr'
-                            : mailDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-
-                        html += `
-                            <div class="arbeitstisch-item" onclick="openMailReadModal(${m.id}, 'dashboard')">
-                                <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
-                                        <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
-                                            <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0;"></span>
-                                            <strong style="font-size: 0.88rem; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escFrom}</strong>
-                                        </div>
-                                        <span style="font-size: 0.72rem; opacity: 0.65; flex-shrink: 0;">${timeStr}</span>
+                        <div class="arbeitstisch-item" onclick="openMailReadModal(${m.id}, 'dashboard')">
+                            <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+                                    <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+                                        <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0;"></span>
+                                        <strong style="font-size: 0.88rem; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escFrom}</strong>
                                     </div>
-                                    <span style="font-size: 0.84rem; color: rgba(255, 255, 255, 0.88); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escSubject}</span>
+                                    <span style="font-size: 0.72rem; opacity: 0.65; flex-shrink: 0;">${timeStr}</span>
                                 </div>
-                            </div>
-                        `;
-                    });
-                    html += `
+                                <span style="font-size: 0.84rem; color: rgba(255, 255, 255, 0.88); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escSubject}</span>
                             </div>
                         </div>
                     `;
-                }
+                });
+            } else {
+                html += `
+                    <div style="display: flex; align-items: center; gap: 10px; padding: 14px 12px; background: rgba(166, 227, 161, 0.08); border: 1px solid rgba(166, 227, 161, 0.2); border-radius: 8px;">
+                        <span style="font-size: 1.5rem; color: #a6e3a1; line-height: 1;">✅</span>
+                        <div>
+                            <strong style="font-size: 0.88rem; color: #a6e3a1; display: block;">Alle E-Mails gelesen</strong>
+                            <span style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.65);">Keine neuen oder ungelesenen Nachrichten im Posteingang.</span>
+                        </div>
+                    </div>
+                `;
+            }
+            html += `
+                    </div>
+                </div>
+            `;
 
-                // 4. Wecker & Timer (nur anzeigen wenn aktive Timer oder Wecker vorhanden)
-                if (activeTimers.length > 0) {
-                    html += `
-                        <div class="arbeitstisch-card">
-                            <div class="arbeitstisch-card-header">
-                                <div class="arbeitstisch-card-title">
-                                    <span>⏱️</span>
-                                    <h4>Timer</h4>
-                                </div>
-                                <button type="button" onclick="openTimerModal()" class="arbeitstisch-card-link" title="Neuen Timer erstellen">+ Timer</button>
+            // 5. Wecker & Timer (nur wenn vorhanden)
+            if (activeTimers.length > 0) {
+                html += `
+                    <div class="arbeitstisch-card">
+                        <div class="arbeitstisch-card-header">
+                            <div class="arbeitstisch-card-title">
+                                <span>⏱️</span>
+                                <h4>Timer</h4>
                             </div>
-                            <div class="arbeitstisch-card-body">
-                    `;
-                    activeTimers.forEach(t => {
-                        const escTitle = escapeHtml(t.title || 'Timer');
-                        html += `
-                            <div class="timer-card" id="timer-card-${t.id}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" onclick="openTimerDetailModal('${t.id}', '${escTitle}', '${t.createdAt}', '${t.expiresAt}')" style="padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); width: 100%; min-width: 0; box-sizing: border-box; position: relative; cursor: pointer;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 6px;">
-                                    <span style="font-size: 0.82rem; font-weight: bold; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escTitle}</span>
-                                    <span style="font-size: 0.65rem; opacity: 0.5; flex-shrink: 0;">Bis ${new Date(t.expiresAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
-                                </div>
-                                <div class="timer-countdown" style="font-family: monospace; font-size: 1.05rem; font-weight: bold; color: var(--accent); margin-bottom: 4px;">--:--:--</div>
-                                <div class="timer-progress-bg" style="width: 100%; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden;">
-                                    <div class="timer-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--on)); border-radius: 2px; transition: width 0.5s linear;"></div>
-                                </div>
-                            </div>
-                        `;
-                    });
+                            <button type="button" onclick="openTimerModal()" class="arbeitstisch-card-link" title="Neuen Timer erstellen">+ Timer</button>
+                        </div>
+                        <div class="arbeitstisch-card-body">
+                `;
+                activeTimers.forEach(t => {
+                    const escTitle = escapeHtml(t.title || 'Timer');
                     html += `
+                        <div class="timer-card" id="timer-card-${t.id}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" onclick="openTimerDetailModal('${t.id}', '${escTitle}', '${t.createdAt}', '${t.expiresAt}')" style="padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); width: 100%; min-width: 0; box-sizing: border-box; position: relative; cursor: pointer;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 6px;">
+                                <span style="font-size: 0.82rem; font-weight: bold; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escTitle}</span>
+                                <span style="font-size: 0.65rem; opacity: 0.5; flex-shrink: 0;">Bis ${new Date(t.expiresAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                            <div class="timer-countdown" style="font-family: monospace; font-size: 1.05rem; font-weight: bold; color: var(--accent); margin-bottom: 4px;">--:--:--</div>
+                            <div class="timer-progress-bg" style="width: 100%; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden;">
+                                <div class="timer-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--on)); border-radius: 2px; transition: width 0.5s linear;"></div>
                             </div>
                         </div>
                     `;
-                }
+                });
+                html += `
+                        </div>
+                    </div>
+                `;
             }
 
             html += `
@@ -6046,6 +6158,414 @@
                 </div>
             `;
 
+            container.innerHTML = html;
+        }
+
+        window.activeProjectDetailId = null;
+
+        window.openProjectDetailPage = function(id) {
+            window.activeProjectDetailId = id;
+            if (typeof focusWidget === 'function') {
+                focusWidget('projects');
+            }
+            loadTopWidgets();
+        };
+
+        window.closeProjectDetail = function() {
+            window.activeProjectDetailId = null;
+            loadTopWidgets();
+        };
+
+        window.navigateToProjects = function() {
+            window.activeProjectDetailId = null;
+            if (typeof focusWidget === 'function') {
+                focusWidget('projects');
+            }
+            loadTopWidgets();
+        };
+
+        window.toggleProjectStar = async function(id, ev) {
+            if (ev) {
+                ev.stopPropagation();
+                ev.preventDefault();
+            }
+            try {
+                const res = await fetch(getApiUrl(`/api/projects/${id}/star`), { method: 'POST' });
+                if (res.ok) {
+                    loadTopWidgets();
+                }
+            } catch (e) {
+                console.error('Fehler beim Markieren des Projekts:', e);
+            }
+        };
+
+        window.toggleTaskStar = async function(id, ev) {
+            if (ev) {
+                ev.stopPropagation();
+                ev.preventDefault();
+            }
+            try {
+                const rawId = String(id).replace('task-', '');
+                const res = await fetch(getApiUrl(`/api/tasks/${rawId}/star`), { method: 'POST' });
+                if (res.ok) {
+                    loadTopWidgets();
+                }
+            } catch (e) {
+                console.error('Fehler beim Markieren der Aufgabe:', e);
+            }
+        };
+
+        window.updateTaskStatus = async function(id, status, ev) {
+            if (ev) {
+                ev.stopPropagation();
+                ev.preventDefault();
+            }
+            try {
+                const rawId = String(id).replace('task-', '');
+                const res = await fetch(getApiUrl(`/api/tasks/${rawId}/status`), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status })
+                });
+                if (res.ok) {
+                    loadTopWidgets();
+                }
+            } catch (e) {
+                console.error('Fehler beim Ändern des Aufgabenstatus:', e);
+            }
+        };
+
+        window.openTaskModalForProject = function(projectId, status = 'in_progress') {
+            openTaskModal(null, '', '', '', '', 'none', projectId, status === 'suggestion', status, false);
+        };
+
+        function renderProjectsWidget(data, container) {
+            const projects = data.projects || [];
+            const unassignedTasks = data.unassignedTasks || [];
+            const unassignedNotes = data.unassignedNotes || [];
+
+            const activeId = window.activeProjectDetailId;
+            let activeProject = null;
+
+            if (activeId === 'unassigned') {
+                activeProject = {
+                    id: 'unassigned',
+                    name: '📥 Allgemein / Inbox',
+                    description: 'Aufgaben und Notizen ohne Projektzuordnung',
+                    isStarred: false,
+                    tasks: unassignedTasks,
+                    notes: unassignedNotes,
+                    isUnassigned: true
+                };
+            } else if (activeId !== null && activeId !== undefined) {
+                activeProject = projects.find(p => String(p.id) === String(activeId));
+            }
+
+            // --- 1. DEDICATED PROJECT DETAIL PAGE (3 COLUMNS) ---
+            if (activeProject) {
+                const p = activeProject;
+                const escName = escapeHtml(p.name);
+                const pTasks = p.tasks || [];
+                const pNotes = p.notes || [];
+
+                const suggestions = [];
+                const inProgress = [];
+                const done = [];
+
+                pTasks.forEach(t => {
+                    const isCompleted = !!t.completed || t.status === 'done';
+                    if (isCompleted) {
+                        done.push(t);
+                    } else if (t.status === 'suggestion' || t.isPlanned) {
+                        suggestions.push(t);
+                    } else {
+                        inProgress.push(t);
+                    }
+                });
+
+                function renderColumnTask(t, currentCol) {
+                    const rawId = String(t.id).replace('task-', '');
+                    const escT = escapeHtml(t.title || 'Aufgabe');
+                    const escN = escapeHtml(t.notes || '');
+                    const isDone = currentCol === 'done' || !!t.completed;
+                    const checkedAttr = isDone ? 'checked' : '';
+                    const textStyle = isDone ? 'text-decoration: line-through; opacity: 0.55;' : '';
+                    const starClass = t.isStarred ? 'is-starred' : '';
+
+                    let moverHtml = '';
+                    if (currentCol === 'suggestion') {
+                        moverHtml = `
+                            <button type="button" class="task-action-btn" onclick="updateTaskStatus('${rawId}', 'in_progress', event)" title="In Arbeit verschieben">
+                                ⏳ In Arbeit ➔
+                            </button>
+                            <button type="button" class="task-action-btn btn-done" onclick="updateTaskStatus('${rawId}', 'done', event)" title="Als erledigt markieren">
+                                ✅ Fertig
+                            </button>
+                        `;
+                    } else if (currentCol === 'in_progress') {
+                        moverHtml = `
+                            <button type="button" class="task-action-btn" onclick="updateTaskStatus('${rawId}', 'suggestion', event)" title="Zu Vorschlägen verschieben">
+                                💡 Vorschlag
+                            </button>
+                            <button type="button" class="task-action-btn btn-done" onclick="updateTaskStatus('${rawId}', 'done', event)" title="Als erledigt markieren">
+                                ✅ Fertig
+                            </button>
+                        `;
+                    } else if (currentCol === 'done') {
+                        moverHtml = `
+                            <button type="button" class="task-action-btn" onclick="updateTaskStatus('${rawId}', 'in_progress', event)" title="Wieder in Arbeit nehmen">
+                                ↩ Reaktivieren
+                            </button>
+                        `;
+                    }
+
+                    const dueObj = t.due ? new Date(t.due) : null;
+                    let dueBadge = '';
+                    if (dueObj && !isNaN(dueObj.getTime())) {
+                        const todayStr = getLocalDateString();
+                        const dueStr = dueObj.toISOString().split('T')[0];
+                        if (dueStr < todayStr) {
+                            dueBadge = `<span style="font-size: 0.65rem; color: var(--off); font-weight: bold; background: rgba(243, 139, 168, 0.15); padding: 1px 5px; border-radius: 4px;">⚠️ Überfällig</span>`;
+                        } else if (dueStr === todayStr) {
+                            dueBadge = `<span style="font-size: 0.65rem; color: var(--accent); font-weight: bold; background: rgba(137, 180, 250, 0.15); padding: 1px 5px; border-radius: 4px;">📅 Heute</span>`;
+                        } else {
+                            dueBadge = `<span style="font-size: 0.65rem; opacity: 0.6;">📅 ${dueObj.toLocaleDateString('de-DE')}</span>`;
+                        }
+                    }
+
+                    const itemHtml = `
+                        <div class="project-task-item">
+                            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
+                                <div style="display: flex; align-items: flex-start; gap: 6px; min-width: 0; flex: 1;">
+                                    <input type="checkbox" class="task-checkbox" data-task-id="${rawId}" data-tasklist-id="Standard" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 2px;" onclick="event.stopPropagation()">
+                                    <span style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; word-break: break-word; font-size: 0.8rem; line-height: 1.35; flex: 1; cursor: pointer; ${textStyle}" onclick="openTaskModal('${rawId}', '${escT.replace(/'/g, "\\'")}', '${escN.replace(/'/g, "\\'")}', '${t.due || ''}', 'Standard', 'none', ${p.isUnassigned ? 'null' : p.id}, ${t.isPlanned || t.status === 'suggestion'}, '${t.status || 'in_progress'}', ${!!t.isStarred})">
+                                        ${escT}
+                                    </span>
+                                </div>
+                                <button type="button" class="star-btn ${starClass}" onclick="toggleTaskStar('${rawId}', event)" title="Aufgabe mit Stern markieren" style="font-size: 0.85rem;">
+                                    ⭐
+                                </button>
+                            </div>
+                            ${dueBadge ? `<div style="margin-left: 20px;">${dueBadge}</div>` : ''}
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-top: 2px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.04); flex-wrap: wrap;">
+                                <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                    ${moverHtml}
+                                </div>
+                                <div style="display: flex; gap: 2px;">
+                                    <button type="button" class="task-action-btn" onclick="openTaskModal('${rawId}', '${escT.replace(/'/g, "\\'")}', '${escN.replace(/'/g, "\\'")}', '${t.due || ''}', 'Standard', 'none', ${p.isUnassigned ? 'null' : p.id}, ${t.isPlanned || t.status === 'suggestion'}, '${t.status || 'in_progress'}', ${!!t.isStarred})" title="Bearbeiten">✏️</button>
+                                    <button type="button" class="task-action-btn" onclick="deleteTask('${rawId}')" title="Löschen" style="color: var(--off);">🗑️</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    const extraData = `data-task-id="${rawId}" data-task-title="${escT.replace(/"/g, '&quot;')}" data-task-project="${p.id}" data-task-status="${t.status || ''}" data-task-completed="${isDone}"`;
+                    return renderSwipeLinkWrapper(itemHtml, t.title, 'task', rawId, '', '', 'margin-bottom: 0;', extraData);
+                }
+
+                let html = `
+                    <div class="project-detail-container">
+                        <div class="project-detail-header">
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                <button type="button" class="project-back-btn" onclick="closeProjectDetail()" title="Zurück zur Übersicht">
+                                    ← Alle Projekte
+                                </button>
+                                <h3 style="margin: 0; font-size: 1.05rem; color: #ffffff; display: flex; align-items: center; gap: 8px;">
+                                    ${escName}
+                                    ${!p.isUnassigned ? `<button type="button" class="star-btn ${p.isStarred ? 'is-starred' : ''}" onclick="toggleProjectStar(${p.id}, event)" title="Projekt anheften">⭐</button>` : ''}
+                                </h3>
+                            </div>
+                            <div style="display: flex; gap: 6px; align-items: center;">
+                                ${!p.isUnassigned ? `<button type="button" class="task-action-btn" onclick="openProjectModal(${p.id}, '${escName.replace(/'/g, "\\'")}', ${!!p.isStarred})" title="Projekt bearbeiten">✏️ Projekt</button>` : ''}
+                                <button type="button" class="nav-btn" onclick="openTaskModalForProject(${p.isUnassigned ? 'null' : p.id}, 'in_progress')" style="font-size: 0.78rem; padding: 6px 12px;">
+                                    ➕ Neue Aufgabe
+                                </button>
+                            </div>
+                        </div>
+                `;
+
+                if (p.description) {
+                    html += `<div style="font-size: 0.8rem; color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">${escapeHtml(p.description)}</div>`;
+                }
+
+                // 3 COLUMNS
+                html += `
+                    <div class="project-task-columns">
+                        <!-- Spalte 1: Vorschläge -->
+                        <div class="project-task-column">
+                            <div class="project-column-header col-suggestion">
+                                <div class="project-column-title">
+                                    <span>💡</span>
+                                    <span>Vorschläge</span>
+                                    <span class="project-tag-badge suggestion">${suggestions.length}</span>
+                                </div>
+                                <button type="button" class="task-action-btn" onclick="openTaskModalForProject(${p.isUnassigned ? 'null' : p.id}, 'suggestion')" title="Neuen Vorschlag hinzufügen">➕</button>
+                            </div>
+                            <div class="project-column-body">
+                                ${suggestions.length === 0 ? '<div style="font-size: 0.75rem; opacity: 0.45; text-align: center; padding: 20px 0;">Keine Vorschläge</div>' : suggestions.map(t => renderColumnTask(t, 'suggestion')).join('')}
+                            </div>
+                        </div>
+
+                        <!-- Spalte 2: In Arbeit -->
+                        <div class="project-task-column">
+                            <div class="project-column-header col-in_progress">
+                                <div class="project-column-title">
+                                    <span>⏳</span>
+                                    <span>In Arbeit</span>
+                                    <span class="project-tag-badge in_progress">${inProgress.length}</span>
+                                </div>
+                                <button type="button" class="task-action-btn" onclick="openTaskModalForProject(${p.isUnassigned ? 'null' : p.id}, 'in_progress')" title="Neue Aufgabe hinzufügen">➕</button>
+                            </div>
+                            <div class="project-column-body">
+                                ${inProgress.length === 0 ? '<div style="font-size: 0.75rem; opacity: 0.45; text-align: center; padding: 20px 0;">Keine offenen Aufgaben</div>' : inProgress.map(t => renderColumnTask(t, 'in_progress')).join('')}
+                            </div>
+                        </div>
+
+                        <!-- Spalte 3: Fertig -->
+                        <div class="project-task-column">
+                            <div class="project-column-header col-done">
+                                <div class="project-column-title">
+                                    <span>✅</span>
+                                    <span>Fertig</span>
+                                    <span class="project-tag-badge done">${done.length}</span>
+                                </div>
+                            </div>
+                            <div class="project-column-body">
+                                ${done.length === 0 ? '<div style="font-size: 0.75rem; opacity: 0.45; text-align: center; padding: 20px 0;">Keine erledigten Aufgaben</div>' : done.map(t => renderColumnTask(t, 'done')).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Notes section if any
+                if (pNotes.length > 0) {
+                    html += `
+                        <div style="margin-top: 10px;">
+                            <div class="arbeitstisch-section-badge">📝 Notizen (${pNotes.length})</div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; margin-top: 6px;">
+                    `;
+                    pNotes.forEach(n => {
+                        const escNTitle = escapeHtml(n.title);
+                        const escNContent = escapeHtml(n.content);
+                        const noteHtml = `
+                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); padding: 10px 12px; border-radius: 8px; font-size: 0.78rem; display: flex; flex-direction: column; gap: 4px;">
+                                <strong style="color: var(--accent); font-size: 0.8rem;">${escNTitle}</strong>
+                                <div style="opacity: 0.8; white-space: pre-wrap; word-break: break-word; line-height: 1.35; font-size: 0.75rem;">${escNContent}</div>
+                            </div>
+                        `;
+                        const extraNoteData = `data-note-id="${n.id}" data-note-title="${escNTitle.replace(/"/g, '&quot;')}" data-note-content="${escNContent.replace(/"/g, '&quot;')}" data-project-id="${p.id}"`;
+                        html += renderSwipeLinkWrapper(noteHtml, n.title, 'note', n.id, '', '', '', extraNoteData);
+                    });
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                }
+
+                html += `</div>`;
+                container.innerHTML = html;
+                return;
+            }
+
+            // --- 2. PROJECTS OVERVIEW GRID (WHEN NO PROJECT OPENED) ---
+            let html = `
+                <div style="text-align: left; padding: 0 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 1.1rem;">📁</span>
+                            <h3 style="margin: 0; font-size: 1rem; color: #ffffff; font-weight: 700;">Projekte & Aufgaben</h3>
+                        </div>
+                        <div style="display: flex; gap: 6px;">
+                            <button type="button" class="nav-btn" onclick="openProjectModal()" style="font-size: 0.78rem; padding: 5px 10px;">➕ Neues Projekt</button>
+                            <button type="button" class="nav-btn" onclick="openTaskModal()" style="font-size: 0.78rem; padding: 5px 10px;">➕ Neue Aufgabe</button>
+                        </div>
+                    </div>
+            `;
+
+            if (projects.length === 0 && unassignedTasks.length === 0 && unassignedNotes.length === 0) {
+                html += `<p style="font-size: 0.8rem; opacity: 0.6; text-align: center; margin: 20px 0;">Keine Projekte oder Aufgaben vorhanden. Erstelle dein erstes Projekt!</p>`;
+            } else {
+                html += `<div class="projects-overview-grid">`;
+
+                // Render Projects
+                projects.forEach(p => {
+                    const escProjName = escapeHtml(p.name);
+                    const pTasks = p.tasks || [];
+                    const sugCount = pTasks.filter(t => !t.completed && (t.status === 'suggestion' || t.isPlanned)).length;
+                    const inProgCount = pTasks.filter(t => !t.completed && t.status !== 'suggestion' && !t.isPlanned && t.status !== 'done').length;
+                    const doneCount = pTasks.filter(t => t.completed || t.status === 'done').length;
+
+                    let personsHtml = '';
+                    if (p.persons && p.persons.length > 0) {
+                        p.persons.forEach(person => {
+                            personsHtml += `
+                                <span class="clickable-tag" onclick="event.stopPropagation(); openPersonProfileModal(${person.id})" style="display: inline-flex; align-items: center; gap: 2px; font-size: 0.65rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.6); padding: 1px 5px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); cursor: pointer;">
+                                    👤 ${escapeHtml(person.name)}
+                                </span>
+                            `;
+                        });
+                    }
+
+                    const cardInner = `
+                        <div class="project-overview-header">
+                            <div class="project-overview-title">
+                                <span>📁</span>
+                                <span>${escProjName}</span>
+                            </div>
+                            <button type="button" class="star-btn ${p.isStarred ? 'is-starred' : ''}" onclick="toggleProjectStar(${p.id}, event)" title="Projekt mit Stern markieren" style="font-size: 1.1rem;">
+                                ⭐
+                            </button>
+                        </div>
+                        ${personsHtml ? `<div style="display: flex; gap: 4px; flex-wrap: wrap;">${personsHtml}</div>` : ''}
+                        ${p.description ? `<div style="font-size: 0.74rem; color: rgba(255,255,255,0.6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(p.description)}</div>` : ''}
+                        <div class="project-overview-badges">
+                            <span class="project-tag-badge suggestion">💡 ${sugCount} Vorschläge</span>
+                            <span class="project-tag-badge in_progress">⏳ ${inProgCount} in Arbeit</span>
+                            <span class="project-tag-badge done">✅ ${doneCount} fertig</span>
+                        </div>
+                        <div style="font-size: 0.75rem; color: var(--accent); display: flex; align-items: center; gap: 4px; font-weight: 600; margin-top: auto; padding-top: 4px;">
+                            Aufgaben ansehen ➔
+                        </div>
+                    `;
+
+                    const extraProjectData = `data-project-id="${p.id}" data-project-name="${escProjName.replace(/"/g, '&quot;')}"`;
+                    html += `
+                        <div class="project-overview-card" onclick="openProjectDetailPage(${p.id})">
+                            ${renderSwipeLinkWrapper(cardInner, p.name, 'project', p.id, '', '', 'width: 100%; border-radius: 0; background: transparent;', extraProjectData)}
+                        </div>
+                    `;
+                });
+
+                // Render "Allgemein / Inbox"
+                if (unassignedTasks.length > 0 || unassignedNotes.length > 0) {
+                    const sugCount = unassignedTasks.filter(t => !t.completed && (t.status === 'suggestion' || t.isPlanned)).length;
+                    const inProgCount = unassignedTasks.filter(t => !t.completed && t.status !== 'suggestion' && !t.isPlanned && t.status !== 'done').length;
+                    const doneCount = unassignedTasks.filter(t => t.completed || t.status === 'done').length;
+
+                    html += `
+                        <div class="project-overview-card" onclick="openProjectDetailPage('unassigned')" style="border-style: dashed; border-color: rgba(255,255,255,0.15);">
+                            <div class="project-overview-header">
+                                <div class="project-overview-title" style="color: rgba(255,255,255,0.8);">
+                                    <span>📥</span>
+                                    <span>Allgemein / Inbox</span>
+                                </div>
+                            </div>
+                            <div style="font-size: 0.74rem; color: rgba(255,255,255,0.5);">Aufgaben & Notizen ohne Projekt</div>
+                            <div class="project-overview-badges">
+                                <span class="project-tag-badge suggestion">💡 ${sugCount} Vorschläge</span>
+                                <span class="project-tag-badge in_progress">⏳ ${inProgCount} in Arbeit</span>
+                                <span class="project-tag-badge done">✅ ${doneCount} fertig</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--accent); display: flex; align-items: center; gap: 4px; font-weight: 600; margin-top: auto; padding-top: 4px;">
+                                Aufgaben ansehen ➔
+                            </div>
+                        </div>
+                    `;
+                }
+
+                html += `</div>`;
+            }
+
+            html += `</div>`;
             container.innerHTML = html;
         }
 
@@ -6105,174 +6625,8 @@
                         widgetDiv.innerHTML = html;
                     } else if (widget.type === 'custom') {
                         if (widget.data.widgetType === 'projects_list') {
-                            let html = `<div style="text-align: left; padding: 0 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 10px;">`;
-                            
-                            const projects = widget.data.projects || [];
-                            const unassignedTasks = widget.data.unassignedTasks || [];
-                            const unassignedNotes = widget.data.unassignedNotes || [];
-
-                            if (projects.length === 0 && unassignedTasks.length === 0 && unassignedNotes.length === 0) {
-                                html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine Projekte oder Notizen vorhanden.</p>`;
-                            } else {
-                                const collapsedStates = JSON.parse(localStorage.getItem('project_collapsed_states') || '{}');
-
-                                // 1. Render Projects
-                                projects.forEach(p => {
-                                    const escProjName = escapeHtml(p.name).replace(/"/g, '&quot;');
-                                    const isCollapsed = collapsedStates[p.id] !== false;
-                                    const displayStyle = isCollapsed ? 'none' : 'flex';
-                                    const arrowRotate = isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)';
-
-                                    let personsHtml = "";
-                                    if (p.persons && p.persons.length > 0) {
-                                        p.persons.forEach(person => {
-                                            personsHtml += `
-                                                <span class="clickable-tag" onclick="event.stopPropagation(); openPersonProfileModal(${person.id})" style="display: inline-flex; align-items: center; gap: 2px; font-size: 0.65rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.6); padding: 1px 5px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); cursor: pointer;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='rgba(255, 255, 255, 0.6)'">
-                                                    👤 ${escapeHtml(person.name)}
-                                                </span>
-                                            `;
-                                        });
-                                    }
-
-                                    const projectHeaderContent = `
-                                        <div style="padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: rgba(255,255,255,0.02); width: 100%;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'">
-                                            <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;">
-                                                <div style="display: flex; align-items: center; gap: 6px;">
-                                                    <span class="project-arrow" id="project-arrow-${p.id}" style="font-size: 0.7rem; transition: transform 0.2s; transform: ${arrowRotate};">▶</span>
-                                                    <strong style="font-size: 0.85rem; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(p.name)}</strong>
-                                                </div>
-                                                <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-left: 14px;">
-                                                    ${personsHtml}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    `;
-
-                                    const extraProjectData = `data-project-id="${p.id}" data-project-name="${escProjName}"`;
-
-                                    html += `
-                                        <div class="project-card" id="project-card-${p.id}" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; overflow: hidden; margin-bottom: 6px; transition: all 0.3s;">
-                                            ${renderSwipeLinkWrapper(projectHeaderContent, p.name, 'project', p.id, '', '', 'margin-bottom: 0; border-radius: 0;', extraProjectData)}
-                                            
-                                            <div class="project-body" id="project-body-${p.id}" style="display: ${displayStyle}; padding: 10px 12px; border-top: 1px solid rgba(255,255,255,0.04); flex-direction: column; gap: 8px; background: rgba(0,0,0,0.15);">
-                                                <div style="display: flex; flex-direction: column; gap: 6px;">
-                                    `;
-                                    
-                                    if (p.tasks.length === 0 && p.notes.length === 0) {
-                                        html += `<p style="font-size: 0.75rem; opacity: 0.5; text-align: center; margin: 5px 0;">Projekt ist leer.</p>`;
-                                    } else {
-                                        p.tasks.forEach(t => {
-                                            const escT = escapeHtml(t.title).replace(/"/g, '&quot;');
-                                            const escN = escapeHtml(t.notes || '').replace(/"/g, '&quot;');
-                                            const checkedAttr = t.completed ? 'checked' : '';
-                                            const textStyle = t.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
-                                            const taskContent = `
-                                                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); font-size: 0.75rem; width: 100%;">
-                                                    <div style="display: flex; align-items: flex-start; gap: 6px; min-width: 0; flex: 1;">
-                                                        <input type="checkbox" class="task-checkbox" data-task-id="${t.id}" data-tasklist-id="Standard" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 2px;">
-                                                        <span style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; word-break: break-word; line-height: 1.4; flex: 1; ${textStyle}">${escapeHtml(t.title)}</span>
-                                                    </div>
-                                                </div>
-                                            `;
-                                            const extraTaskData = `data-task-id="${t.id}" data-task-title="${escT}" data-task-notes="${escN}" data-task-due="${t.due || ''}" data-task-project="${p.id}" data-task-project-id="${p.id}" data-task-completed="${!!t.completed}"`;
-                                            html += renderSwipeLinkWrapper(taskContent, t.title, 'task', t.id, '', '', '', extraTaskData);
-                                        });
-
-                                        p.notes.forEach(n => {
-                                            const escTitle = escapeHtml(n.title).replace(/"/g, '&quot;');
-                                            const escContent = escapeHtml(n.content).replace(/"/g, '&quot;');
-                                            const noteContent = `
-                                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 6px; font-size: 0.75rem; display: flex; flex-direction: column; gap: 4px; width: 100%;">
-                                                    <strong style="color: var(--accent); font-size: 0.75rem;">${escapeHtml(n.title)}</strong>
-                                                    <div style="opacity: 0.8; white-space: pre-wrap; word-break: break-all; line-height: 1.3;">${escapeHtml(n.content)}</div>
-                                                </div>
-                                            `;
-                                            const extraNoteData = `data-note-id="${n.id}" data-note-title="${escTitle}" data-note-content="${escContent}" data-project-id="${p.id}"`;
-                                            html += renderSwipeLinkWrapper(noteContent, n.title, 'note', n.id, '', '', '', extraNoteData);
-                                        });
-                                    }
-
-                                    html += `
-                                                </div>
-                                            </div>
-                                        </div>
-                                    `;
-                                });
-
-                                // 2. Render Virtual "Allgemein" Project
-                                if (unassignedTasks.length > 0 || unassignedNotes.length > 0) {
-                                    const isCollapsed = collapsedStates['unassigned'] !== false;
-                                    const displayStyle = isCollapsed ? 'none' : 'flex';
-                                    const arrowRotate = isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)';
-
-                                    html += `
-                                        <div class="project-card" id="project-card-unassigned" style="background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; overflow: hidden; margin-top: 10px;">
-                                            <div onclick="toggleProjectCollapse('unassigned')" style="padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: rgba(255,255,255,0.01);" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='rgba(255,255,255,0.01)'">
-                                                <div style="display: flex; align-items: center; gap: 6px;">
-                                                    <span class="project-arrow" id="project-arrow-unassigned" style="font-size: 0.7rem; transition: transform 0.2s; transform: ${arrowRotate};">▶</span>
-                                                    <strong style="font-size: 0.85rem; color: rgba(255,255,255,0.6);">📥 Allgemein / Inbox</strong>
-                                                </div>
-                                                <div style="font-size: 0.7rem; opacity: 0.5;">
-                                                    ${unassignedTasks.length + unassignedNotes.length} Einträge
-                                                </div>
-                                            </div>
-                                            
-                                            <div class="project-body" id="project-body-unassigned" style="display: ${displayStyle}; padding: 10px 12px; border-top: 1px solid rgba(255,255,255,0.04); flex-direction: column; gap: 8px; background: rgba(0,0,0,0.15);">
-                                                <div style="display: flex; flex-direction: column; gap: 6px;">
-                                    `;
-                                    
-                                    unassignedTasks.forEach(t => {
-                                        const escT = escapeHtml(t.title).replace(/"/g, '&quot;');
-                                        const escN = escapeHtml(t.notes || '').replace(/"/g, '&quot;');
-                                        const checkedAttr = t.completed ? 'checked' : '';
-                                        const textStyle = t.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
-                                        const taskContent = `
-                                            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); font-size: 0.75rem; width: 100%;">
-                                                <div style="display: flex; align-items: flex-start; gap: 6px; min-width: 0; flex: 1;">
-                                                    <input type="checkbox" class="task-checkbox" data-task-id="${t.id}" data-tasklist-id="Standard" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 2px;">
-                                                    <span style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; word-break: break-word; line-height: 1.4; flex: 1; ${textStyle}">${escapeHtml(t.title)}</span>
-                                                </div>
-                                            </div>
-                                        `;
-                                        const extraTaskData = `data-task-id="${t.id}" data-task-title="${escT}" data-task-notes="${escN}" data-task-due="${t.due || ''}" data-task-completed="${!!t.completed}"`;
-                                        html += renderSwipeLinkWrapper(taskContent, t.title, 'task', t.id, '', '', '', extraTaskData);
-                                    });
-
-                                    unassignedNotes.forEach(n => {
-                                        const escTitle = escapeHtml(n.title).replace(/"/g, '&quot;');
-                                        const escContent = escapeHtml(n.content).replace(/"/g, '&quot;');
-                                        
-                                        let notePersonsHtml = "";
-                                        if (n.persons && n.persons.length > 0) {
-                                            n.persons.forEach(person => {
-                                                notePersonsHtml += `
-                                                    <span onclick="event.stopPropagation(); openPersonProfileModal(${person.id})" style="display: inline-flex; align-items: center; gap: 2px; font-size: 0.65rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.6); padding: 1px 5px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); cursor: pointer; margin-top: 2px;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='rgba(255, 255, 255, 0.6)'">
-                                                        👤 ${escapeHtml(person.name)}
-                                                    </span>
-                                                `;
-                                            });
-                                        }
-
-                                        const noteContent = `
-                                            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 6px; font-size: 0.75rem; display: flex; flex-direction: column; gap: 4px; width: 100%;">
-                                                <strong style="color: var(--accent); font-size: 0.75rem;">${escapeHtml(n.title)}</strong>
-                                                <div style="opacity: 0.8; white-space: pre-wrap; word-break: break-all; line-height: 1.3;">${escapeHtml(n.content)}</div>
-                                                <div style="display: flex; flex-wrap: wrap; gap: 4px;">${notePersonsHtml}</div>
-                                            </div>
-                                        `;
-                                        const extraNoteData = `data-note-id="${n.id}" data-note-title="${escTitle}" data-note-content="${escContent}"`;
-                                        html += renderSwipeLinkWrapper(noteContent, n.title, 'note', n.id, '', '', '', extraNoteData);
-                                    });
-
-                                    html += `
-                                                </div>
-                                            </div>
-                                        </div>
-                                    `;
-                                }
-                            }
-                            html += `</div>`;
-                            widgetDiv.innerHTML = html;
+                            widgetDiv.id = 'widget-projects';
+                            renderProjectsWidget(widget.data, widgetDiv);
                         } else if (widget.data.widgetType === 'memory_people_list') {
                             widgetDiv.id = 'widget-memory';
                             currentMemoryPeopleList = widget.data.people || [];
@@ -9063,13 +9417,18 @@
         const taskNotesInput = document.getElementById('task-notes-input');
         const taskDueInput = document.getElementById('task-due-input');
 
-        window.openTaskModal = function(taskId = null, title = '', notes = '', due = '', listTitle = '', recurrence = 'none', projectId = null, isPlanned = false) {
+        window.openTaskModal = function(taskId = null, title = '', notes = '', due = '', listTitle = '', recurrence = 'none', projectId = null, isPlanned = false, status = 'in_progress', isStarred = false) {
             const taskIdInput = document.getElementById('task-id-input');
             const modalTitle = document.querySelector('#task-modal h3');
             const saveBtn = document.querySelector('#task-modal .save');
             const recurrenceInput = document.getElementById('task-recurrence-input');
             const plannedInput = document.getElementById('task-is-planned-input');
+            const statusInput = document.getElementById('task-status-input');
+            const starredInput = document.getElementById('task-is-starred-input');
+
             if (plannedInput) plannedInput.checked = !!isPlanned;
+            if (statusInput) statusInput.value = status || (isPlanned ? 'suggestion' : 'in_progress');
+            if (starredInput) starredInput.checked = !!isStarred;
             
             if (taskIdInput) taskIdInput.value = taskId || '';
             const taskProjectIdInput = document.getElementById('task-project-id-input');
@@ -9127,6 +9486,9 @@
             const recurrenceInput = document.getElementById('task-recurrence-input');
             const recurrence = recurrenceInput ? recurrenceInput.value : 'none';
             const isPlanned = document.getElementById('task-is-planned-input')?.checked || false;
+            const status = document.getElementById('task-status-input')?.value || (isPlanned ? 'suggestion' : 'in_progress');
+            const isStarred = document.getElementById('task-is-starred-input')?.checked || false;
+
             if (!title) {
                 alert("Titel ist erforderlich.");
                 return;
@@ -9140,14 +9502,18 @@
                     datum: due ? due : "null",
                     recurrence: recurrence,
                     projectId: projectId ? parseInt(projectId) : null,
-                    inPlanung: isPlanned
+                    inPlanung: isPlanned || status === 'suggestion',
+                    status: status,
+                    isStarred: isStarred
                 };
                 await callTool('aktualisiere_aufgabe', args);
             } else {
                 const args = {
                     titel: title,
                     projectId: projectId ? parseInt(projectId) : null,
-                    inPlanung: isPlanned
+                    inPlanung: isPlanned || status === 'suggestion',
+                    status: status,
+                    isStarred: isStarred
                 };
                 if (notes) args.notizen = notes;
                 if (due) args.datum = due;
@@ -9163,8 +9529,8 @@
             }
         };
 
-        window.editTask = function(taskId, title, notes, due, listTitle, recurrence = 'none', projectId = null, isPlanned = false) {
-            openTaskModal(taskId, title, notes, due, listTitle, recurrence, projectId, isPlanned);
+        window.editTask = function(taskId, title, notes, due, listTitle, recurrence = 'none', projectId = null, isPlanned = false, status = 'in_progress', isStarred = false) {
+            openTaskModal(taskId, title, notes, due, listTitle, recurrence, projectId, isPlanned, status, isStarred);
         };
 
         // --- PROJECTS JS LOGIC ---
@@ -9173,9 +9539,11 @@
         const projectNameInput = document.getElementById('project-name-input');
         const projectModalTitle = document.getElementById('project-modal-title');
 
-        window.openProjectModal = function(id = null, name = '') {
+        window.openProjectModal = function(id = null, name = '', isStarred = false) {
             projectIdInput.value = id || '';
             projectNameInput.value = name;
+            const starredInput = document.getElementById('project-is-starred-input');
+            if (starredInput) starredInput.checked = !!isStarred;
             projectModalTitle.textContent = id ? 'Projekt bearbeiten' : 'Projekt erstellen';
             projectModal.style.display = 'block';
             document.body.classList.add('modal-active');
@@ -9189,14 +9557,15 @@
         window.saveProject = async function() {
             const id = projectIdInput.value;
             const name = projectNameInput.value.trim();
+            const isStarred = document.getElementById('project-is-starred-input')?.checked || false;
             if (!name) {
                 alert("Projektname ist erforderlich.");
                 return;
             }
             if (id) {
-                await callTool('bearbeite_projekt', { id: parseInt(id), name: name });
+                await callTool('bearbeite_projekt', { id: parseInt(id), name: name, isStarred: isStarred });
             } else {
-                await callTool('erstelle_projekt', { name: name });
+                await callTool('erstelle_projekt', { name: name, isStarred: isStarred });
             }
             closeProjectModal();
         };

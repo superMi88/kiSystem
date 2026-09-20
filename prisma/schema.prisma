@@ -165,6 +165,8 @@ model Task {
   listTitle   String    @default("Standard") // Name der Aufgabenliste (z. B. "Standard", "Einkäufe")
   recurrence  String?   // Optionales Wiederholungsmuster als Freitext/Regel
   isPlanned   Boolean   @default(false) // Kennzeichnung 'In Planung' (noch nicht fest terminiert)
+  isStarred   Boolean   @default(false) // Stern-Markierung für Arbeitstisch
+  status      String    @default("in_progress") // Status: "suggestion", "in_progress", "done"
   createdAt   DateTime  @default(now()) // Erstellungszeitpunkt
   updatedAt   DateTime  @updatedAt // Zeitpunkt der letzten Aktualisierung
   isDeleted   Boolean   @default(false) // Soft-Delete-Flag
@@ -176,6 +178,7 @@ model Task {
 model Project {
   id        Int      @id @default(autoincrement()) // Eindeutige ID des Projekts
   name      String   // Name des Projekts
+  isStarred Boolean  @default(false) // Stern-Markierung für Arbeitstisch
   createdAt DateTime @default(now()) // Erstellungszeitpunkt
   updatedAt DateTime @updatedAt // Zeitpunkt der letzten Aktualisierung
   isDeleted Boolean  @default(false) // Soft-Delete-Flag

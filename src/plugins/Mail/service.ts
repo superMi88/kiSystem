@@ -889,6 +889,7 @@ export class MailService {
       query?: string;
       limit?: number;
       offset?: number;
+      unreadOnly?: boolean;
     }
   ) {
     const limit = options?.limit || 50;
@@ -897,6 +898,10 @@ export class MailService {
     const where: any = {
       account: { isDeleted: false }
     };
+
+    if (options?.unreadOnly) {
+      where.isRead = false;
+    }
 
     if (options?.accountId) {
       where.accountId = Number(options.accountId);

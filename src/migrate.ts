@@ -62,4 +62,23 @@ export async function runAutomaticMigration(prisma: PrismaClient) {
   } catch (error: any) {
     console.error("[Migration] Fehler bei der automatischen Migration des Personengedächtnisses:", error);
   }
+
+  // Schema-Migration für isStarred (Project, Task) und status (Task)
+  try {
+    console.log("[Migration] Überprüfe Datenbankspalten für Projekte und Aufgaben (isStarred, status)...");
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "isStarred" BOOLEAN DEFAULT false;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "isStarred" BOOLEAN DEFAULT false;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'in_progress';`);
+    
+    // Bestehende Tasks mit passendem Status initialisieren falls noch nicht gesetzt
+    await prisma.$executeRawUnsafe(`
+      UPDATE "Task" SET "status" = 'done' WHERE "completed" = true AND ("status" IS NULL OR "status" = 'in_progress');
+    `);
+    await prisma.$executeRawUnsafe(`
+      UPDATE "Task" SET "status" = 'suggestion' WHERE "isPlanned" = true AND "completed" = false AND ("status" IS NULL OR "status" = 'in_progress');
+    `);
+    console.log("[Migration] Spalten für Projekte und Aufgaben erfolgreich verifiziert/migriert.");
+  } catch (colErr: any) {
+    console.warn("[Migration] Hinweis: Spaltenmigration für Project/Task:", colErr.message);
+  }
 }

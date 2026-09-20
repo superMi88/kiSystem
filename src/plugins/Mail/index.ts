@@ -18,6 +18,7 @@ export const mailPlugin: Plugin = {
             kategorie: { type: SchemaType.STRING, description: "Optionale Kategorie (z.B. 'Arbeit', 'Rechnungen', 'Privat', 'Wichtig')." },
             personId: { type: SchemaType.INTEGER, description: "Optionale ID einer Person aus dem Gedächtnis." },
             suche: { type: SchemaType.STRING, description: "Optionaler Suchbegriff nach Absender, Betreff oder Text." },
+            nurUngelesen: { type: SchemaType.BOOLEAN, description: "Wenn true, werden nur ungelesene E-Mails zurückgegeben." },
             limit: { type: SchemaType.INTEGER, description: "Maximale Anzahl an Mails (Standard ist 30)." },
             jetzt_synchronisieren: { type: SchemaType.BOOLEAN, description: "Wenn true, wird vorher ein Live-Abruf der IMAP-Server gestartet." }
           }
@@ -38,6 +39,7 @@ export const mailPlugin: Plugin = {
           category: args.kategorie,
           personId: args.personId ? Number(args.personId) : undefined,
           query: args.suche,
+          unreadOnly: !!args.nurUngelesen,
           limit
         });
 

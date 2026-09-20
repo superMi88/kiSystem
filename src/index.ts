@@ -2,7 +2,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express from "express";
 import cors from "cors";
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType, FunctionCallingMode } from "@google/generative-ai";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -220,13 +220,92 @@ app.post("/tasks/complete", async (req, res) => {
         where: { id: Number(taskId) },
         data: {
           completed: targetCompleted,
-          completedAt: targetCompleted ? now : null
+          completedAt: targetCompleted ? now : null,
+          status: targetCompleted ? 'done' : 'in_progress'
         }
       });
       res.json({ success: true, message: `Aufgabe erfolgreich ${targetCompleted ? 'erledigt' : 'wieder geöffnet'}.` });
     }
   } catch (e: any) {
     console.error("Fehler beim Erledigen/Reaktivieren der Aufgabe:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * Projects & Tasks Star / Status API
+ */
+app.post("/api/projects/:id/star", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { isStarred } = req.body;
+    let targetStarred = isStarred;
+    if (targetStarred === undefined) {
+      const proj = await prisma.project.findUnique({ where: { id } });
+      if (!proj) return res.status(404).json({ error: "Projekt nicht gefunden." });
+      targetStarred = !proj.isStarred;
+    }
+    const updated = await prisma.project.update({
+      where: { id },
+      data: { isStarred: !!targetStarred }
+    });
+    res.json({ success: true, project: updated });
+  } catch (e: any) {
+    console.error("Fehler beim Umschalten des Projekt-Sterns:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/tasks/:id/star", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { isStarred } = req.body;
+    let targetStarred = isStarred;
+    if (targetStarred === undefined) {
+      const task = await prisma.task.findUnique({ where: { id } });
+      if (!task) return res.status(404).json({ error: "Aufgabe nicht gefunden." });
+      targetStarred = !task.isStarred;
+    }
+    const updated = await prisma.task.update({
+      where: { id },
+      data: { isStarred: !!targetStarred }
+    });
+    res.json({ success: true, task: updated });
+  } catch (e: any) {
+    console.error("Fehler beim Umschalten des Aufgaben-Sterns:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/tasks/:id/status", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { status } = req.body;
+    if (!status || !['suggestion', 'in_progress', 'done'].includes(status)) {
+      return res.status(400).json({ error: "Gültiger status ('suggestion', 'in_progress', 'done') erforderlich." });
+    }
+    const now = new Date();
+    const updateData: any = { status };
+    if (status === 'done') {
+      updateData.completed = true;
+      updateData.completedAt = now;
+      updateData.isPlanned = false;
+    } else if (status === 'suggestion') {
+      updateData.completed = false;
+      updateData.completedAt = null;
+      updateData.isPlanned = true;
+    } else if (status === 'in_progress') {
+      updateData.completed = false;
+      updateData.completedAt = null;
+      updateData.isPlanned = false;
+    }
+    const updated = await prisma.task.update({
+      where: { id },
+      data: updateData
+    });
+    res.json({ success: true, task: updated });
+  } catch (e: any) {
+    console.error("Fehler beim Aktualisieren des Aufgaben-Status:", e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -1120,7 +1199,16 @@ app.post("/chat", async (req, res) => {
       conversationId = newConv.id;
     }
 
-    // Speichere Benutzer-Nachricht in DB
+    // 1. Vorherigen Chatverlauf abrufen (bevor die aktuelle Nachricht in die DB geschrieben wird, um Duplikate zu vermeiden)
+    const chatHistory = conversationId ? (await prisma.chatMessage.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: 'asc' }
+    })).map(m => ({
+      role: m.role === 'user' ? 'user' : 'model',
+      parts: [{ text: m.text }]
+    })) : [];
+
+    // 2. Speichere Benutzer-Nachricht in DB
     if (message || audio || (attachments && attachments.length > 0)) {
       await prisma.chatMessage.create({
         data: {
@@ -1134,20 +1222,35 @@ app.post("/chat", async (req, res) => {
     const now = new Date();
     const dateString = now.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     const timeString = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    const todayIso = now.toISOString().split('T')[0];
 
     const userModel = getSettings().aiModel;
-    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
     const model = genAI.getGenerativeModel({
       model: modelName,
       tools: [{ functionDeclarations: pluginManager.getGeminiTools() } as any],
+      toolConfig: {
+        functionCallingConfig: {
+          mode: FunctionCallingMode.AUTO
+        }
+      },
+      generationConfig: {
+        thinkingConfig: {
+          thinkingBudget: 0
+        }
+      } as any,
       systemInstruction: {
         role: "system",
         parts: [{
-          text: `Du bist ein hilfreicher PC-Assistent. 
-Heute ist ${dateString}, es ist ${timeString} Uhr (deutsche Lokalzeit, Mitteleuropäische Sommerzeit, UTC+2). 
-Nutze dieses Datum als Basis für relative Zeitangaben.
-Wenn du relative Timer erstellst (z.B. "in 15 Minuten" oder "für 10 Sekunden"), benutze im Tool 'erstelle_timer' bevorzugt den Parameter 'sekunden'.
-Für feste Uhrzeiten (z. B. "morgen um 17 Uhr") berechne die Ablaufzeit im lokalen Format unter Berücksichtigung des Offsets '+02:00' (z. B. YYYY-MM-DDTHH:mm:ss+02:00) und gib diesen String an 'erstelle_timer' oder 'fuege_termin_hinzu'.
+          text: `Du bist ein hilfsbereiter, proaktiver persönlicher KI-Assistent. 
+Heute ist ${dateString}, ${todayIso}, es ist ${timeString} Uhr (deutsche Lokalzeit, Mitteleuropäische Sommerzeit, UTC+2). 
+Nutze '${todayIso}' als heutiges Datum als Basis für alle Datumsberechnungen (z.B. morgen = nächster Tag im Format YYYY-MM-DD).
+
+WERKZEUGAUFRUFE (TOOLS) - OBERSTE REGEL:
+- Wenn der Benutzer eine Aktion wünscht (z.B. Aufgabe erstellen, Mails anzeigen/holen, Timer/Wecker stellen, Projekt erstellen, Termin eintragen, Notiz speichern usw.), rufe das passende Werkzeug SOFORT als Function Call auf. Antworte NICHT nur mit Text oder leeren Floskeln, sondern führe die Aktion direkt aus!
+- Verwende in Werkzeug-Parametern IMMER reine JSON-Werte (Strings oder Zahlen). Führe NIEMALS Python-Code oder Formeln wie 'from datetime import date' in den Argumenten aus, sondern berechne Datums-Strings im Voraus als z.B. "${todayIso}".
+- Wenn du relative Timer erstellst (z.B. "in 15 Minuten" oder "für 10 Sekunden"), benutze im Tool 'erstelle_timer' bevorzugt den Parameter 'sekunden'.
+- Für feste Uhrzeiten (z. B. "morgen um 17 Uhr") berechne die Ablaufzeit im lokalen Format unter Berücksichtigung des Offsets '+02:00' (z. B. YYYY-MM-DDTHH:mm:ss+02:00) und gib diesen String an 'erstelle_timer' oder 'fuege_termin_hinzu'.
 
 Du hast Zugriff auf ein persönliches Profil des Benutzers ("Ich / Über mich"):
 - Wenn der Benutzer persönliche Informationen über sich selbst erzählt ("Ich mag...", "Mein Ziel ist...", "Ich habe mir vorgenommen...", "Merke dir über mich..."), verwende 'merke_ueber_mich'.
@@ -1173,8 +1276,6 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
 - Sei bei Antworten stets präzise, ehrlich, hilfsbereit und antworte auf Deutsch.` }]
       }
     });
-
-    const chatHistory = conversationId ? (await prisma.chatMessage.findMany({ where: { conversationId }, orderBy: { createdAt: 'asc' } })).map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] })) : [];
 
     const chat = model.startChat({
       history: chatHistory
@@ -1259,9 +1360,23 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
     let step = 0;
     const MAX_STEPS = 5;
     while (step < MAX_STEPS) {
+      const cand = currentResponse.candidates?.[0];
+      if (cand?.finishReason === 'MALFORMED_FUNCTION_CALL') {
+        console.warn("MALFORMED_FUNCTION_CALL erkannt. Sende Korrekturaufforderung an das Modell...");
+        const correctivePrompt = "Hinweis: Der vorherige Funktionsaufruf enthielt ungültigen Code oder fehlerhafte Argumente. Bitte rufe das Werkzeug erneut auf und verwende ausschließlich reine JSON-Werte (Strings oder Zahlen) für alle Parameter.";
+        const retryStep = await chat.sendMessage(correctivePrompt);
+        currentResponse = retryStep.response;
+        step++;
+        continue;
+      }
+
       const calls = currentResponse.functionCalls();
       if (!calls || calls.length === 0) {
-        aiText = currentResponse.text();
+        try {
+          aiText = currentResponse.text();
+        } catch (e) {
+          aiText = "";
+        }
         break;
       }
 
@@ -1320,7 +1435,31 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
         });
       }
 
-      const nextStep = await chat.sendMessage(functionResponses);
+      let nextStep: any;
+      try {
+        nextStep = await chat.sendMessage(functionResponses);
+      } catch (chatSendErr: any) {
+        console.warn(`Fehler beim Senden der Function-Responses mit Modell '${modelName}':`, chatSendErr.message);
+        if (modelName !== "gemini-2.5-flash") {
+          console.log("Führe automatischen Fallback auf 'gemini-2.5-flash' aus...");
+          try {
+            const fallbackModel = genAI.getGenerativeModel({
+              model: "gemini-2.5-flash",
+              tools: [{ functionDeclarations: pluginManager.getGeminiTools() } as any],
+              toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.AUTO } },
+              generationConfig: { thinkingConfig: { thinkingBudget: 0 } } as any
+            });
+            const fallbackChat = fallbackModel.startChat({ history: chatHistory });
+            await fallbackChat.sendMessage(promptParts);
+            nextStep = await fallbackChat.sendMessage(functionResponses);
+          } catch (fallbackErr: any) {
+            console.error("Fallback ebenfalls fehlgeschlagen:", fallbackErr.message);
+            throw chatSendErr;
+          }
+        } else {
+          throw chatSendErr;
+        }
+      }
       currentResponse = nextStep.response;
       step++;
     }

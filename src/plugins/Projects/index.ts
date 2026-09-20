@@ -82,14 +82,21 @@ export const projectsPlugin: Plugin = {
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
-            zeigeGeloeschte: { type: SchemaType.BOOLEAN, description: "Wenn true, werden nur gelöschte Projekte zurückgegeben. Standard ist false." }
+            zeigeGeloeschte: { type: SchemaType.BOOLEAN, description: "Wenn true, werden nur gelöschte Projekte zurückgegeben. Standard ist false." },
+            nurMarkiert: { type: SchemaType.BOOLEAN, description: "Wenn true, werden nur mit Stern markierte Projekte zurückgegeben." }
           }
         } as any
       },
       handler: async (args, { prisma }) => {
         const zeigeGeloeschte = !!args.zeigeGeloeschte;
+        const nurMarkiert = !!args.nurMarkiert;
+        const whereClause: any = { isDeleted: zeigeGeloeschte };
+        if (nurMarkiert) {
+          whereClause.isStarred = true;
+        }
+
         const projects = await prisma.project.findMany({
-          where: { isDeleted: zeigeGeloeschte },
+          where: whereClause,
           include: {
             tasks: { where: { isDeleted: false } },
             notes: { where: { isDeleted: false } }
@@ -104,13 +111,18 @@ export const projectsPlugin: Plugin = {
           projects: matchedProjects.map(p => ({
             id: p.id,
             name: p.name,
+            isStarred: p.isStarred,
             erstelltAm: p.createdAt.toISOString(),
             personen: p.persons,
             aufgaben: p.tasks.map((t: any) => ({
               id: String(t.id),
               titel: t.title,
               notizen: t.notes || "",
-              erledigt: t.completed
+              erledigt: t.completed,
+              isStarred: t.isStarred,
+              status: t.status || (t.completed ? "done" : (t.isPlanned ? "suggestion" : "in_progress")),
+              inPlanung: t.isPlanned,
+              faellig: t.due ? t.due.toISOString() : null
             })),
             notizen: p.notes.map((n: any) => ({
               id: n.id,
@@ -129,14 +141,18 @@ export const projectsPlugin: Plugin = {
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
-            name: { type: SchemaType.STRING, description: "Der Name des Projekts" }
+            name: { type: SchemaType.STRING, description: "Der Name des Projekts" },
+            isStarred: { type: SchemaType.BOOLEAN, description: "Ob das Projekt mit einem Stern markiert werden soll (optional)" }
           },
           required: ["name"]
         } as any
       },
       handler: async (args, { prisma }) => {
         const project = await prisma.project.create({
-          data: { name: args.name }
+          data: {
+            name: args.name,
+            isStarred: args.isStarred !== undefined ? !!args.isStarred : false
+          }
         });
         return {
           status: "success",
@@ -144,6 +160,7 @@ export const projectsPlugin: Plugin = {
           project: {
             id: project.id,
             name: project.name,
+            isStarred: project.isStarred,
             erstelltAm: project.createdAt.toISOString()
           }
         };
@@ -152,28 +169,34 @@ export const projectsPlugin: Plugin = {
     {
       definition: {
         name: "bearbeite_projekt",
-        description: "Bearbeitet den Namen eines bestehenden Projekts.",
+        description: "Bearbeitet den Namen oder Stern-Status eines bestehenden Projekts.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
             id: { type: SchemaType.INTEGER, description: "Die ID des Projekts" },
-            name: { type: SchemaType.STRING, description: "Der neue Name des Projekts" }
+            name: { type: SchemaType.STRING, description: "Der neue Name des Projekts (optional)" },
+            isStarred: { type: SchemaType.BOOLEAN, description: "Ob das Projekt mit einem Stern markiert ist (optional)" }
           },
-          required: ["id", "name"]
+          required: ["id"]
         } as any
       },
       handler: async (args, { prisma }) => {
         const id = Number(args.id);
+        const data: any = {};
+        if (args.name !== undefined) data.name = args.name;
+        if (args.isStarred !== undefined) data.isStarred = !!args.isStarred;
+
         const project = await prisma.project.update({
           where: { id },
-          data: { name: args.name }
+          data
         });
         return {
           status: "success",
-          message: `Projekt mit ID ${id} wurde in '${args.name}' umbenannt.`,
+          message: `Projekt mit ID ${id} wurde aktualisiert.`,
           project: {
             id: project.id,
-            name: project.name
+            name: project.name,
+            isStarred: project.isStarred
           }
         };
       }
@@ -429,13 +452,18 @@ export const projectsPlugin: Plugin = {
           projects: matchedProjects.map(p => ({
             id: p.id,
             name: p.name,
+            isStarred: p.isStarred,
             createdAt: p.createdAt.toISOString(),
             persons: p.persons,
             tasks: p.tasks.map((t: any) => ({
               id: String(t.id),
               title: t.title,
               notes: t.notes || "",
-              completed: t.completed
+              completed: t.completed,
+              isStarred: t.isStarred,
+              status: t.status || (t.completed ? "done" : (t.isPlanned ? "suggestion" : "in_progress")),
+              isPlanned: t.isPlanned,
+              due: t.due ? t.due.toISOString() : null
             })),
             notes: p.notes.map((n: any) => ({
               id: n.id,
@@ -448,7 +476,11 @@ export const projectsPlugin: Plugin = {
             id: String(t.id),
             title: t.title,
             notes: t.notes || "",
-            completed: t.completed
+            completed: t.completed,
+            isStarred: t.isStarred,
+            status: t.status || (t.completed ? "done" : (t.isPlanned ? "suggestion" : "in_progress")),
+            isPlanned: t.isPlanned,
+            due: t.due ? t.due.toISOString() : null
           })),
           unassignedNotes: matchedUnassignedNotes.map(n => ({
             id: n.id,
