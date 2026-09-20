@@ -1036,7 +1036,7 @@
                 <div style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
-                            <div id="mail-read-account-badge" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: rgba(137, 180, 250, 0.15); color: var(--accent); border: 1px solid rgba(137, 180, 250, 0.3);">
+                            <div id="mail-read-account-badge" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; font-weight: 700; padding: 3px 9px; border-radius: 10px; background: rgba(137, 180, 250, 0.15); color: var(--accent); border: 1px solid rgba(137, 180, 250, 0.3);">
                                 <!-- Account Badge -->
                             </div>
                             <div id="mail-read-person-badge" style="display: none; align-items: center; gap: 4px;">
@@ -1045,8 +1045,8 @@
                         </div>
                     </div>
 
-                    <h3 id="mail-read-subject" style="color: white; margin: 2px 0 4px 0; font-size: 1.15rem; word-break: break-word; line-height: 1.35; font-weight: 700;">Betreff</h3>
-                    <div style="font-size: 0.8rem; opacity: 0.8; display: flex; flex-direction: column; gap: 3px;">
+                    <h3 id="mail-read-subject" style="color: white; margin: 2px 0 6px 0; font-size: 1.25rem; word-break: break-word; line-height: 1.35; font-weight: 700;">Betreff</h3>
+                    <div style="font-size: 0.88rem; opacity: 0.85; display: flex; flex-direction: column; gap: 4px;">
                         <div><strong>Von:</strong> <span id="mail-read-from"></span></div>
                         <div><strong>An:</strong> <span id="mail-read-to"></span></div>
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
@@ -1062,7 +1062,7 @@
                 </div>
 
                 <!-- Mail Body Container (Sicher bereinigtes HTML / Text mit Auto-Fit & Dark Mode) -->
-                <div id="mail-read-body" class="mail-body-container" style="width: 100%; padding: 10px 4px; background: #14141e; font-size: 0.92rem; line-height: 1.6; color: #cdd6f4; box-sizing: border-box;">
+                <div id="mail-read-body" class="mail-body-container" style="width: 100%; padding: 12px 6px; background: #14141e; font-size: 1.05rem; line-height: 1.65; color: #cdd6f4; box-sizing: border-box;">
                     <div id="mail-read-content" class="mail-read-content">
                         <!-- Mail Inhalt -->
                     </div>
@@ -1564,6 +1564,13 @@
                 lastActiveView = viewName;
             }
 
+            // Close mail read modal if open and navigating away from mail view
+            if (typeof isClosingMailReadModal !== 'undefined' && !isClosingMailReadModal && document.body.classList.contains('mail-read-active') && viewName !== 'mail') {
+                if (typeof closeMailReadModal === 'function') {
+                    closeMailReadModal();
+                }
+            }
+
             // Remove all view classes from body
             document.body.classList.remove('view-chat', 'view-dashboard', 'view-calendar', 'view-timer', 'view-tasks', 'view-projects', 'view-plugins', 'view-settings', 'view-history', 'view-memory', 'view-journal', 'view-mail');
             
@@ -1702,6 +1709,11 @@
         window.switchMobileView = switchMobileView;
 
         function toggleDashboardChat() {
+            if (document.body.classList.contains('mail-read-active')) {
+                if (typeof closeMailReadModal === 'function') closeMailReadModal();
+                switchMobileView('dashboard');
+                return;
+            }
             if (document.body.classList.contains('view-dashboard')) {
                 switchMobileView('chat');
             } else {
@@ -1719,6 +1731,9 @@
 
         function handleDrawerJournal() {
             closeMobileDrawer();
+            if (document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
+                closeMailReadModal();
+            }
             switchMobileView('journal');
         }
         window.handleDrawerJournal = handleDrawerJournal;
@@ -4396,6 +4411,11 @@
         };
 
         function showSection(name) {
+            if (name !== 'login' && (name === 'chat' || name === 'history' || name === 'settings')) {
+                if (typeof isClosingMailReadModal !== 'undefined' && !isClosingMailReadModal && document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
+                    closeMailReadModal();
+                }
+            }
             const loginSec = document.getElementById('login-section');
             const mobileTopBar = document.getElementById('mobile-top-bar');
             if (name === 'login') {
@@ -5966,16 +5986,16 @@
                             : mailDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
 
                         html += `
-                            <div class="arbeitstisch-item" onclick="openMailReadModal(${m.id})">
-                                <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;">
+                            <div class="arbeitstisch-item" onclick="openMailReadModal(${m.id}, 'dashboard')">
+                                <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1;">
                                     <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
-                                        <div style="display: flex; align-items: center; gap: 5px; min-width: 0; flex: 1;">
+                                        <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
                                             <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0;"></span>
-                                            <strong style="font-size: 0.78rem; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escFrom}</strong>
+                                            <strong style="font-size: 0.88rem; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escFrom}</strong>
                                         </div>
-                                        <span style="font-size: 0.65rem; opacity: 0.5; flex-shrink: 0;">${timeStr}</span>
+                                        <span style="font-size: 0.72rem; opacity: 0.65; flex-shrink: 0;">${timeStr}</span>
                                     </div>
-                                    <span style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.85); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escSubject}</span>
+                                    <span style="font-size: 0.84rem; color: rgba(255, 255, 255, 0.88); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escSubject}</span>
                                 </div>
                             </div>
                         `;
@@ -6450,6 +6470,11 @@
         }
 
         function focusWidget(name) {
+            if (typeof isClosingMailReadModal !== 'undefined' && !isClosingMailReadModal && document.body.classList.contains('mail-read-active') && name !== 'mail') {
+                if (typeof closeMailReadModal === 'function') {
+                    closeMailReadModal();
+                }
+            }
             if (document.body.classList.contains('mobile-mode')) {
                 switchMobileView(name);
                 const el = document.getElementById('widget-' + name);
@@ -6578,44 +6603,44 @@
             }
 
             // 2. Postfach-Pills (Konto-Filter)
-            html += `<div style="display: flex; gap: 5px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none;">`;
+            html += `<div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 3px; scrollbar-width: none;">`;
             const allActiveStyle = activeMailAccountFilter === null ? 'background: var(--accent); color: #11111b; font-weight: bold; border-color: var(--accent);' : 'background: rgba(255,255,255,0.04); color: var(--text); border-color: rgba(255,255,255,0.1);';
-            html += `<button onclick="filterMailByAccount(null)" class="nav-btn" style="flex: 0 0 auto; height: 25px; font-size: 0.7rem; padding: 0 9px; border-radius: 12px; ${allActiveStyle}">Alle Konten (${rawEmails.length})</button>`;
+            html += `<button onclick="filterMailByAccount(null)" class="nav-btn" style="flex: 0 0 auto; height: 28px; font-size: 0.78rem; padding: 0 11px; border-radius: 14px; ${allActiveStyle}">Alle Konten (${rawEmails.length})</button>`;
             
             accounts.forEach(acc => {
                 const isSelected = Number(activeMailAccountFilter) === Number(acc.id);
                 const color = acc.color || '#89b4fa';
                 const pillStyle = isSelected ? `background: ${color}; color: #11111b; font-weight: bold; border-color: ${color};` : `background: rgba(255,255,255,0.04); color: var(--text); border-color: rgba(255,255,255,0.1);`;
                 const icon = acc.email.toLowerCase().includes('web.de') ? '🟠' : (acc.email.toLowerCase().includes('gmail') ? '🔴' : '✉️');
-                html += `<button onclick="filterMailByAccount(${acc.id})" class="nav-btn" style="flex: 0 0 auto; height: 25px; font-size: 0.7rem; padding: 0 9px; border-radius: 12px; ${pillStyle}">${icon} ${escapeHtml(acc.email)}</button>`;
+                html += `<button onclick="filterMailByAccount(${acc.id})" class="nav-btn" style="flex: 0 0 auto; height: 28px; font-size: 0.78rem; padding: 0 11px; border-radius: 14px; ${pillStyle}">${icon} ${escapeHtml(acc.email)}</button>`;
             });
             html += `</div>`;
 
             // 3. Kategorie-Pills (nur anzeigen wenn benutzerdefinierte Kategorien existieren)
             if (categories && categories.length > 0) {
-                html += `<div style="display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none;">`;
+                html += `<div style="display: flex; gap: 5px; overflow-x: auto; padding-bottom: 3px; scrollbar-width: none;">`;
                 const isAllCatSelected = activeMailCategoryFilter === null;
                 const allCatStyle = isAllCatSelected ? 'background: rgba(137, 180, 250, 0.25); color: var(--accent); font-weight: bold; border: 1px solid var(--accent);' : 'background: rgba(255,255,255,0.03); color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.06);';
-                html += `<button onclick="filterMailByCategory(null)" class="nav-btn" style="flex: 0 0 auto; height: 23px; font-size: 0.68rem; padding: 0 8px; border-radius: 6px; ${allCatStyle}">🏷️ Alle</button>`;
+                html += `<button onclick="filterMailByCategory(null)" class="nav-btn" style="flex: 0 0 auto; height: 26px; font-size: 0.74rem; padding: 0 9px; border-radius: 8px; ${allCatStyle}">🏷️ Alle</button>`;
                 
                 categories.forEach(cat => {
                     const catName = typeof cat === 'object' ? cat.name : cat;
                     const catIcon = (typeof cat === 'object' && cat.icon) ? cat.icon : '🏷️';
                     const isCatSelected = activeMailCategoryFilter === catName;
                     const catStyle = isCatSelected ? 'background: rgba(137, 180, 250, 0.25); color: var(--accent); font-weight: bold; border: 1px solid var(--accent);' : 'background: rgba(255,255,255,0.03); color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.06);';
-                    html += `<button onclick="filterMailByCategory('${escapeHtml(catName)}')" class="nav-btn" style="flex: 0 0 auto; height: 23px; font-size: 0.68rem; padding: 0 8px; border-radius: 6px; ${catStyle}">${catIcon} ${escapeHtml(catName)}</button>`;
+                    html += `<button onclick="filterMailByCategory('${escapeHtml(catName)}')" class="nav-btn" style="flex: 0 0 auto; height: 26px; font-size: 0.74rem; padding: 0 9px; border-radius: 8px; ${catStyle}">${catIcon} ${escapeHtml(catName)}</button>`;
                 });
                 html += `</div>`;
             }
 
             // 4. Emails List
             if (filteredEmails.length === 0) {
-                html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 15px 0;">Keine passenden E-Mails vorhanden.</p>`;
+                html += `<p style="font-size: 0.85rem; opacity: 0.6; text-align: center; margin: 15px 0;">Keine passenden E-Mails vorhanden.</p>`;
             } else {
-                html += `<div style="display: flex; flex-direction: column; gap: 6px;">`;
+                html += `<div style="display: flex; flex-direction: column; gap: 7px;">`;
                 filteredEmails.forEach(e => {
                     const escSubject = escapeHtml(e.subject || '(Kein Betreff)').replace(/'/g, "\\'");
-                    const unreadBadge = !e.isRead ? `<span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; margin-right: 4px; flex-shrink: 0;" title="Ungelesen"></span>` : '';
+                    const unreadBadge = !e.isRead ? `<span style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; margin-right: 5px; flex-shrink: 0;" title="Ungelesen"></span>` : '';
                     const unreadBg = !e.isRead ? 'rgba(137, 180, 250, 0.08)' : 'rgba(255,255,255,0.02)';
                     const unreadBorder = !e.isRead ? 'rgba(137, 180, 250, 0.25)' : 'rgba(255,255,255,0.05)';
                     const subjectWeight = !e.isRead ? '700' : '500';
@@ -6628,13 +6653,13 @@
                     const isToday = getLocalDateString(dateObj) === getLocalDateString();
                     const dateStr = isToday ? dateObj.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr' : dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
 
-                    const attachBadge = e.hasAttachments ? ` <span style="font-size: 0.7rem;" title="Mit Anhang">📎</span>` : '';
+                    const attachBadge = e.hasAttachments ? ` <span style="font-size: 0.75rem;" title="Mit Anhang">📎</span>` : '';
 
                     // Person Badge (nur anzeigen, wenn zugeordnet)
                     let personHtml = '';
                     if (e.personId && e.personName) {
                         personHtml = `
-                            <span onclick="event.stopPropagation(); openPersonProfileModal(${e.personId})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.68rem; font-weight: 700; color: #cba6f7; background: rgba(203, 166, 247, 0.12); border: 1px solid rgba(203, 166, 247, 0.3); padding: 1px 6px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(203, 166, 247, 0.25)'" onmouseout="this.style.background='rgba(203, 166, 247, 0.12)'" title="Personenprofil im Gedächtnis öffnen">
+                            <span onclick="event.stopPropagation(); openPersonProfileModal(${e.personId})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.74rem; font-weight: 700; color: #cba6f7; background: rgba(203, 166, 247, 0.12); border: 1px solid rgba(203, 166, 247, 0.3); padding: 2px 7px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(203, 166, 247, 0.25)'" onmouseout="this.style.background='rgba(203, 166, 247, 0.12)'" title="Personenprofil im Gedächtnis öffnen">
                                 👤 ${escapeHtml(e.personName)}
                             </span>
                         `;
@@ -6644,12 +6669,12 @@
                     let catHtml = '';
                     const mailCats = (e.category || '').split(',').map(c => c.trim()).filter(Boolean);
                     if (mailCats.length > 0) {
-                        catHtml = `<div style="display: inline-flex; align-items: center; gap: 3px; flex-wrap: wrap;">`;
+                        catHtml = `<div style="display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap;">`;
                         mailCats.forEach(catName => {
                             const matchedCat = categories.find(c => (typeof c === 'object' ? c.name : c).toLowerCase() === catName.toLowerCase());
                             const catIcon = (matchedCat && typeof matchedCat === 'object' && matchedCat.icon) ? matchedCat.icon : '🏷️';
                             catHtml += `
-                                <span onclick="event.stopPropagation(); filterMailByCategory('${escapeHtml(catName)}')" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.65rem; color: var(--accent); background: rgba(137, 180, 250, 0.08); border: 1px solid rgba(137, 180, 250, 0.2); padding: 1px 6px; border-radius: 6px; cursor: pointer; transition: all 0.15s;" onmouseover="this.style.background='rgba(137, 180, 250, 0.2)'" onmouseout="this.style.background='rgba(137, 180, 250, 0.08)'" title="Nach dieser Kategorie filtern">
+                                <span onclick="event.stopPropagation(); filterMailByCategory('${escapeHtml(catName)}')" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.72rem; color: var(--accent); background: rgba(137, 180, 250, 0.08); border: 1px solid rgba(137, 180, 250, 0.2); padding: 2px 7px; border-radius: 6px; cursor: pointer; transition: all 0.15s;" onmouseover="this.style.background='rgba(137, 180, 250, 0.2)'" onmouseout="this.style.background='rgba(137, 180, 250, 0.08)'" title="Nach dieser Kategorie filtern">
                                     ${catIcon} ${escapeHtml(catName)}
                                 </span>
                             `;
@@ -6665,31 +6690,31 @@
                     ` : '';
 
                     const mailContent = `
-                        <div class="mail-item-card" data-mail-card-id="${e.id}" style="display: flex; flex-direction: column; gap: 5px; padding: 9px 11px; border-radius: 8px; background: ${unreadBg}; border: 1px solid ${unreadBorder}; border-left: 3.5px solid ${accColor}; cursor: pointer; width: 100%; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='${unreadBg}'">
+                        <div class="mail-item-card" data-mail-card-id="${e.id}" style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 8px; background: ${unreadBg}; border: 1px solid ${unreadBorder}; border-left: 3.5px solid ${accColor}; cursor: pointer; width: 100%; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='${unreadBg}'">
                             <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
                                 <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
                                     ${unreadBadge}
-                                    <span style="font-size: 0.82rem; font-weight: 600; color: ${subjectColor}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    <span style="font-size: 0.92rem; font-weight: 600; color: ${subjectColor}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                         ${escapeHtml(e.fromName || e.from)}
                                     </span>
                                     ${attachBadge}
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
-                                    <span style="font-size: 0.65rem; font-weight: 700; padding: 1px 6px; border-radius: 10px; background: rgba(255,255,255,0.05); color: ${accColor}; border: 1px solid ${accColor};" title="Empfangen auf: ${escapeHtml(e.accountEmail)}">
+                                <div style="display: flex; align-items: center; gap: 5px; flex-shrink: 0;">
+                                    <span style="font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 10px; background: rgba(255,255,255,0.05); color: ${accColor}; border: 1px solid ${accColor};" title="Empfangen auf: ${escapeHtml(e.accountEmail)}">
                                         ${accIcon} ${escapeHtml(e.accountEmail)}
                                     </span>
-                                    <span style="font-size: 0.68rem; opacity: 0.5; margin-left: 4px;">${dateStr}</span>
+                                    <span style="font-size: 0.74rem; opacity: 0.6; margin-left: 4px;">${dateStr}</span>
                                 </div>
                             </div>
 
-                            <div style="font-size: 0.78rem; font-weight: ${subjectWeight}; color: ${subjectColor}; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%;">
+                            <div style="font-size: 0.88rem; font-weight: ${subjectWeight}; color: ${subjectColor}; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%;">
                                 ${escapeHtml(e.subject || '(Kein Betreff)')}
                             </div>
 
                             <!-- Person & Kategorie Meta Tags (nur wenn zugewiesen) -->
                             ${metaTagsHtml}
 
-                            ${e.snippet ? `<div style="font-size: 0.72rem; opacity: 0.6; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(e.snippet)}</div>` : ''}
+                            ${e.snippet ? `<div style="font-size: 0.80rem; opacity: 0.72; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(e.snippet)}</div>` : ''}
                         </div>
                     `;
                     const escMailSubject = escapeHtml(e.subject || '(Kein Betreff)').replace(/"/g, '&quot;');
@@ -6942,6 +6967,19 @@
                         el.style.borderColor = 'rgba(255, 255, 255, 0.1)';
                     }
                 }
+
+                // 6. Font size normalization: Ensure no tiny text inside email
+                if (el.style.fontSize) {
+                    const fs = el.style.fontSize.trim().toLowerCase();
+                    const val = parseFloat(fs);
+                    if ((fs.endsWith('px') && val < 14) || (fs.endsWith('pt') && val < 10.5) || (fs.endsWith('rem') && val < 0.9)) {
+                        el.style.fontSize = '14.5px';
+                    }
+                }
+                if (el.tagName === 'FONT' && el.getAttribute('size') && parseInt(el.getAttribute('size')) <= 2) {
+                    el.removeAttribute('size');
+                    el.style.fontSize = '14.5px';
+                }
             });
         }
         window.applyEmailDarkMode = applyEmailDarkMode;
@@ -6961,9 +6999,16 @@
             // Only scale if the content is genuinely wider than the screen (e.g. 600px+ fixed tables)
             if (availableWidth > 50 && contentWidth > availableWidth + 4) {
                 const scale = Math.floor((availableWidth / contentWidth) * 1000) / 1000;
-                if (scale < 1 && scale > 0.3) {
-                    contentEl.style.zoom = scale;
+                // Never scale down below 0.88 to prevent text from becoming unreadably tiny.
+                // Wide tables can be smoothly scrolled horizontally if needed.
+                const safeScale = Math.max(scale, 0.88);
+                if (safeScale < 1) {
+                    contentEl.style.zoom = safeScale;
                 }
+                bodyEl.style.overflowX = 'auto';
+                bodyEl.style.webkitOverflowScrolling = 'touch';
+            } else {
+                bodyEl.style.overflowX = 'visible';
             }
         }
         window.autoFitEmailContent = autoFitEmailContent;
@@ -7022,9 +7067,29 @@
         }
         window.linkCurrentReadMailToChat = linkCurrentReadMailToChat;
 
-        async function openMailReadModal(id) {
+        let mailOriginView = null;
+        let isClosingMailReadModal = false;
+
+        async function openMailReadModal(id, explicitOrigin = null) {
             currentReadMailId = id;
             dismissMailNotification(id);
+
+            // Determine and remember the origin view before switching
+            if (explicitOrigin) {
+                mailOriginView = explicitOrigin;
+            } else if (document.body.classList.contains('view-dashboard') || (typeof lastActiveView !== 'undefined' && lastActiveView === 'dashboard')) {
+                mailOriginView = 'dashboard';
+            } else if (document.body.classList.contains('view-chat') || (typeof lastActiveView !== 'undefined' && lastActiveView === 'chat')) {
+                mailOriginView = 'chat';
+            } else if (document.body.classList.contains('view-calendar') || (typeof lastActiveView !== 'undefined' && lastActiveView === 'calendar')) {
+                mailOriginView = 'calendar';
+            } else if (document.body.classList.contains('view-projects') || (typeof lastActiveView !== 'undefined' && lastActiveView === 'projects')) {
+                mailOriginView = 'projects';
+            } else if (document.body.classList.contains('view-memory') || (typeof lastActiveView !== 'undefined' && lastActiveView === 'memory')) {
+                mailOriginView = 'memory';
+            } else {
+                mailOriginView = 'mail';
+            }
 
             // Active page state
             document.body.classList.add('mail-read-active');
@@ -7043,13 +7108,32 @@
             if (searchBar) searchBar.style.display = 'none';
             if (readBar) readBar.style.display = 'flex';
 
+            // Back-Button Tooltip & Titel dynamisch anpassen
+            const backTitle = mailOriginView === 'dashboard' ? 'Zurück zum Arbeitstisch' : (mailOriginView !== 'mail' ? `Zurück zu ${mailOriginView}` : 'Zurück zum Posteingang');
+            const mobBackBtn = document.querySelector('#header-mail-read-bar button[onclick="closeMailReadModal()"]');
+            if (mobBackBtn) {
+                mobBackBtn.title = backTitle;
+                mobBackBtn.setAttribute('aria-label', backTitle);
+            }
+
             // Desktop Top Panel Header anpassen
             const desktopActions = document.getElementById('desktop-mail-read-actions');
             const desktopBackBtn = document.getElementById('desktop-mail-back-btn');
             if (desktopActions) desktopActions.style.display = 'flex';
-            if (desktopBackBtn) desktopBackBtn.style.display = 'inline-flex';
+            if (desktopBackBtn) {
+                desktopBackBtn.style.display = 'inline-flex';
+                desktopBackBtn.title = backTitle;
+                desktopBackBtn.setAttribute('aria-label', backTitle);
+            }
             const titleEl = document.getElementById('plugin-view-title');
             if (titleEl) titleEl.textContent = 'E-Mail lesen';
+
+            // Push history state so hardware / browser back button works cleanly
+            try {
+                if (!window.history.state || !window.history.state.isMailReadModalOpen) {
+                    window.history.pushState({ isMailReadModalOpen: true, mailId: id }, '');
+                }
+            } catch (_) {}
 
             // Nach oben scrollen
             const topPanel = document.querySelector('.top-panel');
@@ -8161,36 +8245,60 @@
         }
         window.promptLinkPersonToMail = promptLinkPersonToMail;
 
-        function closeMailReadModal() {
-            const modal = document.getElementById('mail-read-modal');
-            if (modal) modal.style.display = 'none';
-            document.body.classList.remove('mail-read-active');
-            document.body.classList.remove('modal-active');
-            currentReadMailId = null;
-            currentReadMailData = null;
-            mailViewDarkMode = true;
-            updateMailThemeBtnUI(true);
+        function closeMailReadModal(fromPopState = false) {
+            if (isClosingMailReadModal) return;
+            isClosingMailReadModal = true;
+            try {
+                const modal = document.getElementById('mail-read-modal');
+                if (modal) modal.style.display = 'none';
+                document.body.classList.remove('mail-read-active');
+                document.body.classList.remove('modal-active');
+                currentReadMailId = null;
+                currentReadMailData = null;
+                mailViewDarkMode = true;
+                updateMailThemeBtnUI(true);
 
-            // Contextual header toggling (Mobile)
-            const defaultBar = document.getElementById('header-mail-default-bar');
-            const searchBar = document.getElementById('header-mail-search-bar');
-            const readBar = document.getElementById('header-mail-read-bar');
-            if (readBar) readBar.style.display = 'none';
-            if (currentMailSearchQuery && searchBar) {
-                searchBar.style.display = 'flex';
-                if (defaultBar) defaultBar.style.display = 'none';
-            } else if (defaultBar) {
-                defaultBar.style.display = 'flex';
-                if (searchBar) searchBar.style.display = 'none';
+                // Contextual header toggling (Mobile)
+                const defaultBar = document.getElementById('header-mail-default-bar');
+                const searchBar = document.getElementById('header-mail-search-bar');
+                const readBar = document.getElementById('header-mail-read-bar');
+                if (readBar) readBar.style.display = 'none';
+                if (currentMailSearchQuery && searchBar) {
+                    searchBar.style.display = 'flex';
+                    if (defaultBar) defaultBar.style.display = 'none';
+                } else if (defaultBar) {
+                    defaultBar.style.display = 'flex';
+                    if (searchBar) searchBar.style.display = 'none';
+                }
+
+                // Desktop controls
+                const desktopActions = document.getElementById('desktop-mail-read-actions');
+                const desktopBackBtn = document.getElementById('desktop-mail-back-btn');
+                if (desktopActions) desktopActions.style.display = 'none';
+                if (desktopBackBtn) desktopBackBtn.style.display = 'none';
+                const titleEl = document.getElementById('plugin-view-title');
+                if (titleEl) titleEl.textContent = 'E-Mails (Posteingang)';
+
+                // Sync history state if user clicked on-screen back button
+                if (!fromPopState && window.history.state && window.history.state.isMailReadModalOpen) {
+                    try {
+                        window.history.back();
+                    } catch (_) {}
+                }
+
+                // Return to origin view if different from 'mail' (e.g. Arbeitstisch)
+                const targetView = mailOriginView;
+                mailOriginView = null;
+                if (targetView && targetView !== 'mail') {
+                    if (typeof focusWidget === 'function') {
+                        focusWidget(targetView);
+                    } else if (typeof switchMobileView === 'function') {
+                        switchMobileView(targetView);
+                    }
+                }
+            } finally {
+                isClosingMailReadModal = false;
             }
-
-            // Desktop controls
-            const desktopActions = document.getElementById('desktop-mail-read-actions');
-            const desktopBackBtn = document.getElementById('desktop-mail-back-btn');
-            if (desktopActions) desktopActions.style.display = 'none';
-            if (desktopBackBtn) desktopBackBtn.style.display = 'none';
-            const titleEl = document.getElementById('plugin-view-title');
-            if (titleEl) titleEl.textContent = 'E-Mails (Posteingang)';
         }
         window.closeMailReadModal = closeMailReadModal;
 
@@ -9760,6 +9868,9 @@
         
         window.handleDrawerNewChat = function() {
             closeMobileDrawer();
+            if (document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
+                closeMailReadModal();
+            }
             currentConversationId = null;
             chatBox.innerHTML = '<div class="message ai">Ein neuer Chat wurde gestartet. Wie kann ich dir helfen?</div>';
             showSection('chat');
@@ -9767,6 +9878,9 @@
         
         window.handleDrawerSettings = function() {
             closeMobileDrawer();
+            if (document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
+                closeMailReadModal();
+            }
             openMobileSettings();
         };
         
@@ -9782,26 +9896,41 @@
         
         window.handleDrawerDashboard = function() {
             closeMobileDrawer();
+            if (document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
+                closeMailReadModal();
+            }
             focusWidget('dashboard');
         };
 
         window.handleDrawerCalendar = function() {
             closeMobileDrawer();
+            if (document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
+                closeMailReadModal();
+            }
             focusWidget('calendar');
         };
 
         window.handleDrawerProjects = function() {
             closeMobileDrawer();
+            if (document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
+                closeMailReadModal();
+            }
             focusWidget('projects');
         };
 
         window.handleDrawerMail = function() {
             closeMobileDrawer();
+            if (document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
+                closeMailReadModal();
+            }
             focusWidget('mail');
         };
 
         window.handleDrawerMemory = function() {
             closeMobileDrawer();
+            if (document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
+                closeMailReadModal();
+            }
             focusWidget('memory');
         };
 
@@ -9855,6 +9984,26 @@
                 console.error("Fehler beim Wiederherstellen der Aufgabe:", e);
             }
         };
+
+        // Popstate / Back button listener for Mail Read Modal & views
+        window.addEventListener('popstate', function(e) {
+            if (document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
+                closeMailReadModal(true);
+            }
+        });
+
+        // Capacitor Android hardware / gesture back button support
+        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
+            try {
+                window.Capacitor.Plugins.App.addListener('backButton', function(data) {
+                    if (document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
+                        closeMailReadModal();
+                    }
+                });
+            } catch (err) {
+                console.error("Capacitor backButton listener registration error:", err);
+            }
+        }
 
     </script>
 </body>

@@ -1737,14 +1737,17 @@ body.mobile-mode .top-panel > div:first-child {
 .mail-body-container {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     color: #cdd6f4;
-    line-height: 1.6;
+    font-size: 1.05rem !important;
+    line-height: 1.65 !important;
     background: #14141e;
     box-sizing: border-box;
     width: 100%;
     max-width: 100%;
     word-break: normal;
-    overflow: visible !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
     touch-action: auto !important;
+    -webkit-overflow-scrolling: touch;
 }
 
 .mail-read-content {
@@ -1752,6 +1755,18 @@ body.mobile-mode .top-panel > div:first-child {
     max-width: 100%;
     margin: 0 auto;
     box-sizing: border-box;
+    font-size: 1.05rem !important;
+    line-height: 1.65 !important;
+}
+
+.mail-read-content p,
+.mail-read-content div,
+.mail-read-content td,
+.mail-read-content th,
+.mail-read-content span,
+.mail-read-content li {
+    font-size: max(0.98rem, inherit);
+    line-height: 1.6;
 }
 
 /* Ensure top-level email wrapper tables fit screen width without distorting inner columns */
@@ -1795,6 +1810,8 @@ body.mobile-mode .top-panel > div:first-child {
     white-space: pre-wrap !important;
     word-break: break-word !important;
     font-family: inherit;
+    font-size: 1.02rem !important;
+    line-height: 1.6 !important;
 }
 
 .mail-body-container blockquote {
