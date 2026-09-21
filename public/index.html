@@ -5836,18 +5836,34 @@
             const todayStr = getLocalDateString();
             const todayDateObj = new Date();
 
-            // 1. Calendar: Today's Appointments & Tasks
+            // 1. Calendar: Today's Appointments & Tasks (Matches Timeline Day for Today 1:1)
             const calendarWidget = widgets.find(w => w.type === 'calendar_overview');
             let todayEvents = [];
+            let todayOverdueTasks = [];
+            let todayCompletedTasks = [];
+            let todayDiaryEntries = [];
             let calTasks = [];
+
             if (calendarWidget && calendarWidget.data) {
                 const days = calendarWidget.data.timeline || calendarWidget.data.days || [];
                 const todayDay = days.find(d => d.date === todayStr);
+                const globalOverdue = calendarWidget.data.overdueTasks || window.timelineOverdueTasks || [];
+
                 if (todayDay) {
-                    todayEvents = (todayDay.events || []).filter(e => !e.isTask);
-                    (todayDay.events || []).filter(e => e.isTask).forEach(t => calTasks.push(t));
-                    (todayDay.overdueTasks || []).forEach(t => calTasks.push(t));
+                    todayOverdueTasks = (todayDay.overdueTasks && todayDay.overdueTasks.length > 0) ? todayDay.overdueTasks : globalOverdue;
+                    todayEvents = todayDay.events || [];
+                    todayCompletedTasks = todayDay.completedTasks || [];
+                    todayDiaryEntries = todayDay.diaryEntries || [];
+                } else if (globalOverdue.length > 0) {
+                    todayOverdueTasks = globalOverdue;
                 }
+
+                // Collect tasks for Arbeitstisch Card 3 (Aufgaben)
+                todayEvents.filter(e => e.isTask).forEach(t => calTasks.push(t));
+                todayOverdueTasks.forEach(t => calTasks.push(t));
+            } else if (window.timelineOverdueTasks && window.timelineOverdueTasks.length > 0) {
+                todayOverdueTasks = window.timelineOverdueTasks;
+                todayOverdueTasks.forEach(t => calTasks.push(t));
             }
 
             // 2. Projects & Starred Items
@@ -5924,7 +5940,7 @@
                     <div class="arbeitstisch-grid">
             `;
 
-            // 1. Heutige Termine
+            // 1. Heutige Termine (Timeline Parity: Overdue Tasks, Today Events & Tasks, Diary, Completed)
             html += `
                 <div class="arbeitstisch-card">
                     <div class="arbeitstisch-card-header">
@@ -5936,28 +5952,202 @@
                     </div>
                     <div class="arbeitstisch-card-body">
             `;
-            if (todayEvents.length > 0) {
-                todayEvents.forEach(ev => {
-                    const escTitle = escapeHtml(ev.title || 'Termin');
-                    const timeBadge = getEventTimeBadge(ev);
-                    const descText = ev.description ? `<div style="font-size: 0.7rem; opacity: 0.6; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(ev.description)}</div>` : '';
+
+            // 1a. Ausstehende Aufgaben (Overdue)
+            if (todayOverdueTasks.length > 0) {
+                html += `
+                    <div style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px;">
+                        <div style="font-size: 0.7rem; font-weight: 700; color: var(--off); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px;">
+                            <span>⚠️ Ausstehende Aufgaben (${todayOverdueTasks.length})</span>
+                        </div>
+                `;
+                todayOverdueTasks.forEach(t => {
+                    const rawTaskId = String(t.id).replace('task-', '');
+                    const escTitle = escapeHtml(t.title || 'Aufgabe');
+                    const escListTitle = escapeHtml(t.listTitle || 'Standard');
+                    const recurrenceVal = t.recurrence || 'none';
+                    const isRecurring = recurrenceVal && recurrenceVal !== 'none';
+                    const repeatBadge = isRecurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrend: ${recurrenceVal}">🔄</span>` : '';
+                    
+                    let dueText = '';
+                    if (t.due) {
+                        const dateObj = new Date(t.due);
+                        const dueStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : t.due;
+                        dueText = `Ausstehend (fällig seit ${dueStr})`;
+                    } else {
+                        dueText = 'Ausstehend (ohne Datum)';
+                    }
+
                     html += `
-                        <div class="arbeitstisch-item" onclick="handleEntityClick(event, 'event', '${ev.id}')">
-                            <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;">
+                        <div class="arbeitstisch-item" style="border-left: 3.5px solid var(--off); background: rgba(243, 139, 168, 0.08); border-color: rgba(243, 139, 168, 0.25);">
+                            <input type="checkbox" class="task-checkbox" data-task-id="${rawTaskId}" data-tasklist-id="${escListTitle}" onchange="completeTask(this)" onclick="event.stopPropagation()" style="margin-top: 2px;">
+                            <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; cursor: pointer;" onclick="handleEntityClick(event, 'task', '${rawTaskId}')">
                                 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                    <strong style="font-size: 0.82rem; color: #ffffff; overflow: hidden; text-overflow: ellipsis;">${escTitle}</strong>
-                                    ${timeBadge}
-                                    ${ev.isPlanned ? `<span style="font-size: 0.65rem; color: #f9e2af; font-weight: bold; background: rgba(249, 226, 175, 0.15); border: 1px solid rgba(249, 226, 175, 0.3); padding: 1px 5px; border-radius: 4px;">🟡 In Planung</span>` : ''}
+                                    <strong style="font-size: 0.82rem; color: #ffffff; line-height: 1.3; word-break: break-word;">${escTitle}</strong>
+                                    ${repeatBadge}
                                 </div>
-                                ${descText}
+                                <div style="font-size: 0.7rem; color: var(--off); font-weight: 600; display: flex; align-items: center; gap: 3px;">
+                                    <span>⚠️ ${escapeHtml(dueText)}</span>
+                                </div>
                             </div>
                         </div>
                     `;
                 });
-            } else {
+                html += `</div>`;
+            }
+
+            // 1b. Termine & heutige Aufgaben
+            if (todayEvents.length > 0) {
+                if (todayOverdueTasks.length > 0) {
+                    html += `
+                        <div style="font-size: 0.7rem; font-weight: 700; color: rgba(255, 255, 255, 0.7); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 6px; margin-bottom: 5px;">
+                            <span>📅 Termine & Aufgaben heute</span>
+                        </div>
+                    `;
+                }
+                html += `<div style="display: flex; flex-direction: column; gap: 5px;">`;
+                todayEvents.forEach(ev => {
+                    if (ev.isTask) {
+                        const rawTaskId = String(ev.id).replace('task-', '');
+                        const escTitle = escapeHtml(ev.title || 'Aufgabe');
+                        const escListTitle = escapeHtml(ev.listTitle || 'Standard');
+                        const isRecurring = ev.recurring || (ev.recurrence && ev.recurrence !== 'none');
+                        const repeatBadge = isRecurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrend: ${ev.recurrence}">🔄</span>` : '';
+                        const checkedAttr = ev.completed ? 'checked' : '';
+                        const textStyle = ev.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
+
+                        let taskTimeBadge = '';
+                        if (ev.time) {
+                            const d = new Date(ev.time);
+                            if (!isNaN(d.getTime())) {
+                                if (d.getHours() !== 0 || d.getMinutes() !== 0) {
+                                    const timeStr = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                                    taskTimeBadge = `<span style="background: rgba(137, 180, 250, 0.15); color: var(--accent); font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold;">${timeStr} Uhr</span>`;
+                                } else {
+                                    taskTimeBadge = `<span style="background: rgba(137, 180, 250, 0.15); color: var(--accent); font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold;">📅 Heute</span>`;
+                                }
+                            }
+                        }
+
+                        let personsHtml = '';
+                        if (ev.persons && ev.persons.length > 0) {
+                            ev.persons.forEach(p => {
+                                personsHtml += `
+                                    <span onclick="event.stopPropagation(); openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.68rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 1px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer;">
+                                      👤 ${escapeHtml(p.name)}
+                                    </span>
+                                `;
+                            });
+                        }
+
+                        const descText = ev.description ? `<div style="font-size: 0.7rem; opacity: 0.6; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(ev.description)}</div>` : '';
+
+                        html += `
+                            <div class="arbeitstisch-item">
+                                <input type="checkbox" class="task-checkbox" data-task-id="${rawTaskId}" data-tasklist-id="${escListTitle}" onchange="completeTask(this)" ${checkedAttr} onclick="event.stopPropagation()" style="margin-top: 2px;">
+                                <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; cursor: pointer;" onclick="handleEntityClick(event, 'task', '${rawTaskId}')">
+                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                        <span style="font-size: 0.82rem; color: #ffffff; line-height: 1.3; ${textStyle}"><strong style="color: var(--accent);">[Aufgabe]</strong> ${escTitle}</span>
+                                        ${repeatBadge}
+                                        ${taskTimeBadge}
+                                        ${ev.isPlanned ? `<span style="font-size: 0.65rem; color: #f9e2af; font-weight: bold; background: rgba(249, 226, 175, 0.15); border: 1px solid rgba(249, 226, 175, 0.3); padding: 1px 5px; border-radius: 4px;">🟡 In Planung</span>` : ''}
+                                    </div>
+                                    ${personsHtml ? `<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 2px;">${personsHtml}</div>` : ''}
+                                    ${descText}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        const escTitle = escapeHtml(ev.title || 'Termin');
+                        const isRec = ev.recurring || ev.isRecurring;
+                        const repeatBadge = isRec ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
+                        const rescheduleBadge = ev.originalStart ? ` <span style="background: rgba(249, 226, 175, 0.15); color: #f9e2af; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase;" title="Dieser Termin wurde verschoben">verschoben</span>` : '';
+                        const originalTimeText = ev.originalStart ? ` <span style="font-size: 0.68rem; opacity: 0.65; color: #f9e2af;">(ursprünglich: ${new Date(ev.originalStart).toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit'})} ${new Date(ev.originalStart).toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'})})</span>` : '';
+                        const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
+                        const titleCancelStyle = ev.isCancelled ? 'color: var(--off); text-decoration: line-through;' : '';
+                        const rescheduleBorder = ev.originalStart ? 'border-left: 3px solid #f9e2af;' : '';
+                        const birthdayStyle = ev.isBirthday ? 'background: rgba(245, 194, 231, 0.08); border-color: rgba(245, 194, 231, 0.25); border-left: 3px solid #f5c2e7;' : '';
+                        const timeBadge = getEventTimeBadge(ev);
+
+                        let personsHtml = '';
+                        if (ev.persons && ev.persons.length > 0) {
+                            ev.persons.forEach(p => {
+                                personsHtml += `
+                                    <span onclick="event.stopPropagation(); openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.68rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 1px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer;">
+                                      👤 ${escapeHtml(p.name)}
+                                    </span>
+                                `;
+                            });
+                        }
+
+                        const descText = ev.description ? `<div style="font-size: 0.7rem; opacity: 0.6; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(ev.description)}</div>` : '';
+
+                        html += `
+                            <div class="arbeitstisch-item" onclick="handleEntityClick(event, 'event', '${ev.id}')" style="${birthdayStyle} ${rescheduleBorder}">
+                                <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;">
+                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                        <strong style="font-size: 0.82rem; color: #ffffff; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; ${titleCancelStyle}">${escTitle}</strong>
+                                        ${repeatBadge}
+                                        ${rescheduleBadge}
+                                        ${originalTimeText}
+                                        ${reasonHtml}
+                                        ${timeBadge}
+                                        ${ev.isPlanned ? `<span style="font-size: 0.65rem; color: #f9e2af; font-weight: bold; background: rgba(249, 226, 175, 0.15); border: 1px solid rgba(249, 226, 175, 0.3); padding: 1px 5px; border-radius: 4px;">🟡 In Planung</span>` : ''}
+                                    </div>
+                                    ${personsHtml ? `<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 2px;">${personsHtml}</div>` : ''}
+                                    ${descText}
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+                html += `</div>`;
+            }
+
+            // 1c. Tagebucheinträge heute (falls vorhanden)
+            if (todayDiaryEntries.length > 0) {
+                html += `
+                    <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 8px;">
+                        <div style="font-size: 0.7rem; font-weight: bold; color: #fab387; text-transform: uppercase; letter-spacing: 0.5px;">📝 Tagebucheinträge (${todayDiaryEntries.length})</div>
+                `;
+                todayDiaryEntries.forEach(e => {
+                    const timeStr = new Date(e.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                    html += `
+                        <div style="background: rgba(250, 179, 135, 0.06); border: 1px solid rgba(250, 179, 135, 0.2); padding: 6px 9px; border-radius: 6px; font-size: 0.78rem; display: flex; flex-direction: column; gap: 2px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <strong style="color: #fab387; font-size: 0.78rem;">${escapeHtml(e.title || "Tagebucheintrag")}</strong>
+                                <span style="font-size: 0.65rem; opacity: 0.5;">${timeStr} Uhr</span>
+                            </div>
+                            <div style="white-space: pre-wrap; word-break: break-word; line-height: 1.25; font-size: 0.72rem; opacity: 0.85;">${escapeHtml(e.content)}</div>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            }
+
+            // 1d. Heute erledigte Aufgaben
+            if (todayCompletedTasks.length > 0) {
+                html += `
+                    <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 8px;">
+                        <div style="font-size: 0.7rem; font-weight: bold; color: #89b4fa; text-transform: uppercase; letter-spacing: 0.5px;">✅ Heute erledigt (${todayCompletedTasks.length})</div>
+                `;
+                todayCompletedTasks.forEach(t => {
+                    const doneTime = t.completedAt ? new Date(t.completedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+                    html += `
+                        <div style="background: rgba(137, 180, 250, 0.05); border: 1px solid rgba(137, 180, 250, 0.18); padding: 5px 8px; border-radius: 6px; font-size: 0.74rem; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: var(--text); opacity: 0.75; text-decoration: line-through;">✔️ ${escapeHtml(t.title)}</span>
+                            <span style="font-size: 0.65rem; color: #89b4fa;">${doneTime ? 'um ' + doneTime + ' Uhr' : 'erledigt'}</span>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            }
+
+            // 1e. Empty state (wenn keinerlei Einträge für heute)
+            if (todayOverdueTasks.length === 0 && todayEvents.length === 0 && todayDiaryEntries.length === 0 && todayCompletedTasks.length === 0) {
                 html += `
                     <div style="padding: 14px 10px; background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.1); border-radius: 8px; text-align: center; color: rgba(255, 255, 255, 0.6); font-size: 0.78rem;">
-                        <span>✨ Keine Termine für heute – Dein Kalender ist frei.</span>
+                        <span>✨ Keine Termine oder fälligen Aufgaben für heute – Dein Kalender ist frei.</span>
                     </div>
                 `;
             }

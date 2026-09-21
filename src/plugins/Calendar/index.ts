@@ -287,20 +287,24 @@ export async function getEventsForRange(start: Date, end: Date, prisma: any): Pr
       originalEnd: null,
       fuzzyTime: o.fuzzyTime
     })),
-    ...dbTasks.map((t: any) => ({
-      id: `task-${t.id}`,
-      title: t.title,
-      description: t.notes || "",
-      time: t.due.toISOString(),
-      endTime: t.due.toISOString(),
-      isAllDay: true,
-      isTask: true,
-      completed: t.completed,
-      recurring: t.recurrence !== null && t.recurrence !== "none",
-      recurrence: t.recurrence,
-      listTitle: t.listTitle,
-      isPlanned: t.isPlanned
-    })),
+    ...dbTasks.map((t: any) => {
+      const d = t.due ? new Date(t.due) : null;
+      const isAllDayTask = !d || (d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getHours() === 0 && d.getMinutes() === 0);
+      return {
+        id: `task-${t.id}`,
+        title: t.title,
+        description: t.notes || "",
+        time: t.due ? t.due.toISOString() : null,
+        endTime: t.due ? t.due.toISOString() : null,
+        isAllDay: isAllDayTask,
+        isTask: true,
+        completed: t.completed,
+        recurring: t.recurrence !== null && t.recurrence !== "none",
+        recurrence: t.recurrence,
+        listTitle: t.listTitle,
+        isPlanned: t.isPlanned
+      };
+    }),
     ...birthdayEvents
   ];
 
