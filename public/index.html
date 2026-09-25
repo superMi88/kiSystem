@@ -88,6 +88,11 @@
             <div class="drawer-search">
                 <input type="text" id="drawer-history-query" placeholder="Verlauf durchsuchen..." oninput="handleDrawerHistorySearch()">
             </div>
+            <div class="drawer-history-filter-tabs">
+                <button type="button" class="drawer-tab-btn active" data-drawer-filter="all" onclick="setDrawerHistoryFilter('all')">Alle</button>
+                <button type="button" class="drawer-tab-btn" data-drawer-filter="chat" onclick="setDrawerHistoryFilter('chat')">Chats</button>
+                <button type="button" class="drawer-tab-btn" data-drawer-filter="agent_run" onclick="setDrawerHistoryFilter('agent_run')">🤖 Agent Runs</button>
+            </div>
             <div id="drawer-history-list" class="drawer-history-list">
                 <!-- Dynamischer Verlauf -->
             </div>
@@ -225,6 +230,9 @@
                         </button>
                         <button id="mail-read-link-btn" onclick="linkCurrentReadMailToChat()" class="header-action-btn" title="In Chat verlinken" aria-label="In Chat verlinken">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                        </button>
+                        <button id="mail-read-agent-run-btn" onclick="openAgentRunForCurrentMail()" class="header-action-btn" title="Agent Run ansehen" aria-label="Agent Run ansehen" style="color: #cba6f7;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="12" cy="5" r="2"></circle><path d="M12 7v4"></path><line x1="8" y1="16" x2="8" y2="16"></line><line x1="16" y1="16" x2="16" y2="16"></line></svg>
                         </button>
                         <button id="mail-read-theme-btn" onclick="toggleMailViewTheme()" class="header-action-btn" title="Ansicht: Dunkel / Original umschalten" aria-label="Ansicht umschalten">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
@@ -1038,6 +1046,9 @@
                     <button id="desktop-mail-read-link-btn" onclick="linkCurrentReadMailToChat()" class="header-action-btn" title="In Chat verlinken" aria-label="In Chat verlinken">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
                     </button>
+                    <button id="desktop-mail-read-agent-run-btn" onclick="openAgentRunForCurrentMail()" class="header-action-btn" title="Agent Run ansehen" aria-label="Agent Run ansehen" style="color: #cba6f7;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="12" cy="5" r="2"></circle><path d="M12 7v4"></path><line x1="8" y1="16" x2="8" y2="16"></line><line x1="16" y1="16" x2="16" y2="16"></line></svg>
+                    </button>
                     <button id="desktop-mail-read-theme-btn" onclick="toggleMailViewTheme()" class="header-action-btn" title="Ansicht: Dunkel / Original umschalten" aria-label="Ansicht umschalten">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
                     </button>
@@ -1061,6 +1072,9 @@
                             </div>
                             <div id="mail-read-person-badge" style="display: none; align-items: center; gap: 4px;">
                                 <!-- Person Badge -->
+                            </div>
+                            <div id="mail-read-agent-run-badge" style="display: none; align-items: center; gap: 4px;">
+                                <!-- Agent Run Badge / Button -->
                             </div>
                         </div>
                     </div>
@@ -1186,6 +1200,11 @@
                 <div class="history-search">
                     <input type="text" id="history-query" placeholder="Suchen...">
                 </div>
+                <div class="history-filter-tabs">
+                    <button type="button" class="history-tab-btn active" data-history-filter="all" onclick="setHistoryFilter('all')">💬 Alle</button>
+                    <button type="button" class="history-tab-btn" data-history-filter="chat" onclick="setHistoryFilter('chat')">👤 Chats</button>
+                    <button type="button" class="history-tab-btn" data-history-filter="agent_run" onclick="setHistoryFilter('agent_run')">🤖 Agent Runs</button>
+                </div>
                 <div class="history-list" id="history-list">
                     <!-- Verlaufseinträge kommen hierher -->
                 </div>
@@ -1210,8 +1229,10 @@
                     <div class="settings-group">
                         <label>KI-Modell</label>
                         <select id="settings-ai-model" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.88rem; color-scheme: dark;">
-                            <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash (Empfohlen, schnell & Werkzeug-Support)</option>
-                            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Sehr leicht & schnell)</option>
+                            <option value="gemini-3.5-flash" selected>Gemini 3.5 Flash (Empfohlen, hohe Intelligenz & Werkzeug-Support)</option>
+                            <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Flaggschiff, maximale Denkfähigkeit)</option>
+                            <option value="gemini-2.5-flash">Gemini 2.5 Flash (Klassisch)</option>
+                            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Leicht)</option>
                         </select>
                         <span class="hotkey-tip">Standard-Modell für Chat & KI-Werkzeuge.</span>
                     </div>
@@ -1252,6 +1273,45 @@
                         <label>Plugins aktivieren/deaktivieren</label>
                         <div id="plugins-list" class="plugins-list" style="margin-top: 10px;">
                             <!-- Plugins werden dynamisch geladen -->
+                        </div>
+                    </div>
+
+                    <!-- Registrierte KI-Tools (Übersicht) -->
+                    <div class="settings-group" id="registered-tools-group">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label style="margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px;">
+                                    🛠️ Registrierte KI-Tools
+                                </label>
+                                <span id="tools-badge-count" style="background: rgba(137, 180, 250, 0.15); color: var(--accent); border: 1px solid rgba(137, 180, 250, 0.3); font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; font-weight: 600;">
+                                    0 Tools
+                                </span>
+                            </div>
+                            <button type="button" onclick="loadRegisteredToolsOverview()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text); border-radius: 6px; padding: 5px 10px; font-size: 0.75rem; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'" title="Aktualisieren">
+                                🔄 Neu laden
+                            </button>
+                        </div>
+                        <span class="hotkey-tip" style="margin-bottom: 10px; display: block;">
+                            Übersicht aller dynamisch per Push registrierten Remote-Tools sowie interner System-Tools.
+                        </span>
+                        
+                        <!-- Filter & Suche -->
+                        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                            <div style="position: relative; flex: 1;">
+                                <input type="text" id="tools-search-input" placeholder="Nach Tool, Beschreibung oder Provider suchen..." oninput="filterRegisteredToolsView()" style="width: 100%; padding: 8px 12px 8px 30px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.82rem;">
+                                <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); opacity: 0.5; font-size: 0.8rem;">🔍</span>
+                            </div>
+                            <select id="tools-filter-type" onchange="filterRegisteredToolsView()" style="padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.82rem; color-scheme: dark;">
+                                <option value="all">Alle Tools</option>
+                                <option value="dynamic" selected>🌐 Dynamisch (Remote)</option>
+                                <option value="internal">⚙️ Intern (Plugins)</option>
+                            </select>
+                        </div>
+
+                        <!-- Liste der registrierten Tools -->
+                        <div id="registered-tools-list" class="plugins-list" style="max-height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px;">
+                            <!-- Wird dynamisch befüllt -->
+                            <div style="text-align: center; padding: 20px; color: #a6adc8; font-size: 0.85rem;">Lade registrierte Tools...</div>
                         </div>
                     </div>
                 </div>
@@ -3273,6 +3333,9 @@
         }
 
         function getServerUrl() {
+            if (window.location && window.location.protocol && window.location.protocol.startsWith('http') && !window.Capacitor) {
+                return window.location.origin;
+            }
             return (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || 'https://ki.kleiner-wald-server.de';
         }
 
@@ -3282,7 +3345,11 @@
                 return path;
             }
             const cleanPath = path.startsWith('/') ? path : '/' + path;
-            if (window.Capacitor || window.location.protocol === 'file:' || window.location.origin === 'null' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            // Wenn wir direkt im Browser/Electron über HTTP laufen und nicht in Capacitor
+            if (window.location && window.location.protocol && window.location.protocol.startsWith('http') && !window.Capacitor) {
+                return cleanPath;
+            }
+            if (window.Capacitor || window.location.protocol === 'file:' || window.location.origin === 'null') {
                 const baseUrl = getServerUrl().replace(/\/+$/, '');
                 return baseUrl + cleanPath;
             }
@@ -3913,7 +3980,7 @@
                 
                 const modelSelect = document.getElementById('settings-ai-model');
                 if (modelSelect) {
-                    modelSelect.value = settings.aiModel || 'gemini-2.5-flash';
+                    modelSelect.value = settings.aiModel || 'gemini-3.5-flash';
                 }
 
                 try {
@@ -3925,6 +3992,9 @@
                 } catch (err) {
                     console.warn("Konnte Plugins-Liste nicht vom Server laden:", err);
                 }
+
+                // Registrierte KI-Tools Übersicht laden
+                loadRegisteredToolsOverview();
             } catch (e) {
                 console.error("Fehler beim Laden der Einstellungen:", e);
             }
@@ -4010,6 +4080,257 @@
             });
         }
 
+        // ==========================================
+        // Dynamische & Registrierte KI-Tools Übersicht
+        // ==========================================
+        let allRegisteredToolsCache = {
+            dynamicTools: [],
+            internalTools: []
+        };
+
+        function escapeToolHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        window.toggleToolParams = function(id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const isVisible = el.style.display !== 'none';
+            el.style.display = isVisible ? 'none' : 'block';
+            const btn = el.previousElementSibling;
+            if (btn && btn.tagName === 'BUTTON') {
+                btn.textContent = isVisible ? '📋 Parameter anzeigen ▾' : '📋 Parameter ausblenden ▴';
+            }
+        };
+
+        window.toggleDynamicToolStatus = async function(toolName, isEnabled) {
+            try {
+                const res = await fetch(getApiUrl('/api/tools/' + encodeURIComponent(toolName) + '/toggle'), {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ isEnabled: isEnabled })
+                });
+                if (res.ok) {
+                    console.log(`Tool '${toolName}' Status aktualisiert:`, isEnabled);
+                    const tool = allRegisteredToolsCache.dynamicTools.find(t => t.name === toolName);
+                    if (tool) tool.isEnabled = isEnabled;
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert(`Fehler beim Ändern des Tool-Status: ${err.error || res.statusText}`);
+                    loadRegisteredToolsOverview();
+                }
+            } catch (e) {
+                console.error("Fehler beim Umschalten des Tool-Status:", e);
+                alert(`Netzwerkfehler: ${e.message}`);
+                loadRegisteredToolsOverview();
+            }
+        };
+
+        window.deleteDynamicTool = async function(toolName) {
+            if (!confirm(`Möchtest du das externe Tool '${toolName}' wirklich deregistrieren und löschen?`)) {
+                return;
+            }
+            try {
+                const res = await fetch(getApiUrl('/api/tools/' + encodeURIComponent(toolName)), {
+                    method: 'DELETE'
+                });
+                if (res.ok) {
+                    allRegisteredToolsCache.dynamicTools = allRegisteredToolsCache.dynamicTools.filter(t => t.name !== toolName);
+                    filterRegisteredToolsView();
+                    const badge = document.getElementById('tools-badge-count');
+                    if (badge) {
+                        const dynCount = allRegisteredToolsCache.dynamicTools.length;
+                        badge.textContent = `${dynCount} Remote / ${dynCount + allRegisteredToolsCache.internalTools.length} Gesamt`;
+                    }
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert(`Fehler beim Löschen des Tools: ${err.error || res.statusText}`);
+                }
+            } catch (e) {
+                console.error("Fehler beim Löschen:", e);
+                alert(`Fehler beim Löschen: ${e.message}`);
+            }
+        };
+
+        window.loadRegisteredToolsOverview = async function() {
+            const listEl = document.getElementById('registered-tools-list');
+            const badgeEl = document.getElementById('tools-badge-count');
+            if (listEl) {
+                listEl.innerHTML = '<div style="text-align: center; padding: 15px; color: #a6adc8; font-size: 0.8rem;">Lade registrierte Werkzeuge...</div>';
+            }
+
+            try {
+                // Versuche die umfassende Overview-API abzurufen
+                const res = await fetch(getApiUrl('/api/tools/overview'));
+                if (res.ok) {
+                    const data = await res.json();
+                    allRegisteredToolsCache = {
+                        dynamicTools: Array.isArray(data.dynamicTools) ? data.dynamicTools : [],
+                        internalTools: Array.isArray(data.internalTools) ? data.internalTools : []
+                    };
+                } else {
+                    // Fallback: reine /api/tools Liste
+                    const fbRes = await fetch(getApiUrl('/api/tools'));
+                    if (fbRes.ok) {
+                        const fbData = await fbRes.json();
+                        allRegisteredToolsCache = {
+                            dynamicTools: Array.isArray(fbData.tools) ? fbData.tools.map(t => ({ ...t, isDynamic: true })) : [],
+                            internalTools: []
+                        };
+                    }
+                }
+
+                const dynCount = allRegisteredToolsCache.dynamicTools.length;
+                const totalCount = dynCount + allRegisteredToolsCache.internalTools.length;
+                if (badgeEl) {
+                    badgeEl.textContent = `${dynCount} Remote / ${totalCount} Gesamt`;
+                }
+
+                filterRegisteredToolsView();
+            } catch (err) {
+                console.warn("Fehler beim Abrufen der registrierten Tools:", err);
+                if (listEl) {
+                    listEl.innerHTML = `<div style="text-align: center; padding: 15px; color: #f38ba8; font-size: 0.8rem;">Konnte Tools nicht laden (${escapeToolHtml(err.message)})</div>`;
+                }
+            }
+        };
+
+        window.filterRegisteredToolsView = function() {
+            const listEl = document.getElementById('registered-tools-list');
+            if (!listEl) return;
+
+            const searchInput = document.getElementById('tools-search-input');
+            const filterSelect = document.getElementById('tools-filter-type');
+            
+            const query = (searchInput?.value || '').toLowerCase().trim();
+            const filterType = filterSelect?.value || 'dynamic';
+
+            let itemsToDisplay = [];
+
+            if (filterType === 'all') {
+                itemsToDisplay = [
+                    ...allRegisteredToolsCache.dynamicTools,
+                    ...allRegisteredToolsCache.internalTools
+                ];
+            } else if (filterType === 'dynamic') {
+                itemsToDisplay = [...allRegisteredToolsCache.dynamicTools];
+            } else if (filterType === 'internal') {
+                itemsToDisplay = [...allRegisteredToolsCache.internalTools];
+            }
+
+            if (query) {
+                itemsToDisplay = itemsToDisplay.filter(item => {
+                    const name = (item.name || '').toLowerCase();
+                    const desc = (item.description || '').toLowerCase();
+                    const prov = (item.provider || item.pluginName || '').toLowerCase();
+                    return name.includes(query) || desc.includes(query) || prov.includes(query);
+                });
+            }
+
+            if (itemsToDisplay.length === 0) {
+                listEl.innerHTML = `
+                    <div style="text-align: center; padding: 25px 15px; background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.08); border-radius: 8px;">
+                        <span style="font-size: 1.5rem; display: block; margin-bottom: 6px;">🔍</span>
+                        <span style="color: #a6adc8; font-size: 0.85rem;">Keine passenden Tools gefunden.</span>
+                        <div style="color: #6c7086; font-size: 0.75rem; margin-top: 4px;">
+                            ${filterType === 'dynamic' ? 'Bislang wurden keine externen Tools per Push registriert.' : 'Passe deinen Suchbegriff oder Filter an.'}
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            listEl.innerHTML = '';
+            itemsToDisplay.forEach(tool => {
+                const card = document.createElement('div');
+                card.className = 'registered-tool-card';
+                card.style.cssText = 'background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; transition: all 0.2s;';
+
+                const isDyn = !!tool.isDynamic;
+                const safeName = escapeToolHtml(tool.name);
+                const safeDesc = escapeToolHtml(tool.description || 'Keine Beschreibung verfügbar.');
+                const safeProvider = escapeToolHtml(tool.provider || tool.pluginName || (isDyn ? 'extern' : 'System'));
+                const paramsId = `tool-params-${safeName.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+
+                let headerRightHtml = '';
+                if (isDyn) {
+                    headerRightHtml = `
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label class="switch" title="Tool aktivieren / deaktivieren">
+                                <input type="checkbox" onchange="toggleDynamicToolStatus('${safeName}', this.checked)" ${tool.isEnabled !== false ? 'checked' : ''}>
+                                <span class="slider"></span>
+                            </label>
+                            <button type="button" onclick="deleteDynamicTool('${safeName}')" title="Tool deregistrieren" style="background: transparent; border: none; color: #f38ba8; cursor: pointer; padding: 4px; font-size: 0.85rem; border-radius: 4px; opacity: 0.75;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.75'">🗑️</button>
+                        </div>
+                    `;
+                } else {
+                    const statusColor = tool.isEnabled !== false ? '#a6e3a1' : '#f38ba8';
+                    const statusText = tool.isEnabled !== false ? '● Aktiv' : '○ Deaktiviert';
+                    headerRightHtml = `
+                        <span style="font-size: 0.72rem; color: ${statusColor}; font-weight: 600;">${statusText}</span>
+                    `;
+                }
+
+                let metaDetailsHtml = '';
+                if (isDyn && tool.endpointUrl) {
+                    const safeEndpoint = escapeToolHtml(tool.endpointUrl);
+                    const authText = tool.authentication?.type
+                        ? `${escapeToolHtml(tool.authentication.type)} ${tool.authentication.header ? '(' + escapeToolHtml(tool.authentication.header) + ')' : ''}`
+                        : 'keine';
+                    metaDetailsHtml = `
+                        <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 2px;">
+                            <div style="font-size: 0.72rem; color: #89dceb; font-family: monospace; word-break: break-all; background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 5px; display: flex; align-items: center; gap: 6px;">
+                                <span>🔗</span>
+                                <span>${safeEndpoint}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 12px; font-size: 0.7rem; color: #fab387;">
+                                <span>🔑 Auth: <b>${authText}</b></span>
+                                ${tool.updatedAt ? `<span style="color: #6c7086;">🕒 ${new Date(tool.updatedAt).toLocaleDateString('de-DE')}</span>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                const paramsJson = JSON.stringify(tool.parameters || {}, null, 2);
+
+                card.innerHTML = `
+                    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                <span style="background: ${isDyn ? 'rgba(137, 180, 250, 0.15)' : 'rgba(166, 227, 161, 0.15)'}; color: ${isDyn ? 'var(--accent)' : '#a6e3a1'}; border: 1px solid ${isDyn ? 'rgba(137, 180, 250, 0.3)' : 'rgba(166, 227, 161, 0.3)'}; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: 700; letter-spacing: 0.5px;">
+                                    ${isDyn ? '🌐 REMOTE' : '⚙️ SYSTEM'}
+                                </span>
+                                <span style="background: rgba(203, 166, 247, 0.15); color: #cba6f7; border: 1px solid rgba(203, 166, 247, 0.3); font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: 600;">
+                                    ${safeProvider}
+                                </span>
+                            </div>
+                            <span style="font-family: monospace; font-size: 0.88rem; font-weight: 700; color: #ffffff; letter-spacing: 0.2px;">${safeName}</span>
+                        </div>
+                        ${headerRightHtml}
+                    </div>
+
+                    <div style="font-size: 0.78rem; color: #a6adc8; line-height: 1.4;">${safeDesc}</div>
+
+                    ${metaDetailsHtml}
+
+                    <div style="margin-top: 4px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.04);">
+                        <button type="button" onclick="toggleToolParams('${paramsId}')" style="background: transparent; border: none; color: var(--accent); font-size: 0.72rem; cursor: pointer; padding: 0; text-align: left; text-decoration: underline;">
+                            📋 Parameter anzeigen ▾
+                        </button>
+                        <div id="${paramsId}" style="display: none; margin-top: 6px; padding: 8px; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; font-size: 0.72rem; font-family: monospace; white-space: pre-wrap; color: #cdd6f4; max-height: 160px; overflow-y: auto;">${escapeToolHtml(paramsJson)}</div>
+                    </div>
+                `;
+
+                listEl.appendChild(card);
+            });
+        };
+
         openSettings.onclick = () => {
             loadSettings();
             showSection('settings');
@@ -4045,7 +4366,7 @@
             const autostart = autostartCheckbox ? autostartCheckbox.checked : false;
 
             const modelSelect = document.getElementById('settings-ai-model');
-            const aiModel = modelSelect ? modelSelect.value : 'gemini-2.5-flash';
+            const aiModel = modelSelect ? modelSelect.value : 'gemini-3.5-flash';
             
             try {
                 const res = await fetch(getApiUrl('/settings'), {
@@ -4530,71 +4851,232 @@
             }
         }
 
-        // Verlauf laden
+        // Verlauf laden & filtern
+        let allLoadedConversations = [];
+        let currentHistoryFilter = 'all';
+        let currentDrawerHistoryFilter = 'all';
+
+        window.setHistoryFilter = function(filter) {
+            currentHistoryFilter = filter;
+            document.querySelectorAll('.history-tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.historyFilter === filter);
+            });
+            applyHistoryFilter();
+        };
+
+        window.setDrawerHistoryFilter = function(filter) {
+            currentDrawerHistoryFilter = filter;
+            document.querySelectorAll('.drawer-tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.drawerFilter === filter);
+            });
+            applyDrawerHistoryFilter();
+        };
+
+        function applyHistoryFilter() {
+            const query = (historyQuery ? historyQuery.value : '').toLowerCase().trim();
+            let filtered = allLoadedConversations;
+            if (currentHistoryFilter === 'chat') {
+                filtered = filtered.filter(c => !c.isAgentRun);
+            } else if (currentHistoryFilter === 'agent_run') {
+                filtered = filtered.filter(c => !!c.isAgentRun);
+            }
+            if (query) {
+                filtered = filtered.filter(c => (c.title || '').toLowerCase().includes(query) || (c.summary || '').toLowerCase().includes(query));
+            }
+            renderHistoryListOnly(filtered);
+        }
+
+        function applyDrawerHistoryFilter() {
+            const drawerQueryInput = document.getElementById('drawer-history-query');
+            const query = (drawerQueryInput ? drawerQueryInput.value : '').toLowerCase().trim();
+            let filtered = allLoadedConversations;
+            if (currentDrawerHistoryFilter === 'chat') {
+                filtered = filtered.filter(c => !c.isAgentRun);
+            } else if (currentDrawerHistoryFilter === 'agent_run') {
+                filtered = filtered.filter(c => !!c.isAgentRun);
+            }
+            if (query) {
+                filtered = filtered.filter(c => (c.title || '').toLowerCase().includes(query) || (c.summary || '').toLowerCase().includes(query));
+            }
+            renderDrawerHistoryListOnly(filtered);
+        }
+
         async function loadHistory() {
-            const res = await fetch(getApiUrl('/conversations'));
-            const conversations = await res.json();
-            renderHistory(conversations);
+            try {
+                const res = await fetch(getApiUrl('/conversations'));
+                allLoadedConversations = await res.json();
+                applyHistoryFilter();
+                applyDrawerHistoryFilter();
+            } catch (err) {
+                console.error("Fehler beim Laden des Verlaufs:", err);
+            }
         }
 
         function renderHistory(conversations) {
+            allLoadedConversations = conversations;
+            applyHistoryFilter();
+            applyDrawerHistoryFilter();
+        }
+
+        function renderHistoryListOnly(conversations) {
+            if (!historyList) return;
             historyList.innerHTML = '';
+            if (conversations.length === 0) {
+                historyList.innerHTML = `<div style="text-align: center; padding: 25px 15px; opacity: 0.5; font-size: 0.85rem;">Keine Einträge gefunden.</div>`;
+                return;
+            }
             conversations.forEach(conv => {
                 const item = document.createElement('div');
-                item.className = 'history-item';
+                item.className = 'history-item' + (conv.isAgentRun ? ' agent-run' : '');
                 const date = new Date(conv.createdAt).toLocaleString('de-DE', { 
                     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
                 });
+
+                let badgeHtml = '';
+                if (conv.isAgentRun) {
+                    const statusClass = conv.status === 'running' ? 'running' : (conv.status === 'error' ? 'error' : 'completed');
+                    const statusText = conv.status === 'running' ? '⏳ Läuft' : (conv.status === 'error' ? '❌ Fehler' : '✅ Erledigt');
+                    const triggerIcon = conv.triggerType === 'mail' ? '✉️ E-Mail' : '🤖 Agent';
+                    badgeHtml = `
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <span style="font-size: 0.68rem; color: #cba6f7; background: rgba(203, 166, 247, 0.15); border: 1px solid rgba(203, 166, 247, 0.3); padding: 1px 6px; border-radius: 6px; font-weight: 700;">${triggerIcon}</span>
+                            <span class="agent-status-pill ${statusClass}">${statusText}</span>
+                        </div>
+                    `;
+                } else {
+                    badgeHtml = `<span style="font-size: 0.68rem; color: var(--accent); opacity: 0.8;">💬 Chat</span>`;
+                }
+
                 item.innerHTML = `
-                    <div class="date">${date}</div>
-                    <div class="title">${conv.title}</div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 6px;">
+                        <div class="date" style="margin-bottom: 0;">${date}</div>
+                        ${badgeHtml}
+                    </div>
+                    <div class="title" style="${conv.isAgentRun ? 'color: #cdd6f4; font-weight: 600;' : ''}">${escapeHtml(conv.title)}</div>
+                    ${conv.summary ? `<div style="font-size: 0.74rem; opacity: 0.7; margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3;">${escapeHtml(conv.summary)}</div>` : ''}
                 `;
                 item.onclick = () => loadConversation(conv.id);
                 historyList.appendChild(item);
             });
+        }
 
-            // Also render drawer history
+        function renderDrawerHistoryListOnly(conversations) {
             const drawerHistoryList = document.getElementById('drawer-history-list');
-            if (drawerHistoryList) {
-                drawerHistoryList.innerHTML = '';
-                conversations.forEach(conv => {
-                    const item = document.createElement('div');
-                    item.className = 'drawer-history-item';
-                    const date = new Date(conv.createdAt).toLocaleString('de-DE', { 
-                        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
-                    });
-                    item.innerHTML = `
-                        <div class="date">${date}</div>
-                        <div class="title">${conv.title}</div>
-                    `;
-                    item.onclick = () => {
-                        loadConversation(conv.id);
-                        closeMobileDrawer();
-                    };
-                    drawerHistoryList.appendChild(item);
-                });
+            if (!drawerHistoryList) return;
+            drawerHistoryList.innerHTML = '';
+            if (conversations.length === 0) {
+                drawerHistoryList.innerHTML = `<div style="text-align: center; padding: 20px 10px; opacity: 0.5; font-size: 0.8rem;">Keine Einträge gefunden.</div>`;
+                return;
             }
+            conversations.forEach(conv => {
+                const item = document.createElement('div');
+                item.className = 'drawer-history-item' + (conv.isAgentRun ? ' agent-run' : '');
+                const date = new Date(conv.createdAt).toLocaleString('de-DE', { 
+                    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
+                });
+
+                let badgeHtml = '';
+                if (conv.isAgentRun) {
+                    const statusClass = conv.status === 'running' ? 'running' : (conv.status === 'error' ? 'error' : 'completed');
+                    const statusText = conv.status === 'running' ? '⏳' : (conv.status === 'error' ? '❌' : '✅');
+                    badgeHtml = `
+                        <div style="display: flex; align-items: center; gap: 4px;">
+                            <span style="font-size: 0.65rem; color: #cba6f7; background: rgba(203, 166, 247, 0.15); border: 1px solid rgba(203, 166, 247, 0.3); padding: 1px 5px; border-radius: 6px; font-weight: 700;">🤖</span>
+                            <span class="agent-status-pill ${statusClass}" style="padding: 1px 4px;">${statusText}</span>
+                        </div>
+                    `;
+                }
+
+                item.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                        <div class="date" style="margin-bottom: 0;">${date}</div>
+                        ${badgeHtml}
+                    </div>
+                    <div class="title">${escapeHtml(conv.title)}</div>
+                    ${conv.summary ? `<div style="font-size: 0.72rem; opacity: 0.65; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(conv.summary)}</div>` : ''}
+                `;
+                item.onclick = () => {
+                    loadConversation(conv.id);
+                    closeMobileDrawer();
+                };
+                drawerHistoryList.appendChild(item);
+            });
         }
 
         async function loadConversation(id) {
-            const res = await fetch(getApiUrl(`/conversations/${id}`));
-            const messages = await res.json();
+            let messages = [];
+            let conversationMeta = null;
+            try {
+                const metaRes = await fetch(getApiUrl(`/conversations/${id}/meta`));
+                if (metaRes.ok) {
+                    const data = await metaRes.json();
+                    conversationMeta = data.conversation;
+                    messages = data.messages || [];
+                } else {
+                    const res = await fetch(getApiUrl(`/conversations/${id}`));
+                    messages = await res.json();
+                }
+            } catch (err) {
+                try {
+                    const res = await fetch(getApiUrl(`/conversations/${id}`));
+                    messages = await res.json();
+                } catch (e2) {
+                    console.error("Fehler beim Laden der Konversation:", e2);
+                }
+            }
             
             currentConversationId = id;
             chatBox.innerHTML = '';
+
+            // Wenn dies ein Agent Run ist, ein informatives Banner oben anzeigen
+            if (conversationMeta && conversationMeta.isAgentRun) {
+                const banner = document.createElement('div');
+                banner.className = 'agent-run-chat-banner';
+                
+                const statusClass = conversationMeta.status === 'running' ? 'running' : (conversationMeta.status === 'error' ? 'error' : 'completed');
+                const statusText = conversationMeta.status === 'running' 
+                    ? '<span class="agent-status-pill running">⏳ Läuft...</span>' 
+                    : (conversationMeta.status === 'error' 
+                        ? '<span class="agent-status-pill error">❌ Fehler</span>' 
+                        : '<span class="agent-status-pill completed">✅ Erledigt</span>');
+                        
+                const triggerLabel = conversationMeta.triggerType === 'mail' ? '✉️ E-Mail-Eingang' : (conversationMeta.triggerType || 'System');
+                
+                let mailBtnHtml = '';
+                if (conversationMeta.triggerType === 'mail' && conversationMeta.triggerId) {
+                    mailBtnHtml = `
+                        <button type="button" onclick="openMailReadModal(${conversationMeta.triggerId}, 'chat')" class="nav-btn" style="padding: 5px 12px; font-size: 0.74rem; background: var(--accent); color: #11111b; font-weight: 700; border-radius: 8px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.opacity='0.9'" title="Zur verknüpften E-Mail springen">
+                            ✉️ Zur E-Mail
+                        </button>
+                    `;
+                }
+                
+                banner.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 9px; min-width: 0;">
+                        <span style="font-size: 1.3rem;">🤖</span>
+                        <div style="min-width: 0;">
+                            <div style="font-size: 0.92rem; font-weight: 700; color: #cba6f7; display: flex; align-items: center; gap: 6px;">
+                                <span>Autonomer Agent Run</span>
+                                ${statusText}
+                            </div>
+                            <div style="font-size: 0.76rem; opacity: 0.75; color: var(--text);">
+                                Auslöser: ${triggerLabel} &bull; ${new Date(conversationMeta.createdAt).toLocaleString('de-DE')}
+                            </div>
+                        </div>
+                    </div>
+                    ${mailBtnHtml}
+                `;
+                chatBox.appendChild(banner);
+            }
+
             messages.forEach(msg => addMessage(msg.text, msg.role === 'user'));
-            
             showSection('chat');
         }
 
         // Suche
-        historyQuery.oninput = async () => {
-            const query = historyQuery.value.toLowerCase();
-            const res = await fetch(getApiUrl('/conversations'));
-            const conversations = await res.json();
-            const filtered = conversations.filter(c => c.title.toLowerCase().includes(query));
-            renderHistory(filtered);
-        };
+        if (historyQuery) {
+            historyQuery.oninput = () => applyHistoryFilter();
+        }
 
         // Audio Aufnahme (MediaRecorder API)
         let mediaRecorder;
@@ -5919,13 +6401,18 @@
                 return dueA.localeCompare(dueB);
             });
 
-            // 3. Mail: All unread emails
+            // 3. Mail: All unread emails (optional count)
             const mailWidget = widgets.find(w => w.pluginName === 'Mail' || (w.data && w.data.emails));
             let unreadMails = [];
             if (mailWidget && mailWidget.data) {
                 const allMails = mailWidget.data.emails || [];
                 unreadMails = allMails.filter(m => !m.isRead);
             }
+
+            // 4. Agent-Benachrichtigungen / Handlungsbedarf
+            const notifWidget = widgets.find(w => w.pluginName === 'Notifications' || w.type === 'agent_notifications');
+            const agentNotifications = (notifWidget && notifWidget.data && notifWidget.data.notifications) ? notifWidget.data.notifications : [];
+            const activeNotifs = agentNotifications.filter(n => !n.isDismissed);
 
             // 4. Timers
             const timerWidget = widgets.find(w => w.type === 'timer_list');
@@ -6257,49 +6744,116 @@
                 </div>
             `;
 
-            // 4. E-Mails (Ungelesene oder Haken bei allen gelesen)
+            // 4. Agent-Benachrichtigungen / Handlungsbedarf
+            const notifCountBadge = activeNotifs.length > 0 
+                ? `<span style="background: rgba(137, 180, 250, 0.2); color: #89b4fa; font-size: 0.72rem; padding: 2px 7px; border-radius: 12px; margin-left: 6px; font-weight: 600;">${activeNotifs.length}</span>` 
+                : '';
+
             html += `
                 <div class="arbeitstisch-card">
                     <div class="arbeitstisch-card-header">
                         <div class="arbeitstisch-card-title">
-                            <span>📬</span>
-                            <h4>E-Mails</h4>
+                            <span>🤖</span>
+                            <h4>Agent-Meldungen</h4>
+                            ${notifCountBadge}
                         </div>
                         <button type="button" onclick="focusWidget('mail')" class="arbeitstisch-card-link" title="Zum Posteingang">Posteingang ➔</button>
                     </div>
                     <div class="arbeitstisch-card-body">
             `;
-            if (unreadMails.length > 0) {
-                unreadMails.slice(0, 6).forEach(m => {
-                    const escSubject = escapeHtml(m.subject || '(Kein Betreff)');
-                    const escFrom = escapeHtml(m.fromName || m.from || 'Unbekannt');
-                    const mailDate = new Date(m.date);
-                    const timeStr = getLocalDateString(mailDate) === todayStr
-                        ? mailDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr'
-                        : mailDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+
+            if (activeNotifs.length > 0) {
+                activeNotifs.slice(0, 6).forEach(n => {
+                    const escTitle = escapeHtml(n.title || 'Benachrichtigung');
+                    const escMsg = escapeHtml(n.message || '');
+                    const notifDate = new Date(n.createdAt);
+                    const timeStr = getLocalDateString(notifDate) === todayStr
+                        ? notifDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr'
+                        : notifDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+
+                    let typeBadge = '';
+                    let borderLeftColor = 'var(--accent)';
+                    if (n.type === 'question') {
+                        typeBadge = '<span style="font-size: 0.68rem; background: rgba(203, 166, 247, 0.2); color: #cba6f7; padding: 1px 6px; border-radius: 6px; font-weight: 600;">❓ Frage</span>';
+                        borderLeftColor = '#cba6f7';
+                    } else if (n.type === 'action_required') {
+                        typeBadge = '<span style="font-size: 0.68rem; background: rgba(250, 179, 135, 0.2); color: #fab387; padding: 1px 6px; border-radius: 6px; font-weight: 600;">⚡ Wichtig</span>';
+                        borderLeftColor = '#fab387';
+                    } else {
+                        typeBadge = '<span style="font-size: 0.68rem; background: rgba(148, 226, 213, 0.2); color: #94e2d5; padding: 1px 6px; border-radius: 6px; font-weight: 600;">ℹ️ Info</span>';
+                        borderLeftColor = '#94e2d5';
+                    }
+
+                    // Interaktive Buttons (z. B. [Ja, eintragen], [Nein])
+                    let buttonsHtml = '';
+                    let buttonsList = [];
+                    if (n.buttons) {
+                        try {
+                            buttonsList = typeof n.buttons === 'string' ? JSON.parse(n.buttons) : n.buttons;
+                        } catch (e) {
+                            buttonsList = [];
+                        }
+                    }
+
+                    if (Array.isArray(buttonsList) && buttonsList.length > 0) {
+                        buttonsHtml = `<div class="arbeitstisch-notif-buttons" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">`;
+                        buttonsList.forEach(btn => {
+                            const escBtnLabel = escapeHtml(btn.label || 'Auswählen');
+                            const btnAction = btn.action || 'reply';
+                            const rawReply = btn.replyText || btn.label || '';
+                            const escReplyText = encodeURIComponent(rawReply);
+                            const isPrimary = btn.style === 'primary';
+                            const btnStyle = isPrimary 
+                                ? 'background: var(--accent); color: #11111b; font-weight: 700; border: none;' 
+                                : 'background: rgba(255, 255, 255, 0.08); color: var(--text); border: 1px solid rgba(255, 255, 255, 0.15);';
+                            
+                            buttonsHtml += `
+                                <button type="button" 
+                                    class="notif-action-btn"
+                                    style="padding: 5px 12px; font-size: 0.74rem; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px; ${btnStyle}"
+                                    onclick="handleNotificationAction(event, ${n.id}, '${escBtnLabel}', '${btnAction}', decodeURIComponent('${escReplyText}'))">
+                                    ${escBtnLabel}
+                                </button>
+                            `;
+                        });
+                        buttonsHtml += `</div>`;
+                    }
+
+                    const clickHandler = n.conversationId 
+                        ? `onclick="openNotificationConversation(event, '${n.conversationId}')"` 
+                        : '';
+                    const cursorStyle = n.conversationId ? 'cursor: pointer;' : 'cursor: default;';
+                    const runHint = n.conversationId 
+                        ? `<div style="font-size: 0.7rem; color: #cba6f7; display: flex; align-items: center; gap: 4px; margin-top: 5px; opacity: 0.85;">💬 Klicke hier, um im Agent-Chat weiterzuschreiben ➔</div>`
+                        : '';
 
                     html += `
-                        <div class="arbeitstisch-item" onclick="openMailReadModal(${m.id}, 'dashboard')">
-                            <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
-                                    <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
-                                        <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0;"></span>
-                                        <strong style="font-size: 0.88rem; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escFrom}</strong>
-                                    </div>
-                                    <span style="font-size: 0.72rem; opacity: 0.65; flex-shrink: 0;">${timeStr}</span>
+                        <div class="arbeitstisch-item notif-item" ${clickHandler} style="border-left: 3.5px solid ${borderLeftColor}; ${cursorStyle} padding: 10px 12px; display: flex; flex-direction: column; gap: 4px;" title="${n.conversationId ? 'Zum Agent Run Chat springen' : ''}">
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                                <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+                                    ${typeBadge}
+                                    <strong style="font-size: 0.88rem; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escTitle}</strong>
                                 </div>
-                                <span style="font-size: 0.84rem; color: rgba(255, 255, 255, 0.88); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escSubject}</span>
+                                <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                                    <span style="font-size: 0.72rem; opacity: 0.65;">${timeStr}</span>
+                                    <button type="button" onclick="dismissNotification(event, ${n.id})" title="Benachrichtigung schließen" style="background: none; border: none; color: rgba(255,255,255,0.4); cursor: pointer; padding: 2px 4px; font-size: 0.85rem; line-height: 1; border-radius: 4px;" onmouseover="this.style.color='#f38ba8'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">✕</button>
+                                </div>
                             </div>
+                            <div style="font-size: 0.82rem; color: rgba(255, 255, 255, 0.85); line-height: 1.35; margin-top: 2px;">
+                                ${escMsg}
+                            </div>
+                            ${buttonsHtml}
+                            ${runHint}
                         </div>
                     `;
                 });
             } else {
                 html += `
                     <div style="display: flex; align-items: center; gap: 10px; padding: 14px 12px; background: rgba(166, 227, 161, 0.08); border: 1px solid rgba(166, 227, 161, 0.2); border-radius: 8px;">
-                        <span style="font-size: 1.5rem; color: #a6e3a1; line-height: 1;">✅</span>
+                        <span style="font-size: 1.5rem; color: #a6e3a1; line-height: 1;">✨</span>
                         <div>
-                            <strong style="font-size: 0.88rem; color: #a6e3a1; display: block;">Alle E-Mails gelesen</strong>
-                            <span style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.65);">Keine neuen oder ungelesenen Nachrichten im Posteingang.</span>
+                            <strong style="font-size: 0.88rem; color: #a6e3a1; display: block;">Alles erledigt & gefiltert</strong>
+                            <span style="font-size: 0.72rem; color: rgba(255, 255, 255, 0.65);">Kein Handlungsbedarf durch Agenten oder offene Fragen.</span>
                         </div>
                     </div>
                 `;
@@ -7248,10 +7802,20 @@
                         catHtml += `</div>`;
                     }
 
-                    const metaTagsHtml = (personHtml || catHtml) ? `
+                    let agentBadgeHtml = '';
+                    if (e.agentRunId) {
+                        agentBadgeHtml = `
+                            <span onclick="event.stopPropagation(); loadAgentRun('${e.agentRunId}')" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.70rem; color: #cba6f7; background: rgba(203, 166, 247, 0.12); border: 1px solid rgba(203, 166, 247, 0.3); padding: 2px 7px; border-radius: 6px; cursor: pointer; transition: all 0.15s;" onmouseover="this.style.background='rgba(203, 166, 247, 0.25)'" onmouseout="this.style.background='rgba(203, 166, 247, 0.12)'" title="Agent Run Chatverlauf öffnen">
+                                🤖 Agent Run
+                            </span>
+                        `;
+                    }
+
+                    const metaTagsHtml = (personHtml || catHtml || agentBadgeHtml) ? `
                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                             ${personHtml}
                             ${catHtml}
+                            ${agentBadgeHtml}
                         </div>
                     ` : '';
 
@@ -7838,6 +8402,44 @@
                 if (replyBtn) replyBtn.style.display = 'inline-flex';
                 if (linkBtn) linkBtn.style.display = 'inline-flex';
 
+                // Agent Run Header-Buttons
+                const agentRunBtns = [
+                    document.getElementById('mail-read-agent-run-btn'),
+                    document.getElementById('desktop-mail-read-agent-run-btn')
+                ].filter(Boolean);
+                agentRunBtns.forEach(btn => {
+                    btn.style.display = 'inline-flex';
+                    if (mail.agentRunId || mail.agentRun) {
+                        btn.title = 'Agent Run ansehen';
+                        btn.style.color = '#cba6f7';
+                    } else {
+                        btn.title = 'Agent Run starten';
+                        btn.style.color = 'var(--text)';
+                    }
+                    btn.onclick = () => openAgentRunForCurrentMail();
+                });
+
+                // Agent Run Badge im Mail-Header
+                const agentBadgeEl = document.getElementById('mail-read-agent-run-badge');
+                if (agentBadgeEl) {
+                    agentBadgeEl.style.display = 'inline-flex';
+                    if (mail.agentRunId || mail.agentRun) {
+                        const runStatus = mail.agentRun?.status || 'completed';
+                        const statusLabel = runStatus === 'running' ? '⏳ Läuft...' : (runStatus === 'error' ? '❌ Fehler' : '✅ Erledigt');
+                        agentBadgeEl.innerHTML = `
+                            <button type="button" onclick="openAgentRunForCurrentMail()" class="nav-btn" style="padding: 2px 9px; font-size: 0.72rem; background: rgba(203, 166, 247, 0.15); color: #cba6f7; border: 1px solid rgba(203, 166, 247, 0.4); border-radius: 10px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='rgba(203, 166, 247, 0.3)'" onmouseout="this.style.background='rgba(203, 166, 247, 0.15)'" title="Agent Run Chatverlauf öffnen">
+                                🤖 Agent Run (${statusLabel})
+                            </button>
+                        `;
+                    } else {
+                        agentBadgeEl.innerHTML = `
+                            <button type="button" onclick="startAgentRunForCurrentMail()" class="nav-btn" style="padding: 2px 9px; font-size: 0.72rem; background: rgba(137, 180, 250, 0.12); color: var(--accent); border: 1px dashed rgba(137, 180, 250, 0.4); border-radius: 10px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='rgba(137, 180, 250, 0.25)'" onmouseout="this.style.background='rgba(137, 180, 250, 0.12)'" title="Agent Run für diese E-Mail starten">
+                                🤖 Agent Run starten
+                            </button>
+                        `;
+                    }
+                }
+
                 const acc = mail.account || {};
                 const accColor = acc.color || '#89b4fa';
                 const accIcon = (acc.email || '').toLowerCase().includes('web.de') ? '🟠' : ((acc.email || '').toLowerCase().includes('gmail') ? '🔴' : '✉️');
@@ -7988,6 +8590,122 @@
             updateMailReadToggleBtnUI(newStatus);
         }
         window.toggleCurrentMailReadStatus = toggleCurrentMailReadStatus;
+
+        async function openAgentRunForCurrentMail() {
+            if (!currentReadMailData) return;
+            let agentRunId = currentReadMailData.agentRunId || currentReadMailData.agentRun?.id;
+            if (!agentRunId) {
+                try {
+                    const res = await fetch(getApiUrl(`/api/agent-runs/mail/${currentReadMailData.id}`));
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.agentRun) {
+                            agentRunId = data.agentRun.id;
+                        }
+                    }
+                } catch (_) {}
+            }
+            if (agentRunId) {
+                if (typeof closeMailReadModal === 'function') {
+                    closeMailReadModal();
+                }
+                await loadConversation(agentRunId);
+            } else {
+                startAgentRunForCurrentMail();
+            }
+        }
+        window.openAgentRunForCurrentMail = openAgentRunForCurrentMail;
+
+        async function startAgentRunForCurrentMail() {
+            if (!currentReadMailData) return;
+            const mailId = currentReadMailData.id;
+            const badgeEl = document.getElementById('mail-read-agent-run-badge');
+            if (badgeEl) {
+                badgeEl.innerHTML = `<span style="font-size: 0.72rem; color: #cba6f7; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px;">⏳ Agent Run läuft...</span>`;
+            }
+            try {
+                const res = await fetch(getApiUrl(`/api/agent-runs/mail/${mailId}`), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ force: true })
+                });
+                const data = await res.json();
+                if (data.success && data.conversationId) {
+                    if (typeof closeMailReadModal === 'function') {
+                        closeMailReadModal();
+                    }
+                    await loadConversation(data.conversationId);
+                } else {
+                    alert("Agent Run konnte nicht gestartet werden: " + (data.error || "Unbekannter Fehler"));
+                }
+            } catch (err) {
+                console.error("Fehler beim Starten des Agent Runs:", err);
+                alert("Fehler beim Starten des Agent Runs: " + err.message);
+            }
+        }
+        window.startAgentRunForCurrentMail = startAgentRunForCurrentMail;
+
+        window.loadAgentRun = async function(convId) {
+            await loadConversation(convId);
+        };
+
+        async function handleNotificationAction(event, notifId, label, action, replyText) {
+            if (event) event.stopPropagation();
+            const btn = event ? event.currentTarget : null;
+            const originalHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '⏳ Wird ausgeführt...';
+            }
+
+            try {
+                const res = await fetch(getApiUrl(`/api/notifications/${notifId}/respond`), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ label, action, replyText })
+                });
+                const data = await res.json();
+                if (btn) {
+                    btn.innerHTML = '✅ Erledigt';
+                }
+                setTimeout(() => {
+                    loadTopWidgets();
+                    if (isElectron && ipcRenderer) {
+                        ipcRenderer.send('widgets-updated');
+                    }
+                }, 350);
+            } catch (err) {
+                console.error("Fehler beim Beantworten der Benachrichtigung:", err);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            }
+        }
+        window.handleNotificationAction = handleNotificationAction;
+
+        async function dismissNotification(event, notifId) {
+            if (event) event.stopPropagation();
+            try {
+                await fetch(getApiUrl(`/api/notifications/${notifId}/dismiss`), {
+                    method: 'POST'
+                });
+                loadTopWidgets();
+                if (isElectron && ipcRenderer) {
+                    ipcRenderer.send('widgets-updated');
+                }
+            } catch (err) {
+                console.error("Fehler beim Schließen der Benachrichtigung:", err);
+            }
+        }
+        window.dismissNotification = dismissNotification;
+
+        async function openNotificationConversation(event, conversationId) {
+            if (event) event.stopPropagation();
+            if (!conversationId) return;
+            await loadConversation(conversationId);
+        }
+        window.openNotificationConversation = openNotificationConversation;
 
         // ==========================================
         // Universal Multi-Selection System
@@ -10525,14 +11243,10 @@
             openMobileSettings();
         };
         
-        window.handleDrawerHistorySearch = async function() {
-            const queryInput = document.getElementById('drawer-history-query');
-            if (!queryInput) return;
-            const query = queryInput.value.toLowerCase();
-            const res = await fetch(getApiUrl('/conversations'));
-            const conversations = await res.json();
-            const filtered = conversations.filter(c => c.title.toLowerCase().includes(query));
-            renderHistory(filtered);
+        window.handleDrawerHistorySearch = function() {
+            if (typeof applyDrawerHistoryFilter === 'function') {
+                applyDrawerHistoryFilter();
+            }
         };
         
         window.handleDrawerDashboard = function() {

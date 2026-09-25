@@ -15,10 +15,17 @@ datasource db {
 
 /// [Core-System] Repräsentiert eine Chat-Unterhaltung zwischen dem Benutzer und der KI.
 model Conversation {
-  id        String        @id @default(uuid()) // Eindeutige ID des Chats (UUID)
-  title     String        @default("Neuer Chat") // Titel des Chats
-  createdAt DateTime      @default(now()) // Erstellungszeitpunkt des Chats
-  messages  ChatMessage[] // Liste der zugehörigen Chat-Nachrichten
+  id          String        @id @default(uuid()) // Eindeutige ID des Chats (UUID)
+  title       String        @default("Neuer Chat") // Titel des Chats
+  createdAt   DateTime      @default(now()) // Erstellungszeitpunkt des Chats
+  isAgentRun  Boolean       @default(false) // Flag: Handelt es sich um einen autonomen Agent-Run?
+  triggerType String?       // Art des Auslösers (z.B. "mail", "system", "manual")
+  triggerId   String?       // ID des auslösenden Objekts (z.B. CachedEmail ID)
+  status      String?       @default("completed") // Status: "running", "completed", "error"
+  summary     String?       // Zusammenfassung des Laufs
+  messages    ChatMessage[] // Liste der zugehörigen Chat-Nachrichten
+  cachedEmails CachedEmail[] // Verknüpfte E-Mails
+  notifications AgentNotification[] // Verknüpfte Benachrichtigungen
 }
 
 /// [Core-System] Speichert die einzelnen Nachrichten innerhalb einer Chat-Unterhaltung.
@@ -29,6 +36,25 @@ model ChatMessage {
   createdAt      DateTime     @default(now()) // Sendezeitpunkt der Nachricht
   conversationId String?      // Fremdschlüssel zur Conversation
   conversation   Conversation? @relation(fields: [conversationId], references: [id]) // Relation zum Chat
+}
+
+/// [Core-System] Speichert Benachrichtigungen und Handlungsbedarf von autonomen Agent Runs oder Systemereignissen.
+model AgentNotification {
+  id             Int           @id @default(autoincrement())
+  title          String        // Titel (z. B. "Neuer Terminvorschlag: Keramik bemalen")
+  message        String        // Text oder Frage der Benachrichtigung
+  type           String        @default("info") // "info", "question", "action_required"
+  priority       String        @default("normal") // "low", "normal", "high"
+  sourceType     String        @default("mail") // "mail", "system", "task", etc.
+  sourceId       String?       // ID des Auslösers (z. B. CachedEmail ID)
+  conversationId String?       // Verknüpfung zum Agent Run Chat
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  buttons        Json?         // Array von { label: string, action: string, replyText?: string, style?: string }
+  isRead         Boolean       @default(false)
+  isDismissed    Boolean       @default(false)
+  selectedButton String?       // Welcher Button wurde geklickt
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 }
 
 /// [AppLauncher Plugin] Ermöglicht das Verwalten und Starten von externen Anwendungen/Links über Kurzbefehle.
@@ -246,6 +272,8 @@ model CachedEmail {
   category       String?     // Optionale Kategorie (vom Benutzer angelegt)
   personId       Int?        // Optionale ID der zugeordneten Person aus dem Gedächtnis
   person         Person?     @relation(fields: [personId], references: [id], onDelete: SetNull) // Relation zur Person
+  agentRunId     String?     // Optionale ID des zugehörigen Agent Runs (Conversation)
+  agentRun       Conversation? @relation(fields: [agentRunId], references: [id], onDelete: SetNull) // Relation zum Agent Run
   createdAt      DateTime    @default(now()) // Abrufzeitpunkt
 
   @@unique([accountId, uid])
@@ -273,6 +301,24 @@ model TrainTrip {
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 }
+
+/// [Dynamic Tools] Verwaltet dynamisch registrierte Remote-Werkzeuge externer Dienste.
+model DynamicTool {
+  id           Int      @id @default(autoincrement())
+  name         String   @unique
+  description  String
+  parameters   Json
+  returnValues Json?
+  endpointUrl  String
+  authType     String   @default("none")
+  authHeader   String?
+  authToken    String?
+  provider     String?
+  isEnabled    Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 
 
 

@@ -81,4 +81,69 @@ export async function runAutomaticMigration(prisma: PrismaClient) {
   } catch (colErr: any) {
     console.warn("[Migration] Hinweis: Spaltenmigration für Project/Task:", colErr.message);
   }
+
+  // Schema-Migration für DynamicTool-Tabelle
+  try {
+    console.log("[Migration] Überprüfe Tabelle DynamicTool...");
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "DynamicTool" (
+        "id" SERIAL PRIMARY KEY,
+        "name" TEXT NOT NULL UNIQUE,
+        "description" TEXT NOT NULL,
+        "parameters" JSONB NOT NULL,
+        "returnValues" JSONB,
+        "endpointUrl" TEXT NOT NULL,
+        "authType" TEXT NOT NULL DEFAULT 'none',
+        "authHeader" TEXT,
+        "authToken" TEXT,
+        "provider" TEXT,
+        "isEnabled" BOOLEAN NOT NULL DEFAULT true,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log("[Migration] Tabelle DynamicTool erfolgreich verifiziert/erstellt.");
+  } catch (toolTableErr: any) {
+    console.warn("[Migration] Hinweis: Tabelle DynamicTool:", toolTableErr.message);
+  }
+
+  // Schema-Migration für Agent Runs (Conversation & CachedEmail)
+  try {
+    console.log("[Migration] Überprüfe Spalten für Agent Runs...");
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Conversation" ADD COLUMN IF NOT EXISTS "isAgentRun" BOOLEAN DEFAULT false;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Conversation" ADD COLUMN IF NOT EXISTS "triggerType" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Conversation" ADD COLUMN IF NOT EXISTS "triggerId" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Conversation" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'completed';`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Conversation" ADD COLUMN IF NOT EXISTS "summary" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CachedEmail" ADD COLUMN IF NOT EXISTS "agentRunId" TEXT;`);
+    console.log("[Migration] Agent Run Spalten erfolgreich verifiziert/migriert.");
+  } catch (agentErr: any) {
+    console.warn("[Migration] Hinweis: Spaltenmigration für Agent Runs:", agentErr.message);
+  }
+
+  // Schema-Migration für AgentNotification
+  try {
+    console.log("[Migration] Überprüfe Tabelle AgentNotification...");
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "AgentNotification" (
+        "id" SERIAL PRIMARY KEY,
+        "title" TEXT NOT NULL,
+        "message" TEXT NOT NULL,
+        "type" TEXT NOT NULL DEFAULT 'info',
+        "priority" TEXT NOT NULL DEFAULT 'normal',
+        "sourceType" TEXT NOT NULL DEFAULT 'mail',
+        "sourceId" TEXT,
+        "conversationId" TEXT REFERENCES "Conversation"("id") ON DELETE CASCADE,
+        "buttons" JSONB,
+        "isRead" BOOLEAN NOT NULL DEFAULT false,
+        "isDismissed" BOOLEAN NOT NULL DEFAULT false,
+        "selectedButton" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log("[Migration] Tabelle AgentNotification erfolgreich verifiziert/erstellt.");
+  } catch (notifErr: any) {
+    console.warn("[Migration] Hinweis: Tabelle AgentNotification:", notifErr.message);
+  }
 }

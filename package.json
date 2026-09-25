@@ -5,8 +5,11 @@
   "scripts": {
     "build": "tsc",
     "start": "node build/index.js",
+    "server": "npm run build && node build/index.js",
+    "dev:server": "npm run build && node build/index.js",
     "electron": "electron .",
-    "dev": "npx prisma db push --accept-data-loss && npm run build && concurrently \"npm start\" \"electron .\"",
+    "dev": "npm run build && concurrently \"npm start\" \"electron .\"",
+    "test:tools": "npm run build && node build/test_cross_project_integration.js",
     "generate-env": "node scripts/generate-env.js",
     "cap:sync": "npm run generate-env && npx cap sync",
     "cap:open": "npx cap open android"

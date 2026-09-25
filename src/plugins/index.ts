@@ -9,13 +9,19 @@ import { projectsPlugin } from "./Projects/index.js";
 import { tasksPlugin } from "./Tasks/index.js";
 import { journalPlugin } from "./Journal/index.js";
 import { mailPlugin } from "./Mail/index.js";
+import { notificationsPlugin } from "./Notifications/index.js";
 import { getSettings } from "../settings.js";
+
+import { DynamicToolManager } from "./dynamic/DynamicToolManager.js";
 
 export class PluginManager {
   private plugins: Plugin[] = [];
   private toolsMap: Map<string, PluginTool> = new Map();
+  public dynamicTools: DynamicToolManager;
 
   constructor(private prisma: PrismaClient) {
+    this.dynamicTools = new DynamicToolManager(prisma);
+
     // Hier werden die Plugins registriert
     this.registerPlugin(appLauncherPlugin);
     this.registerPlugin(memoryPlugin);
@@ -26,6 +32,11 @@ export class PluginManager {
     this.registerPlugin(tasksPlugin);
     this.registerPlugin(journalPlugin);
     this.registerPlugin(mailPlugin);
+    this.registerPlugin(notificationsPlugin);
+  }
+
+  async init(): Promise<void> {
+    await this.dynamicTools.init();
   }
 
   registerPlugin(plugin: Plugin) {
@@ -42,11 +53,25 @@ export class PluginManager {
   getPluginsInfo() {
     const settings = getSettings();
     const disabled = settings.disabledPlugins || [];
-    return this.plugins.map(p => ({
+    const internalPlugins = this.plugins.map(p => ({
       name: p.name,
       description: p.description,
-      enabled: !disabled.includes(p.name)
+      enabled: !disabled.includes(p.name),
+      isDynamic: false
     }));
+
+    // Dynamische Tools als Übersicht anfügen
+    const dynamicTools = this.dynamicTools.getTools();
+    if (dynamicTools.length > 0) {
+      internalPlugins.push({
+        name: "Externe Tools",
+        description: `${dynamicTools.length} dynamisch registrierte(s) Remote-Tool(s)`,
+        enabled: true,
+        isDynamic: true
+      });
+    }
+
+    return internalPlugins;
   }
 
   getGeminiTools() {
@@ -60,6 +85,11 @@ export class PluginManager {
         activeTools.push(tool.definition);
       }
     }
+
+    // Dynamische Tools für Gemini anfügen
+    const dynamicDeclarations = this.dynamicTools.getGeminiDeclarations();
+    activeTools.push(...dynamicDeclarations);
+
     return activeTools;
   }
 
@@ -78,10 +108,21 @@ export class PluginManager {
         });
       }
     }
+
+    // Dynamische MCP Tools anfügen
+    const dynamicMcp = this.dynamicTools.getMCPTools();
+    activeTools.push(...dynamicMcp);
+
     return activeTools;
   }
 
   async executeTool(name: string, args: any) {
+    // 1. Zuerst prüfen, ob es sich um ein dynamisches Remote-Tool handelt
+    if (this.dynamicTools.hasTool(name)) {
+      return await this.dynamicTools.executeTool(name, args);
+    }
+
+    // 2. Ansonsten Standard-Plugin suchen
     const settings = getSettings();
     const disabled = settings.disabledPlugins || [];
     
@@ -94,6 +135,40 @@ export class PluginManager {
     const tool = plugin.tools.find(t => t.definition.name === name);
     if (!tool) throw new Error(`Tool ${name} nicht gefunden.`);
     return await tool.handler(args, { prisma: this.prisma });
+  }
+
+  getToolsOverview() {
+    const settings = getSettings();
+    const disabled = settings.disabledPlugins || [];
+
+    const dynamicTools = this.dynamicTools.getTools().map(t => ({
+      ...t,
+      isDynamic: true
+    }));
+
+    const internalTools: any[] = [];
+    for (const plugin of this.plugins) {
+      const isPluginEnabled = !disabled.includes(plugin.name);
+      for (const tool of plugin.tools) {
+        internalTools.push({
+          name: tool.definition.name,
+          description: tool.definition.description,
+          parameters: tool.definition.parameters,
+          pluginName: plugin.name,
+          isEnabled: isPluginEnabled,
+          isDynamic: false
+        });
+      }
+    }
+
+    return {
+      success: true,
+      totalCount: dynamicTools.length + internalTools.length,
+      dynamicCount: dynamicTools.length,
+      internalCount: internalTools.length,
+      dynamicTools,
+      internalTools
+    };
   }
 
   async getAllAlerts() {

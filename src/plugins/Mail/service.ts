@@ -76,6 +76,11 @@ export interface MailAccountInput {
 
 export class MailService {
   /**
+   * Optionaler Hook/Listener, der aufgerufen wird, wenn eine neue E-Mail synchronisiert wurde (z.B. für Agent Runs).
+   */
+  static onNewEmail?: (mail: any, prisma: PrismaClient) => void | Promise<void>;
+
+  /**
    * Extrahiert die reine E-Mail-Adresse aus Strings wie 'Max Mustermann <max@web.de>' oder 'max@web.de'.
    */
   static extractEmailAddress(str: string): string {
@@ -373,18 +378,22 @@ export class MailService {
                 console.error("[MailService] Fehler bei DB-Buchungsanalyse:", dbErr);
               }
 
-              // 2. E-Mail auf Handlungsbedarf prüfen und ggf. automatisch Aufgabe erstellen
+              // 2. E-Mail auf Handlungsbedarf prüfen (Agent Run oder statische Action-Items)
               try {
-                await processEmailForActionItems({
-                  id: createdMail.id,
-                  subject: rawSubject,
-                  bodyText: rawBodyText,
-                  from: rawFrom,
-                  fromName: fromName,
-                  snippet: snippet
-                }, prisma);
+                if (MailService.onNewEmail) {
+                  MailService.onNewEmail(createdMail, prisma);
+                } else {
+                  await processEmailForActionItems({
+                    id: createdMail.id,
+                    subject: rawSubject,
+                    bodyText: rawBodyText,
+                    from: rawFrom,
+                    fromName: fromName,
+                    snippet: snippet
+                  }, prisma);
+                }
               } catch (actionErr) {
-                console.error("[MailService] Fehler bei Action-Item-Erkennung:", actionErr);
+                console.error("[MailService] Fehler bei Action-Item / Agent Run Ausführung:", actionErr);
               }
 
               if (!isRead) {

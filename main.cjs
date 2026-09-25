@@ -3,6 +3,10 @@ const path = require('path');
 const isDev = require('electron-is-dev');
 const fs = require('fs');
 
+try {
+  require('dotenv').config();
+} catch (e) {}
+
 const settingsPath = path.join(__dirname, 'settings.json');
 
 function getSettings() {
@@ -193,7 +197,9 @@ function createWindow() {
   const loadURL = () => {
     const settings = getSettings();
     const isTesting = settings.testing === true;
-    const serverUrl = isTesting ? 'http://localhost:3001' : (settings.serverUrl || 'http://localhost:3001');
+    const defaultPort = process.env.PORT || '4000';
+    const defaultUrl = `http://localhost:${defaultPort}`;
+    const serverUrl = isTesting ? defaultUrl : (settings.serverUrl || defaultUrl);
     
     console.log(`Lade URLs von Server (testing=${isTesting}): ${serverUrl}`);
     Promise.all([

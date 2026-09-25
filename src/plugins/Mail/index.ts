@@ -125,7 +125,8 @@ export const mailPlugin: Plugin = {
             inhaltHtml: mail.bodyHtml,
             hatAnhaenge: mail.hasAttachments,
             kategorie: mail.category || "Allgemein",
-            person: mail.person ? { id: mail.person.id, name: mail.person.name || mail.person.aliases[0]?.name || "Person" } : null
+            person: mail.person ? { id: mail.person.id, name: mail.person.name || mail.person.aliases[0]?.name || "Person" } : null,
+            agentRunId: mail.agentRunId || null
           }
         };
       }
@@ -489,7 +490,8 @@ export const mailPlugin: Plugin = {
               category: e.category || null,
               personId: e.personId,
               personName: personName,
-              personEmail: e.person?.email || null
+              personEmail: e.person?.email || null,
+              agentRunId: (e as any).agentRunId || null
             };
           }),
           unreadCount: recentResult.unreadCount,

@@ -20,6 +20,8 @@ import { calculateNextDueDate } from "./plugins/Tasks/index.js";
 import { getDaySummaryData, getRangeSummaryData, parseLocalDate } from "./plugins/Journal/index.js";
 import { MailService } from "./plugins/Mail/service.js";
 import { runTrainTripMonitor } from "./plugins/Mail/dbBahnService.js";
+import { createDynamicToolsRouter } from "./routes/dynamicToolsRouter.js";
+import { AgentRunService } from "./services/agentRunService.js";
 
 dotenv.config();
 
@@ -32,6 +34,9 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static('public'));
+
+// Dynamische Tools API-Endpunkte
+app.use("/api/tools", createDynamicToolsRouter(pluginManager.dynamicTools, pluginManager));
 
 const server = new Server(
   { name: "ki-system-server", version: "1.0.0" },
@@ -65,7 +70,16 @@ app.get("/sse", async (req, res) => {
  * Conversations API
  */
 app.get("/conversations", async (req, res) => {
+  const type = req.query.type as string | undefined;
+  const where: any = {};
+  if (type === 'agent_run') {
+    where.isAgentRun = true;
+  } else if (type === 'chat') {
+    where.isAgentRun = false;
+  }
+
   const conversations = await prisma.conversation.findMany({
+    where,
     orderBy: { createdAt: 'desc' }
   });
   res.json(conversations);
@@ -77,6 +91,160 @@ app.get("/conversations/:id", async (req, res) => {
     orderBy: { createdAt: 'asc' }
   });
   res.json(messages);
+});
+
+app.get("/conversations/:id/meta", async (req, res) => {
+  try {
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: req.params.id }
+    });
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation nicht gefunden" });
+    }
+    const messages = await prisma.chatMessage.findMany({
+      where: { conversationId: req.params.id },
+      orderBy: { createdAt: 'asc' }
+    });
+    res.json({ conversation, messages });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * Agent Runs API
+ */
+app.get("/api/agent-runs", async (req, res) => {
+  try {
+    const triggerType = req.query.triggerType as string | undefined;
+    const status = req.query.status as string | undefined;
+    const runs = await AgentRunService.getAgentRuns(prisma, { triggerType, status });
+    res.json(runs);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/agent-runs/mail/:id", async (req, res) => {
+  try {
+    const emailId = Number(req.params.id);
+    const run = await AgentRunService.getAgentRunForEmail(emailId, prisma);
+    res.json({ agentRun: run });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/agent-runs/mail/:id", async (req, res) => {
+  try {
+    const emailId = Number(req.params.id);
+    const force = req.body?.force === true;
+    console.log(`[API] Trigger Agent Run für E-Mail ${emailId} (force: ${force})...`);
+    const run = await AgentRunService.executeEmailRun(emailId, prisma, pluginManager, { force });
+    if (!run) {
+      return res.status(404).json({ error: `E-Mail mit ID ${emailId} nicht gefunden.` });
+    }
+    res.json({ success: true, conversationId: run.id, agentRun: run });
+  } catch (err: any) {
+    console.error("[API] Fehler bei Agent Run Ausführung:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Agent Notifications API
+ */
+app.get("/api/notifications", async (req, res) => {
+  try {
+    const onlyActive = req.query.all !== "true";
+    const notifications = await prisma.agentNotification.findMany({
+      where: onlyActive ? { isDismissed: false } : {},
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      include: {
+        conversation: {
+          select: { id: true, title: true, status: true }
+        }
+      }
+    });
+    res.json(notifications);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/notifications/:id/respond", async (req, res) => {
+  try {
+    const notifId = Number(req.params.id);
+    const { label, action, replyText } = req.body;
+
+    const notif = await prisma.agentNotification.findUnique({
+      where: { id: notifId },
+      include: { conversation: true }
+    });
+
+    if (!notif) {
+      return res.status(404).json({ error: `Benachrichtigung mit ID ${notifId} nicht gefunden.` });
+    }
+
+    // 1. Benachrichtigung aktualisieren
+    const updatedNotif = await prisma.agentNotification.update({
+      where: { id: notifId },
+      data: {
+        selectedButton: label,
+        isRead: true,
+        isDismissed: true
+      }
+    });
+
+    // 2. Wenn Aktion 'reply' ist und eine Conversation verknüpft ist, Agenten ausführen
+    let aiResponse = null;
+    if (action === "reply" && notif.conversationId) {
+      const responseText = replyText || label;
+      console.log(`[API] Führe Folgeaktion für Benachrichtigung ${notifId} in Conv ${notif.conversationId} aus ("${responseText}")...`);
+      aiResponse = await AgentRunService.continueRun(
+        notif.conversationId,
+        responseText,
+        prisma,
+        pluginManager
+      );
+    }
+
+    res.json({
+      success: true,
+      notification: updatedNotif,
+      aiResponse
+    });
+  } catch (err: any) {
+    console.error("[API] Fehler beim Beantworten der Benachrichtigung:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/notifications/:id/dismiss", async (req, res) => {
+  try {
+    const notifId = Number(req.params.id);
+    const updated = await prisma.agentNotification.update({
+      where: { id: notifId },
+      data: { isDismissed: true, isRead: true }
+    });
+    res.json({ success: true, notification: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/notifications/:id/read", async (req, res) => {
+  try {
+    const notifId = Number(req.params.id);
+    const updated = await prisma.agentNotification.update({
+      where: { id: notifId },
+      data: { isRead: true }
+    });
+    res.json({ success: true, notification: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 /**
@@ -683,6 +851,15 @@ app.get("/api/mail/messages/:id", async (req, res) => {
             email: true,
             aliases: { select: { name: true, isPrimary: true } }
           }
+        },
+        agentRun: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            summary: true,
+            createdAt: true
+          }
         }
       }
     });
@@ -1225,7 +1402,7 @@ app.post("/chat", async (req, res) => {
     const todayIso = now.toISOString().split('T')[0];
 
     const userModel = getSettings().aiModel;
-    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-3.5-flash";
     const model = genAI.getGenerativeModel({
       model: modelName,
       tools: [{ functionDeclarations: pluginManager.getGeminiTools() } as any],
@@ -1440,11 +1617,11 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
         nextStep = await chat.sendMessage(functionResponses);
       } catch (chatSendErr: any) {
         console.warn(`Fehler beim Senden der Function-Responses mit Modell '${modelName}':`, chatSendErr.message);
-        if (modelName !== "gemini-2.5-flash") {
-          console.log("Führe automatischen Fallback auf 'gemini-2.5-flash' aus...");
+        if (modelName !== "gemini-3.5-flash") {
+          console.log("Führe automatischen Fallback auf 'gemini-3.5-flash' aus...");
           try {
             const fallbackModel = genAI.getGenerativeModel({
-              model: "gemini-2.5-flash",
+              model: "gemini-3.5-flash",
               tools: [{ functionDeclarations: pluginManager.getGeminiTools() } as any],
               toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.AUTO } },
               generationConfig: { thinkingConfig: { thinkingBudget: 0 } } as any
@@ -1513,8 +1690,17 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`KI-System Server läuft auf Port ${PORT}`);
 
+  // Dynamische Tools initialisieren
+  await pluginManager.init();
+
   // Automatische Datenmigration ausführen
   await runAutomaticMigration(prisma);
+
+  // Agent Run Hook für neu eingehende E-Mails registrieren
+  MailService.onNewEmail = (createdMail, dbPrisma) => {
+    console.log(`[Mail Hook] 📬 Neue E-Mail empfangen: #${createdMail.id} "${createdMail.subject}". Starte Agent Run...`);
+    AgentRunService.queueEmailRun(createdMail.id, dbPrisma, pluginManager);
+  };
 
   // Periodischer Hintergrund-Sync für E-Mails alle 3 Minuten
   setInterval(() => {
