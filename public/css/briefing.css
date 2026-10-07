@@ -1,0 +1,249 @@
+/* ==========================================================================
+   Agent Briefings, Status Pills & Notification Widgets
+   ========================================================================== */
+
+/* Agent Runs Stile */
+.history-filter-tabs, .drawer-history-filter-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.history-tab-btn, .drawer-tab-btn {
+    padding: 5px 11px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.history-tab-btn:hover, .drawer-tab-btn:hover {
+    background: rgba(255, 255, 255, 0.09);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.history-tab-btn.active, .drawer-tab-btn.active {
+    background: rgba(137, 180, 250, 0.18);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 700;
+}
+
+.history-item.agent-run, .drawer-history-item.agent-run {
+    border-left: 3.5px solid #cba6f7;
+    background: rgba(203, 166, 247, 0.05);
+}
+
+.history-item.agent-run:hover, .drawer-history-item.agent-run:hover {
+    background: rgba(203, 166, 247, 0.12);
+    border-color: rgba(203, 166, 247, 0.3);
+}
+
+.agent-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 6px;
+}
+
+.agent-status-pill.completed {
+    background: rgba(166, 227, 161, 0.15);
+    color: #a6e3a1;
+    border: 1px solid rgba(166, 227, 161, 0.3);
+}
+
+.agent-status-pill.running {
+    background: rgba(249, 226, 175, 0.18);
+    color: #f9e2af;
+    border: 1px solid rgba(249, 226, 175, 0.45);
+    animation: statusPulse 2s infinite ease-in-out;
+}
+
+@keyframes statusPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(0.98); }
+}
+
+.agent-status-pill.error {
+    background: rgba(243, 139, 168, 0.15);
+    color: #f38ba8;
+    border: 1px solid rgba(243, 139, 168, 0.3);
+}
+
+.agent-run-chat-banner {
+    background: linear-gradient(135deg, rgba(203, 166, 247, 0.15), rgba(137, 180, 250, 0.08));
+    border: 1px solid rgba(203, 166, 247, 0.35);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+
+   Arbeitstisch Agent-Briefing & Mail Chat Enhancements
+   ========================================================================= */
+.arbeitstisch-subtab {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.65);
+    border: none;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+}
+.arbeitstisch-subtab:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.06);
+}
+.arbeitstisch-subtab.active {
+    background: var(--accent);
+    color: #11111b !important;
+    font-weight: 700;
+}
+.notif-box {
+    position: relative;
+    user-select: none;
+}
+.notif-box:hover {
+    background: rgba(255, 255, 255, 0.055) !important;
+    border-color: rgba(255, 255, 255, 0.14) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.mail-agent-chat-btn {
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mail-agent-chat-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(203, 166, 247, 0.25);
+}
+.mail-agent-thought-preview:hover {
+    background: rgba(203, 166, 247, 0.12) !important;
+}
+
+
+   Agent Briefing: Filter Bar & Agent Pills
+   ========================================================================= */
+.briefing-agent-filter-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px 0 4px 0;
+}
+
+.briefing-agent-filter-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    letter-spacing: 0.3px;
+}
+
+.briefing-agent-filter-reset-btn {
+    background: none;
+    border: none;
+    color: #cba6f7;
+    font-size: 0.72rem;
+    cursor: pointer;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.briefing-agent-filter-reset-btn:hover {
+    background: rgba(203, 166, 247, 0.15);
+    color: #ffffff;
+}
+
+.briefing-agent-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px 2px 6px 2px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    -webkit-overflow-scrolling: touch;
+}
+
+.briefing-agent-filter-bar::-webkit-scrollbar {
+    height: 4px;
+}
+
+.briefing-agent-filter-bar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.briefing-agent-filter-bar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.briefing-agent-filter-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    user-select: none;
+    flex-shrink: 0;
+    outline: none;
+}
+
+.briefing-agent-filter-pill:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.22);
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+.briefing-agent-filter-pill.active {
+    background: rgba(203, 166, 247, 0.18);
+    border-color: #cba6f7;
+    color: #ffffff;
+    box-shadow: 0 0 12px rgba(203, 166, 247, 0.25);
+}
+
+.briefing-agent-filter-count {
+    font-size: 0.65rem;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.12);
+    color: #cdd6f4;
+    transition: all 0.2s ease;
+    line-height: 1.3;
+}
+
+.briefing-agent-filter-count.has-active {
+    background: rgba(249, 226, 175, 0.25);
+    color: #f9e2af;
+    border: 1px solid rgba(249, 226, 175, 0.4);
+}
+

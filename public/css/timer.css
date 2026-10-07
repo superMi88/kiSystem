@@ -1,0 +1,15 @@
+/* ==========================================================================
+   Timer Widget & Quick Action Controls
+   ========================================================================== */
+
+/* Dedicated Timer Widget Rules */
+.timer-widget {
+    padding: 10px;
+    border-radius: 12px;
+}
+.timer-countdown-display {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+}

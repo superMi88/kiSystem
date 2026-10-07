@@ -1,0 +1,363 @@
+/* ==========================================================================
+   Settings Sections, Toggle Switches & Agent Permissions
+   ========================================================================== */
+
+/* Settings Modal has been removed to be inline settings-section instead */
+
+.settings-group {
+    text-align: left;
+    margin-bottom: 20px;
+}
+.settings-group > label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+}
+
+.hotkey-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.hotkey-display {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text);
+    padding: 12px;
+    border-radius: 8px;
+    font-family: monospace;
+    font-size: 0.9rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+    width: 100%;
+}
+.hotkey-display:hover {
+    background: rgba(137, 180, 250, 0.1);
+    border-color: var(--accent);
+}
+.hotkey-display.recording {
+    background: rgba(243, 139, 168, 0.1);
+    border-color: var(--off);
+    color: var(--off);
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.8; }
+    50% { opacity: 0.4; }
+    100% { opacity: 0.8; }
+}
+
+.hotkey-tip {
+    font-size: 0.65rem;
+    opacity: 0.5;
+    font-style: italic;
+    display: block;
+    margin-top: 4px;
+}
+
+.plugins-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-right: 5px;
+}
+
+.plugin-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+.plugin-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255,255,255,0.1);
+}
+
+.registered-tool-card {
+    transition: all 0.2s ease;
+}
+.registered-tool-card:hover {
+    background: rgba(255, 255, 255, 0.055) !important;
+    border-color: rgba(137, 180, 250, 0.35) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.plugin-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-width: 75%;
+}
+.plugin-name-label {
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: var(--text);
+}
+.plugin-desc-label {
+    font-size: 0.7rem;
+    opacity: 0.6;
+}
+
+/* Premium Custom Toggle Switch */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 38px;
+    height: 20px;
+}
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(255, 255, 255, 0.1);
+    transition: .3s;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    bottom: 2px;
+    background-color: var(--text);
+    transition: .3s;
+    border-radius: 50%;
+}
+input:checked + .slider {
+    background-color: var(--on);
+}
+input:checked + .slider:before {
+    transform: translateX(18px);
+    background-color: #11111b;
+}
+
+/* Pulsierender Lade-Zustand */
+.message.ai.thinking {
+    opacity: 0.85;
+    background: rgba(137, 180, 250, 0.05);
+    border: 1px dashed rgba(137, 180, 250, 0.3);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 200px;
+}
+
+.thinking-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--accent);
+    font-weight: bold;
+}
+
+.thinking-dots {
+    display: inline-flex;
+    gap: 4px;
+}
+.thinking-dots span {
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    display: inline-block;
+    animation: dotPulse 1.4s infinite ease-in-out both;
+}
+.thinking-dots span:nth-child(1) { animation-delay: -0.32s; }
+.thinking-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes dotPulse {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1); }
+}
+
+.live-tool-item {
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--text);
+    animation: slideInTool 0.25s ease-out;
+}
+
+@keyframes slideInTool {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.live-tool-name {
+    font-family: monospace;
+    background: rgba(137, 180, 250, 0.1);
+    color: var(--accent);
+    padding: 1px 4px;
+    border-radius: 4px;
+}
+
+
+/* Granular Agent Plugin Permission Cards & Segmented Buttons */
+.plugin-perm-card {
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: all 0.2s ease;
+}
+
+.plugin-perm-card:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+.plugin-perm-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-wrap: wrap;
+}
+
+.plugin-perm-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.plugin-perm-desc {
+    font-size: 0.72rem;
+    color: #a6adc8;
+}
+
+.plugin-perm-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.plugin-perm-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.perm-row-label {
+    font-size: 0.78rem;
+    color: #cdd6f4;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.perm-btn-group {
+    display: inline-flex;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 2px;
+    gap: 2px;
+}
+
+.perm-btn {
+    border: 1px solid transparent;
+    background: transparent;
+    color: #a6adc8;
+    font-size: 0.73rem;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    white-space: nowrap;
+    user-select: none;
+    line-height: 1.2;
+}
+
+.perm-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.perm-btn.active-no {
+    background: rgba(243, 139, 168, 0.18) !important;
+    color: #f38ba8 !important;
+    font-weight: 700 !important;
+    border-color: rgba(243, 139, 168, 0.45) !important;
+    box-shadow: 0 0 10px rgba(243, 139, 168, 0.2);
+}
+
+.perm-btn.active-ask {
+    background: rgba(249, 226, 175, 0.18) !important;
+    color: #f9e2af !important;
+    font-weight: 700 !important;
+    border-color: rgba(249, 226, 175, 0.45) !important;
+    box-shadow: 0 0 10px rgba(249, 226, 175, 0.2);
+}
+
+.perm-btn.active-yes {
+    background: rgba(166, 227, 161, 0.18) !important;
+    color: #a6e3a1 !important;
+    font-weight: 700 !important;
+    border-color: rgba(166, 227, 161, 0.45) !important;
+    box-shadow: 0 0 10px rgba(166, 227, 161, 0.2);
+}
+
+/* Detailed Permission Badges on Cards */
+.detailed-perm-badge {
+    font-size: 0.72rem;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+.detailed-perm-badge.badge-green {
+    background: rgba(166, 227, 161, 0.12);
+    color: #a6e3a1;
+    border: 1px solid rgba(166, 227, 161, 0.3);
+}
+.detailed-perm-badge.badge-yellow {
+    background: rgba(249, 226, 175, 0.14);
+    color: #f9e2af;
+    border: 1px solid rgba(249, 226, 175, 0.35);
+}
+.detailed-perm-badge.badge-red {
+    background: rgba(243, 139, 168, 0.1);
+    color: #f38ba8;
+    border: 1px solid rgba(243, 139, 168, 0.25);
+    opacity: 0.8;
+}

@@ -1,0 +1,300 @@
+/* ==========================================================================
+   Mail Inbox, Reader View & Dialogs
+   ========================================================================== */
+
+/* Mail Plugin Styles */
+.mail-item-card {
+    position: relative;
+    user-select: none;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mail-item-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.mail-body-container {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    color: #cdd6f4;
+    font-size: 1rem;
+    line-height: 1.6;
+    background: #14141e;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    word-break: normal;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    touch-action: auto !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+.mail-read-content {
+    width: 100%;
+    max-width: 100%;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box;
+    font-size: 1rem;
+    line-height: 1.6;
+    text-align: left;
+}
+
+.mail-read-content p,
+.mail-read-content div,
+.mail-read-content td,
+.mail-read-content th,
+.mail-read-content span,
+.mail-read-content li {
+    font-size: max(0.95rem, inherit);
+    line-height: 1.6;
+    box-sizing: border-box;
+}
+
+/* Ensure top-level email wrapper tables fit screen width without distorting inner columns */
+.mail-read-content > table,
+.mail-read-content > div > table,
+.mail-read-content > center > table {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+}
+
+.mail-read-content table {
+    max-width: 100% !important;
+    box-sizing: border-box;
+}
+
+.mail-read-content center {
+    text-align: left;
+    margin: 0;
+}
+
+/* NEVER force borders, padding, or margins on layout cells */
+.mail-body-container td,
+.mail-body-container th,
+.mail-read-content td,
+.mail-read-content th {
+    word-break: normal;
+    overflow-wrap: break-word;
+    box-sizing: border-box;
+}
+
+.mail-body-container img,
+.mail-read-content img,
+.mail-body-container svg,
+.mail-body-container video,
+.mail-body-container canvas {
+    max-width: 100% !important;
+    height: auto !important;
+    object-fit: contain;
+    display: inline-block;
+    box-sizing: border-box;
+}
+
+.mail-body-container a {
+    color: var(--accent, #89b4fa);
+    text-decoration: underline;
+    word-break: break-word;
+}
+
+.mail-body-container pre,
+.mail-body-container code {
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    font-family: inherit;
+    font-size: 1.02rem !important;
+    line-height: 1.6 !important;
+}
+
+.mail-body-container blockquote {
+    border-left: 3px solid var(--accent);
+    padding-left: 10px;
+    margin: 0.5em 0;
+    opacity: 0.85;
+}
+
+/* Original/Light Mode toggle fallback */
+.mail-body-container.original-theme {
+    background: #ffffff !important;
+    color: #1f2328 !important;
+}
+
+.mail-body-container.original-theme a {
+    color: #0969da !important;
+}
+
+/* ==========================================================================
+
+/* Mail Person & Category Selection Dialogs */
+.mail-select-dialog-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    user-select: none;
+}
+
+.mail-select-dialog-item:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+.mail-select-dialog-item.selected {
+    background: rgba(137, 180, 250, 0.12);
+    border-color: var(--accent);
+    box-shadow: 0 0 10px rgba(137, 180, 250, 0.2);
+}
+
+.mail-person-dialog-item.selected {
+    background: rgba(203, 166, 247, 0.14);
+    border-color: #cba6f7;
+    box-shadow: 0 0 10px rgba(203, 166, 247, 0.2);
+}
+
+.mail-checkbox-box {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    background: rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 900;
+    color: transparent;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.mail-select-dialog-item.selected .mail-checkbox-box {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #11111b;
+    box-shadow: 0 0 8px rgba(137, 180, 250, 0.4);
+}
+
+.mail-select-remove-item {
+    background: rgba(243, 139, 168, 0.06);
+    border: 1px dashed rgba(243, 139, 168, 0.3);
+    color: #f38ba8;
+    margin-bottom: 4px;
+}
+
+.mail-select-remove-item:hover {
+    background: rgba(243, 139, 168, 0.15);
+    border-color: rgba(243, 139, 168, 0.6);
+}
+
+/* =========================================================================
+
+/* Mail Reading View (Full-Page View inside .top-panel) */
+#mail-read-modal {
+    display: none;
+    flex-direction: column;
+    width: 100%;
+    min-height: 100%;
+    padding: 0 0 20px 0;
+    box-sizing: border-box;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    position: static;
+    transform: none;
+    z-index: auto;
+}
+
+body.mail-read-active #top-widgets-container {
+    display: none !important;
+}
+
+body.mail-read-active #mail-read-modal {
+    display: flex !important;
+}
+
+body.mobile-mode #mail-read-modal {
+    padding-bottom: 180px !important;
+}
+
+@media (max-width: 768px) {
+    #mail-read-modal {
+        width: 100%;
+        min-height: auto;
+        padding: 0 0 40px 0;
+    }
+    #mail-read-body {
+        overflow: visible !important;
+        height: auto !important;
+        max-height: none !important;
+        touch-action: auto !important;
+    }
+}
+
+.mail-read-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.mail-read-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    flex-shrink: 0;
+}
+
+.mail-read-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.25);
+    transform: translateY(-1px);
+}
+
+.mail-read-icon-btn:active {
+    transform: translateY(0);
+}
+
+.mail-read-icon-btn.primary-action {
+    background: rgba(137, 180, 250, 0.15);
+    border-color: rgba(137, 180, 250, 0.35);
+    color: var(--accent);
+}
+
+.mail-read-icon-btn.primary-action:hover {
+    background: var(--accent);
+    color: #11111b;
+}
+
+.mail-read-icon-btn.close-btn {
+    color: var(--off);
+    background: rgba(243, 139, 168, 0.08);
+    border-color: rgba(243, 139, 168, 0.2);
+}
+
+.mail-read-icon-btn.close-btn:hover {
+    background: rgba(243, 139, 168, 0.25);
+    color: #ffffff;
+}
+
+/* ==========================================================================
