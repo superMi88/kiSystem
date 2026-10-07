@@ -134,7 +134,7 @@
         <div id="header-context-container" class="header-context-container">
             <!-- Dashboard Context Header -->
             <div id="header-context-dashboard" class="header-context">
-                <div style="font-size: 0.95rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 8px;">
+                <div style="font-size: 0.95rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 8px; cursor: pointer;" onclick="focusWidget('dashboard'); const tp = document.querySelector('.top-panel'); if (tp) tp.scrollTo({ top: 0, behavior: 'smooth' });" title="Zu Heute nach oben scrollen">
                     <span>📅 Heute</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px;">
@@ -3012,7 +3012,8 @@
                 } else if (type === 'mail') {
                     openMailReadModal(Number(item.dataset.mailId || id));
                 } else if (type === 'day') {
-                    jumpToTimelineDate(id || item.dataset.dayDate || item.dataset.date);
+                    focusWidget('calendar');
+                    jumpToTimelineDate(id || item.dataset.dayDate || item.dataset.date || 'today');
                 }
             }
         }, true);
@@ -4021,6 +4022,7 @@
             pill.setAttribute('data-label', label);
 
             const fallbackEntityConfigs = {
+                day: { icon: '📅', color: 'rgba(137, 180, 250, 0.15)', borderColor: '#89b4fa' },
                 pause: { icon: '☕', color: 'rgba(249, 226, 175, 0.15)', borderColor: '#f9e2af' },
                 travel: { icon: '🗺️', color: 'rgba(166, 227, 161, 0.15)', borderColor: '#a6e3a1' }
             };
@@ -6666,6 +6668,7 @@
             // Entity-Links: [Label](app://type/id)
             const linkRegex = /\[([^\]]+)\]\((app:\/\/([a-zA-Z0-9_\-]+)\/([a-zA-Z0-9_\-:]+))\)/g;
             const fallbackLinkConfigs = {
+                day: { icon: '📅', color: 'rgba(137, 180, 250, 0.15)', borderColor: '#89b4fa' },
                 pause: { icon: '☕', color: 'rgba(249, 226, 175, 0.15)', borderColor: '#f9e2af' },
                 travel: { icon: '🗺️', color: 'rgba(166, 227, 161, 0.15)', borderColor: '#a6e3a1' }
             };
@@ -8240,10 +8243,19 @@
             const headerDateInput = document.getElementById('header-calendar-date');
             if (headerDateInput) headerDateInput.value = dateStr;
 
+            if (document.body.classList.contains('mobile-mode') && !document.body.classList.contains('view-calendar')) {
+                switchMobileView('calendar');
+            }
+
             let targetEl = document.getElementById(`timeline-day-${dateStr}`);
             if (targetEl) {
-                scrollElementInsideTopPanel(targetEl, 'start', 'smooth');
-                flashTimelineDay(targetEl);
+                const doScroll = () => {
+                    scrollElementInsideTopPanel(targetEl, 'start', 'smooth');
+                    flashTimelineDay(targetEl);
+                };
+                doScroll();
+                requestAnimationFrame(doScroll);
+                setTimeout(doScroll, 80);
                 return;
             }
 
@@ -8597,10 +8609,10 @@
 
             html += `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: ${todayOverdueTasks.length > 0 ? '10px' : '2px'}; margin-bottom: 6px;">
-                    <div style="font-size: 0.72rem; font-weight: 700; color: rgba(255, 255, 255, 0.75); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px;">
+                    <div style="font-size: 0.72rem; font-weight: 700; color: rgba(255, 255, 255, 0.75); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px; cursor: pointer;" onclick="focusWidget('calendar'); jumpToTimelineDate('today');" title="Zu Heute im Kalender springen">
                         <span style="display: inline-flex; align-items: center; gap: 5px;">${googleIcon('calendar_add_on', '14px', 'fill: var(--accent);')} Termine & Aufgaben heute</span>
                     </div>
-                    <button type="button" onclick="focusWidget('calendar')" class="arbeitstisch-card-link" title="Zum Kalender">Kalender ➔</button>
+                    <button type="button" onclick="focusWidget('calendar'); jumpToTimelineDate('today');" class="arbeitstisch-card-link" title="Zu Heute im Kalender">Kalender ➔</button>
                 </div>
             `;
 
@@ -10568,6 +10580,15 @@
                     loadTopWidgets();
                 }
             } else {
+                if (name === 'calendar') {
+                    const todayStr = getLocalDateString();
+                    const todayEl = document.getElementById(`timeline-day-${todayStr}`);
+                    if (todayEl) {
+                        scrollElementInsideTopPanel(todayEl, 'start', 'smooth');
+                        flashTimelineDay(todayEl);
+                        return;
+                    }
+                }
                 const el = document.getElementById('widget-' + name);
                 if (el) {
                     scrollElementInsideTopPanel(el, 'start', 'smooth');
