@@ -200,8 +200,11 @@
 .briefing-agent-filter-pill {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
-    padding: 5px 12px;
+    padding: 5px 10px;
+    min-width: 44px;
+    height: 38px;
     border-radius: 20px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -214,6 +217,21 @@
     user-select: none;
     flex-shrink: 0;
     outline: none;
+}
+
+.briefing-agent-filter-pill .agent-avatar-icon {
+    font-size: 1.2rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.briefing-agent-filter-pill .agent-avatar-icon img {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: cover;
 }
 
 .briefing-agent-filter-pill:hover {

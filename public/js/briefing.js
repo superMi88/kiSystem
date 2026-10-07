@@ -84,38 +84,17 @@
 
             let html = `
                 <div class="arbeitstisch-dashboard briefing-dashboard">
-                    <div style="margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                            <div>
-                                <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: #cba6f7; display: flex; align-items: center; gap: 8px;">
-                                    <span>🤖</span> Agent-Briefing
-                                </h3>
-                                <p style="margin: 3px 0 0 0; font-size: 0.75rem; color: rgba(255, 255, 255, 0.65);">
-                                    Rückfragen, Handlungsempfehlungen & autonome Agenten-Entscheidungen
-                                </p>
-                            </div>
-                        </div>
-
-                        <!-- Agent Filter Bar -->
-                        <div class="briefing-agent-filter-wrapper">
-                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-                                <span class="briefing-agent-filter-label">
-                                    <span>🎯</span> Filter nach Agent:
-                                </span>
-                                ${currentFilter !== 'all' ? `
-                                    <button type="button" onclick="switchBriefingAgentFilter('all')" class="briefing-agent-filter-reset-btn" title="Filter zurücksetzen">
-                                        ✕ Filter aufheben
-                                    </button>
-                                ` : ''}
-                            </div>
+                    <div style="margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;">
+                        <!-- Agent Filter Bar (Nur Profilbilder / Avatare) -->
+                        <div class="briefing-agent-filter-wrapper" style="padding-top: 0;">
                             <div class="briefing-agent-filter-bar">
                                 <!-- Alle Pill -->
                                 <button type="button" 
                                         onclick="switchBriefingAgentFilter('all')" 
                                         class="briefing-agent-filter-pill ${currentFilter === 'all' ? 'active' : ''}"
+                                        title="Alle Agenten"
                                         style="${currentFilter === 'all' ? 'border-color: #cba6f7; background: rgba(203, 166, 247, 0.2); color: #ffffff; box-shadow: 0 0 12px rgba(203, 166, 247, 0.25);' : ''}">
-                                    <span style="font-size: 0.85rem;">✨</span>
-                                    <span>Alle</span>
+                                    <span class="agent-avatar-icon">✨</span>
                                     <span class="briefing-agent-filter-count ${allActiveNotifs.length > 0 && currentTab === 'active' ? 'has-active' : ''}"
                                           style="${currentFilter === 'all' ? 'background: #cba6f7; color: #11111b; font-weight: 800;' : ''}">
                                         ${allPillCount}
@@ -134,9 +113,9 @@
                             onclick="switchBriefingAgentFilter('${escapeHtml(ag.id)}')" 
                             class="briefing-agent-filter-pill ${isSelected ? 'active' : ''}"
                             data-agent-id="${escapeHtml(ag.id)}"
+                            title="${escapeHtml(ag.name)}"
                             style="${isSelected ? `border-color: ${agColor}; background: ${hexToRgba(agColor, 0.2)}; color: #ffffff; box-shadow: 0 0 12px ${hexToRgba(agColor, 0.3)};` : ''}">
-                        <span style="font-size: 0.85rem;">${ag.avatar}</span>
-                        <span>${escapeHtml(ag.name)}</span>
+                        <span class="agent-avatar-icon">${ag.avatar}</span>
                         <span class="briefing-agent-filter-count ${hasPending ? 'has-active' : ''}"
                               style="${isSelected ? `background: ${agColor}; color: #11111b; font-weight: 800;` : ''}">
                             ${pillCount}
