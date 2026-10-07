@@ -3441,3 +3441,65 @@
                 closeMailReadModal(true);
             }
         });
+
+        // Diary Modal Management
+        window.openDiaryModal = function(dateStr = '', title = '', content = '') {
+            const modal = document.getElementById('diary-modal');
+            if (!modal) return;
+            const dateInput = document.getElementById('diary-date-input');
+            const titleInput = document.getElementById('diary-title-input');
+            const contentInput = document.getElementById('diary-content-input');
+            const targetDate = dateStr || window.currentCalendarDate || (typeof getLocalDateString === 'function' ? getLocalDateString() : new Date().toISOString().split('T')[0]);
+            if (dateInput) dateInput.value = targetDate;
+            if (titleInput) titleInput.value = title || '';
+            if (contentInput) {
+                contentInput.value = content || '';
+                setTimeout(() => contentInput.focus(), 60);
+            }
+            modal.style.display = 'block';
+            document.body.classList.add('modal-active');
+        };
+
+        window.closeDiaryModal = function() {
+            const modal = document.getElementById('diary-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.classList.remove('modal-active');
+        };
+
+        window.saveDiaryEntry = async function() {
+            const dateInput = document.getElementById('diary-date-input');
+            const titleInput = document.getElementById('diary-title-input');
+            const contentInput = document.getElementById('diary-content-input');
+            const date = dateInput ? dateInput.value : (window.currentCalendarDate || (typeof getLocalDateString === 'function' ? getLocalDateString() : new Date().toISOString().split('T')[0]));
+            const title = titleInput ? titleInput.value.trim() : '';
+            const content = contentInput ? contentInput.value.trim() : '';
+            if (!content) {
+                alert('Bitte gib einen Text für den Tagebucheintrag ein.');
+                return;
+            }
+            try {
+                const res = await fetch(getApiUrl('/api/journal/entries'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date, title, content })
+                });
+                if (res.ok) {
+                    closeDiaryModal();
+                    if (window.calendarTimelineCache && window.calendarTimelineCache[date]) {
+                        delete window.calendarTimelineCache[date];
+                    }
+                    if (typeof jumpToTimelineDate === 'function') {
+                        await jumpToTimelineDate(date);
+                    }
+                    if (typeof loadTopWidgets === 'function') {
+                        loadTopWidgets();
+                    }
+                } else {
+                    const errData = await res.json().catch(() => ({}));
+                    alert('Fehler beim Speichern: ' + (errData.error || res.statusText));
+                }
+            } catch (e) {
+                console.error('Fehler beim Speichern des Tagebucheintrags:', e);
+                alert('Verbindungsfehler beim Speichern des Tagebucheintrags.');
+            }
+        };

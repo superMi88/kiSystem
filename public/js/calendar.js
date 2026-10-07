@@ -1,622 +1,97 @@
 
+        // =========================================================================
+        // Day-by-Day Vertical Timeline Calendar & Diary (Main Calendar System)
+        // =========================================================================
 
-        function scrollElementInsideTopPanel(targetEl, block = 'start', behavior = 'smooth') {
-            const topPanel = document.querySelector('.top-panel');
-            if (!topPanel || !targetEl) return;
+        window.currentCalendarDate = typeof getLocalDateString === 'function' ? getLocalDateString() : new Date().toISOString().split('T')[0];
+        window.calendarTimelineCache = window.calendarTimelineCache || {};
 
-            const panelHeight = topPanel.clientHeight;
-            if (panelHeight === 0) {
-                setTimeout(() => scrollElementInsideTopPanel(targetEl, block, behavior), 60);
-                return;
+        function getBedtimeRecommendation(tomorrowEvents) {
+            if (!tomorrowEvents || tomorrowEvents.length === 0) {
+                return {
+                    hasEvent: false,
+                    earliestEvent: null,
+                    bedtimeStr: '23:00 - 00:00 Uhr',
+                    wakeUpStr: '07:00 - 08:00 Uhr',
+                    adviceText: 'Keine Termine für morgen eingetragen',
+                    timeStr: null,
+                    title: null
+                };
+            }
+            const validEvents = tomorrowEvents.filter(e => !e.isCancelled);
+            if (validEvents.length === 0) {
+                return {
+                    hasEvent: false,
+                    earliestEvent: null,
+                    bedtimeStr: '23:00 - 00:00 Uhr',
+                    wakeUpStr: '07:00 - 08:00 Uhr',
+                    adviceText: 'Keine aktiven Termine für morgen eingetragen',
+                    timeStr: null,
+                    title: null
+                };
             }
 
-            const panelRect = topPanel.getBoundingClientRect();
-            const targetRect = targetEl.getBoundingClientRect();
-
-            let relativeTop;
-            if (panelRect.height > 0 && targetRect.height > 0) {
-                relativeTop = (targetRect.top - panelRect.top) + topPanel.scrollTop;
-            } else {
-                relativeTop = getElementTopRelativeToParent(targetEl, topPanel);
-            }
-
-            const targetHeight = targetRect.height || targetEl.offsetHeight || 80;
-            let targetScrollTop = relativeTop;
-
-            if (block === 'center') {
-                targetScrollTop = relativeTop - (panelHeight / 2) + (targetHeight / 2);
-            } else if (block === 'start' || block === 'top') {
-                const isMobile = document.body.classList.contains('mobile-mode');
-                const headerOffset = isMobile ? 80 : 15;
-                targetScrollTop = relativeTop - headerOffset;
-            }
-
-            const finalScrollTop = Math.max(0, targetScrollTop);
-
-            topPanel.scrollTo({
-                top: finalScrollTop,
-                behavior: behavior
+            const sorted = [...validEvents].sort((a, b) => {
+                const ta = new Date(a.time || a.start || 0).getTime();
+                const tb = new Date(b.time || b.start || 0).getTime();
+                return ta - tb;
             });
 
-            // Prevent outer page/window from ever scrolling out of view
-            window.scrollTo(0, 0);
-            if (document.documentElement) document.documentElement.scrollTop = 0;
-            if (document.body) document.body.scrollTop = 0;
+            const first = sorted[0];
+            if (first.isAllDay) {
+                return {
+                    hasEvent: true,
+                    earliestEvent: first,
+                    timeStr: 'Ganztägig',
+                    bedtimeStr: '23:00 Uhr',
+                    wakeUpStr: '07:00 Uhr',
+                    title: first.title
+                };
+            }
+
+            const startDate = new Date(first.time || first.start);
+            const startH = startDate.getHours();
+            const startM = startDate.getMinutes();
+            const timeStr = `${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')} Uhr`;
+
+            const totalMinutesTomorrow = startH * 60 + startM;
+            const wakeMinutes = totalMinutesTomorrow - 60;
+            const bedMinutes = totalMinutesTomorrow - (9 * 60);
+
+            const wakeH = Math.floor((wakeMinutes + 1440) % 1440 / 60);
+            const wakeM = Math.floor((wakeMinutes + 1440) % 1440 % 60);
+            const wakeUpStr = `${String(wakeH).padStart(2, '0')}:${String(wakeM).padStart(2, '0')} Uhr`;
+
+            const bedStartH = Math.floor((bedMinutes + 1440) % 1440 / 60);
+            const bedStartM = Math.floor((bedMinutes + 1440) % 1440 % 60);
+            const bedEndH = Math.floor((bedMinutes + 60 + 1440) % 1440 / 60);
+            const bedEndM = Math.floor((bedMinutes + 60 + 1440) % 1440 % 60);
+            const bedtimeStr = `${String(bedStartH).padStart(2, '0')}:${String(bedStartM).padStart(2, '0')} - ${String(bedEndH).padStart(2, '0')}:${String(bedEndM).padStart(2, '0')} Uhr`;
+
+            return {
+                hasEvent: true,
+                earliestEvent: first,
+                timeStr,
+                bedtimeStr,
+                wakeUpStr,
+                title: first.title,
+                adviceText: `Frühester Termin morgen: ${first.title || 'Termin'} um ${timeStr}`
+            };
         }
+        window.getBedtimeRecommendation = getBedtimeRecommendation;
 
-
-
-        function hasTimelineDayContent(dayData) {
-            if (!dayData) return false;
-            const isToday = (dayData.date === getLocalDateString());
-            const hasOverdue = isToday && ((dayData.overdueTasks && dayData.overdueTasks.length > 0) || (window.timelineOverdueTasks && window.timelineOverdueTasks.length > 0));
-            const hasEntries = dayData.diaryEntries && dayData.diaryEntries.length > 0;
-            const hasEvents = dayData.events && dayData.events.length > 0;
-            const hasCompletedTasks = dayData.completedTasks && dayData.completedTasks.length > 0;
-            return !!(hasOverdue || hasEntries || hasEvents || hasCompletedTasks);
+        function navigateCalendarDay(delta) {
+            const cur = window.currentCalendarDate || getLocalDateString();
+            const parts = cur.split('-').map(Number);
+            const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+            d.setDate(d.getDate() + delta);
+            const newDateStr = getLocalDateString(d);
+            jumpToTimelineDate(newDateStr);
         }
-
-
-
-        function getTimelineDayDiff(dateStr1, dateStr2) {
-            if (!dateStr1 || !dateStr2) return 0;
-            const d1 = new Date(dateStr1 + 'T12:00:00');
-            const d2 = new Date(dateStr2 + 'T12:00:00');
-            const diffTime = Math.abs(d2.getTime() - d1.getTime());
-            return Math.round(diffTime / (1000 * 60 * 60 * 24));
-        }
-
-
-
-        function renderTimelineDayHtml(dayData) {
-            const dateStr = dayData.date;
-            const parts = dateStr.split('-').map(Number);
-            const dateObj = (parts.length === 3 && !isNaN(parts[0])) ? new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0) : new Date();
-            const formattedDate = dateObj.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
-            const longFormattedDate = dateObj.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
-            
-            const todayStr = getLocalDateString();
-            const yesterdayDate = new Date();
-            yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-            const yesterdayStr = getLocalDateString(yesterdayDate);
-
-            const tomorrowDate = new Date();
-            tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-            const tomorrowStr = getLocalDateString(tomorrowDate);
-
-            const isToday = (dateStr === todayStr);
-            const isYesterday = (dateStr === yesterdayStr);
-            const isTomorrow = (dateStr === tomorrowStr);
-            const isFuture = (dateStr > todayStr);
-
-            let dayBadge = '';
-            let boxClass = 'timeline-day-box';
-
-            if (isToday) {
-                dayBadge = `<span style="background: rgba(137, 180, 250, 0.2); color: #89b4fa; font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; font-weight: bold; border: 1px solid rgba(137, 180, 250, 0.4);">Heute</span>`;
-                boxClass += ' today-box';
-            } else if (isYesterday) {
-                dayBadge = `<span style="background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.8); font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; font-weight: 500;">Gestern</span>`;
-            } else if (isTomorrow) {
-                dayBadge = `<span style="background: rgba(166, 227, 161, 0.15); color: #a6e3a1; font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; font-weight: bold; border: 1px solid rgba(166, 227, 161, 0.3);">Morgen</span>`;
-            }
-
-            let overdueList = (isToday && ((dayData.overdueTasks && dayData.overdueTasks.length > 0) ? dayData.overdueTasks : (window.timelineOverdueTasks || []))) || [];
-            if (isToday && dayData.completedTasks && dayData.completedTasks.length > 0) {
-                dayData.completedTasks.forEach(t => {
-                    const rawId = String(t.id).replace('task-', '');
-                    const exists = overdueList.some(ot => String(ot.id).replace('task-', '') === rawId);
-                    if (!exists && t.due && new Date(t.due) < new Date(todayStr + 'T00:00:00')) {
-                        overdueList.push({ ...t, id: rawId, isTask: true, isOverdue: true, completed: true, status: 'done' });
-                    }
-                });
-            }
-            if (isToday && overdueList.length > 0) {
-                overdueList.sort((a, b) => {
-                    const aDone = (a.completed || a.status === 'done') ? 1 : 0;
-                    const bDone = (b.completed || b.status === 'done') ? 1 : 0;
-                    if (aDone !== bDone) return aDone - bDone;
-                    return new Date(a.due || 0).getTime() - new Date(b.due || 0).getTime();
-                });
-            }
-            const hasOverdue = overdueList.length > 0;
-            const hasEntries = dayData.diaryEntries && dayData.diaryEntries.length > 0;
-            const hasEvents = dayData.events && dayData.events.length > 0;
-            const hasCompletedTasks = dayData.completedTasks && dayData.completedTasks.length > 0;
-
-            const dayTitleLabel = escapeHtml(dayData.displayDate || formattedDate);
-
-            let dayInnerHtml = `
-                <div style="flex: 1; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; width: 100%;">
-                    
-                    <!-- Datum Header -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 5px;">
-                        <div style="font-size: 0.84rem; font-weight: bold; color: ${isToday ? 'var(--accent)' : 'var(--text)'}; display: flex; align-items: center; gap: 8px;" title="${longFormattedDate}">
-                            <span>📅 ${dayData.displayDate || formattedDate}</span>
-                        </div>
-                        ${dayBadge}
-                    </div>
-            `;
-
-            if (!hasOverdue && !hasEntries && !hasEvents && (!hasCompletedTasks || isToday)) {
-                dayInnerHtml += `<p style="font-size: 0.72rem; opacity: 0.35; margin: 2px 0; font-style: italic;">Keine Termine oder Einträge.</p>`;
-            } else {
-                // 0. Ausstehende / Überfällige Aufgaben (für Heute)
-                if (hasOverdue) {
-                    const uncompletedOverdue = overdueList.filter(t => !t.completed && t.status !== 'done');
-                    const completedOverdue = overdueList.filter(t => t.completed || t.status === 'done');
-                    const badgeOverdueLabel = completedOverdue.length > 0
-                        ? `${uncompletedOverdue.length} offen, ${completedOverdue.length} erledigt`
-                        : `${overdueList.length}`;
-
-                    dayInnerHtml += `
-                        <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px;">
-                            <div style="font-size: 0.7rem; font-weight: 700; color: var(--off); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px;">
-                                <span>⚠️ Ausstehende Aufgaben (${badgeOverdueLabel})</span>
-                            </div>
-                            <div style="display: flex; flex-direction: column; gap: 4px;">
-                    `;
-                    overdueList.forEach(t => {
-                        const rawTaskId = String(t.id).replace('task-', '');
-                        const escTitle = escapeHtml(t.title).replace(/"/g, '&quot;');
-                        const escNotes = escapeHtml(t.notes || t.description || '').replace(/"/g, '&quot;');
-                        const escListTitle = escapeHtml(t.listTitle || 'Standard').replace(/"/g, '&quot;');
-                        const recurrenceVal = t.recurrence || 'none';
-                        const isRecurring = recurrenceVal && recurrenceVal !== 'none';
-                        const repeatBadge = isRecurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrend: ${recurrenceVal}">🔄</span>` : '';
-                        const isDone = !!t.completed || t.status === 'done';
-                        
-                        let dueText = '';
-                        if (t.due) {
-                            const dateObj = new Date(t.due);
-                            const dueStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : t.due;
-                            dueText = isDone ? `Erledigt (fällig war ${dueStr})` : `Ausstehend (fällig seit ${dueStr})`;
-                        } else {
-                            dueText = isDone ? 'Erledigt' : 'Ausstehend (ohne Datum)';
-                        }
-
-                        const cardBg = isDone ? 'rgba(166, 227, 161, 0.05)' : 'rgba(243, 139, 168, 0.07)';
-                        const cardBorder = isDone ? 'rgba(166, 227, 161, 0.25)' : 'rgba(243, 139, 168, 0.3)';
-                        const cardBorderLeft = isDone ? '#a6e3a1' : 'var(--off)';
-                        const titleColor = isDone ? '#a6adc8' : '#ffffff';
-                        const textDecor = isDone ? 'line-through' : 'none';
-                        const opacityVal = isDone ? '0.75' : '1';
-                        const badgeIcon = isDone ? '✔️' : '⚠️';
-                        const badgeColor = isDone ? '#a6e3a1' : 'var(--off)';
-
-                        const taskContent = `
-                            <div class="task-item overdue" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: ${cardBg}; border: 1px solid ${cardBorder}; border-left: 3.5px solid ${cardBorderLeft}; width: 100%; cursor: pointer; opacity: ${opacityVal};">
-                                <div style="display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; min-width: 0; flex: 1;">
-                                    <button type="button" 
-                                            class="task-circle-check ${isDone ? 'is-done' : ''} ${!isDone ? 'is-expired' : ''}" 
-                                            onclick="event.stopPropagation(); toggleTaskCompletion('${rawTaskId}', '${escListTitle}', ${!isDone}, this)"
-                                            style="margin-top: 2px; flex-shrink: 0;"
-                                            title="${isDone ? 'Als unerledigt markieren' : 'Aufgabe abhaken'}"
-                                            aria-label="${isDone ? 'Als unerledigt markieren' : 'Aufgabe abhaken'}">
-                                        ${isDone ? googleIcon('check', '12px', 'fill: #11111b;') : ''}
-                                    </button>
-                                    <div style="line-height: 1.35; color: var(--text); overflow: hidden; text-overflow: ellipsis; word-break: break-word; flex: 1;">
-                                        <span style="font-weight: 600; color: ${titleColor}; text-decoration: ${textDecor};">${escapeHtml(t.title)}</span>
-                                        ${repeatBadge}
-                                        <div style="font-size: 0.7rem; color: ${badgeColor}; font-weight: 700; margin-top: 2px; display: flex; align-items: center; gap: 3px;">
-                                            <span>${badgeIcon} ${escapeHtml(dueText)}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                        const extraDayTaskData = `data-task-id="${rawTaskId}" data-task-title="${escTitle}" data-task-notes="${escNotes}" data-task-due="${t.due || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}" data-task-completed="${isDone}" data-task-project-id="${t.projectId || ''}"`;
-                        dayInnerHtml += renderSwipeLinkWrapper(taskContent, t.title, 'task', rawTaskId, '', '', '', extraDayTaskData);
-                    });
-                    dayInnerHtml += `
-                            </div>
-                        </div>
-                    `;
-                }
-
-                // 1. Tagebucheinträge (falls vorhanden)
-                if (hasEntries) {
-                    dayInnerHtml += `
-                        <div style="display: flex; flex-direction: column; gap: 4px;">
-                            <div style="font-size: 0.7rem; font-weight: bold; color: #fab387; text-transform: uppercase; letter-spacing: 0.5px;">📝 Tagebucheinträge</div>
-                            <div style="display: flex; flex-direction: column; gap: 4px;">
-                    `;
-                    dayData.diaryEntries.forEach(e => {
-                        const timeStr = new Date(e.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                        const escTitle = escapeHtml(e.title || "Tagebucheintrag").replace(/"/g, '&quot;');
-                        const entryContent = `
-                            <div style="background: rgba(250, 179, 135, 0.06); border: 1px solid rgba(250, 179, 135, 0.2); padding: 7px 10px; border-radius: 6px; font-size: 0.78rem; display: flex; flex-direction: column; gap: 2px; width: 100%;">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <strong style="color: #fab387; font-size: 0.78rem;">${escapeHtml(e.title || "Tagebucheintrag")}</strong>
-                                    <span style="font-size: 0.65rem; opacity: 0.5;">${timeStr} Uhr</span>
-                                </div>
-                                <div style="white-space: pre-wrap; word-break: break-word; line-height: 1.25;">${escapeHtml(e.content)}</div>
-                            </div>
-                        `;
-                        const extraJournalData = `data-journal-id="${e.id}" data-journal-title="${escTitle}" data-journal-date="${dateStr}"`;
-                        dayInnerHtml += renderSwipeLinkWrapper(entryContent, e.title || "Tagebucheintrag", 'journal', e.id, '', '', '', extraJournalData);
-                    });
-                    dayInnerHtml += `
-                            </div>
-                        </div>
-                    `;
-                }
-
-                // 2. Kalender-Events & Aufgaben mit Fälligkeit
-                if (hasEvents) {
-                    dayInnerHtml += `
-                        <div style="display: flex; flex-direction: column; gap: 4px;">
-                    `;
-                    dayData.events.forEach(ev => {
-                        if (ev.isTask) {
-                            const escTitle = escapeHtml(ev.title).replace(/"/g, '&quot;');
-                            const escNotes = escapeHtml(ev.description || '').replace(/"/g, '&quot;');
-                            const escListTitle = escapeHtml(ev.listTitle || '').replace(/"/g, '&quot;');
-                            const recurrenceVal = ev.recurrence || 'none';
-                            const isRecurring = ev.recurring || false;
-                            const repeatBadge = isRecurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrend: ${ev.recurrence}">🔄</span>` : '';
-                            
-                            let personsHtml = "";
-                            if (ev.persons && ev.persons.length > 0) {
-                                ev.persons.forEach(p => {
-                                    personsHtml += `
-                                        <span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; transition: all 0.2s;">
-                                          👤 ${escapeHtml(p.name)}
-                                        </span>
-                                    `;
-                                });
-                            }
-
-                            const rawTaskId = ev.id.replace('task-', '');
-                            const checkedAttr = ev.completed ? 'checked' : '';
-                            const textStyle = ev.completed ? 'text-decoration: line-through; opacity: 0.5;' : '';
-
-                            const isExpiredTaskWithTime = !ev.completed && ev.time && (Date.now() >= new Date(ev.time).getTime());
-                            const taskExpiredStyle = isExpiredTaskWithTime ? 'border: 1.5px solid var(--off) !important; background: rgba(243, 139, 168, 0.06);' : 'background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);';
-
-                            const taskContent = `
-                                <div class="task-item" style="font-size: 0.8rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; ${taskExpiredStyle} width: 100%;">
-                                    <div style="display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; min-width: 0; flex: 1;">
-                                        <button type="button" 
-                                                class="task-circle-check ${ev.completed ? 'is-done' : ''} ${isExpiredTaskWithTime ? 'is-expired' : ''}" 
-                                                onclick="event.stopPropagation(); toggleTaskCompletion('${rawTaskId}', '${ev.listTitle || 'Standard'}', ${!ev.completed}, this)"
-                                                style="margin-top: 2px; flex-shrink: 0;"
-                                                title="${ev.completed ? 'Als unerledigt markieren' : 'Aufgabe abhaken'}"
-                                                aria-label="${ev.completed ? 'Als unerledigt markieren' : 'Aufgabe abhaken'}">
-                                            ${ev.completed ? googleIcon('check', '12px', 'fill: #11111b;') : ''}
-                                        </button>
-                                        <div style="line-height: 1.35; color: var(--text); overflow: hidden; text-overflow: ellipsis; word-break: break-word; flex: 1; ${textStyle}">
-                                            <strong style="color: ${isExpiredTaskWithTime ? 'var(--off)' : 'inherit'};">[Aufgabe]</strong> ${escapeHtml(ev.title)}
-                                            ${repeatBadge}
-                                            ${personsHtml}
-                                        </div>
-                                    </div>
-                                </div>
-                            `;
-                            const extraDayTaskData = `data-task-id="${rawTaskId}" data-task-title="${escTitle}" data-task-notes="${escNotes}" data-task-due="${ev.time || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}" data-task-completed="${!!ev.completed}" data-task-project-id="${ev.projectId || ''}"`;
-                            dayInnerHtml += renderSwipeLinkWrapper(taskContent, ev.title, 'task', rawTaskId, '', '', '', extraDayTaskData);
-                        } else {
-                            const isRec = ev.recurring || ev.isRecurring;
-                            const repeatBadge = isRec ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
-                            const rescheduleBadge = ev.originalStart ? ` <span style="background: rgba(249, 226, 175, 0.15); color: #f9e2af; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase;" title="Dieser Termin wurde verschoben">verschoben</span>` : '';
-                            const targetDate = ev.occurrenceDate || (ev.time ? ev.time.split('T')[0] : dateStr);
-                            
-                            const cancelStyle = ev.isCancelled ? 'color: var(--off); text-decoration: line-through;' : '';
-                            const titleCancelStyle = ev.isCancelled ? 'color: var(--off); font-weight: 500;' : 'font-weight: 500;';
-                            const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
-                            
-                            const rescheduleBorder = ev.originalStart ? 'border-left: 3px solid #f9e2af; padding-left: 6px;' : '';
-                            const escTitle = escapeHtml(ev.title).replace(/"/g, '&quot;');
-                            const escDesc = escapeHtml(ev.description || '').replace(/"/g, '&quot;');
-                            const escPersonsJson = escapeHtml(JSON.stringify(ev.persons || [])).replace(/"/g, '&quot;');
-                            const escReason = escapeHtml(ev.cancellationReason || '').replace(/"/g, '&quot;');
-                            
-                            const timeBadgeHtml = getEventTimeBadge(ev);
-                            let todayStatusBadge = '';
-                            if (isToday && !ev.isAllDay && (ev.time || ev.start)) {
-                                const startMs = new Date(ev.time || ev.start).getTime();
-                                const endMs = (ev.endTime || ev.end) ? new Date(ev.endTime || ev.end).getTime() : startMs + 60 * 60 * 1000;
-                                const nowMs = Date.now();
-                                if (nowMs >= endMs) {
-                                    todayStatusBadge = '';
-                                } else if (nowMs >= startMs && nowMs < endMs) {
-                                    todayStatusBadge = `<span class="timeline-active-badge"><span class="active-pulse-dot"></span> Läuft gerade</span>`;
-                                }
-                            }
-                            
-                            let personsHtml = "";
-                            if (ev.persons && ev.persons.length > 0) {
-                                ev.persons.forEach(p => {
-                                    personsHtml += `
-                                        <span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; transition: all 0.2s;">
-                                          👤 ${escapeHtml(p.name)}
-                                        </span>
-                                    `;
-                                });
-                            }
-
-                            let birthdayStyle = "border-bottom: 1px solid rgba(255,255,255,0.02); padding: 4px 0;";
-                            if (ev.isBirthday) {
-                                birthdayStyle = "background: rgba(245, 194, 231, 0.08); border: 1px solid rgba(245, 194, 231, 0.2); border-left: 3px solid #f5c2e7; padding: 5px 8px; border-radius: 6px; margin: 2px 0;";
-                            }
-
-                            const originalTimeText = ev.originalStart ? ` <span style="font-size: 0.7rem; opacity: 0.65; color: #f9e2af;">(ursprünglich: ${new Date(ev.originalStart).toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit'})} ${new Date(ev.originalStart).toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'})})</span>` : '';
-
-                            const eventContent = `
-                                <div style="font-size: 0.8rem; display: flex; justify-content: space-between; align-items: flex-start; width: 100%; ${birthdayStyle} ${rescheduleBorder} ${cancelStyle}">
-                                    <div style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
-                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                            <span style="${titleCancelStyle}">${escapeHtml(ev.title)}</span>
-                                            ${repeatBadge}
-                                            ${rescheduleBadge}
-                                            ${originalTimeText}
-                                            ${reasonHtml}
-                                        </div>
-                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px;">
-                                            ${timeBadgeHtml}
-                                            ${todayStatusBadge}
-                                            ${personsHtml}
-                                        </div>
-                                        ${ev.description ? `<div style="font-size: 0.72rem; opacity: 0.6; margin-top: 2px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(ev.description)}</div>` : ''}
-                                    </div>
-                                </div>
-                            `;
-                            const linkType = ev.isBirthday && ev.persons && ev.persons.length > 0 ? 'person' : 'event';
-                            const linkId = ev.isBirthday && ev.persons && ev.persons.length > 0 ? ev.persons[0].id : ev.id;
-                            const extraTimelineEventData = `data-event-id="${ev.id}" data-event-title="${escTitle}" data-event-date="${targetDate}" data-event-start="${ev.start || ev.time || ''}" data-event-end="${ev.end || ''}" data-event-is-allday="${!!ev.isAllDay}" data-event-fuzzy="${ev.fuzzyTime || ''}" data-event-desc="${escDesc}" data-event-is-rec="${isRec}" data-event-is-birthday="${!!ev.isBirthday}" data-person-id="${ev.persons && ev.persons.length > 0 ? ev.persons[0].id : ''}" data-event-persons="${escPersonsJson}" data-event-iscancelled="${!!ev.isCancelled}" data-event-cancelreason="${escReason}" data-event-originalstart="${ev.originalStart || ''}"`;
-                            dayInnerHtml += renderSwipeLinkWrapper(eventContent, ev.title, linkType, linkId, '', '', '', extraTimelineEventData);
-                        }
-                    });
-                    dayInnerHtml += `</div>`;
-                }
-
-                // 3. Erledigte Aufgaben (für vergangene Tage; für Heute stehen erledigte ausstehende Aufgaben oben und andere erledigte Aufgaben werden nicht angezeigt)
-                if (hasCompletedTasks && !isToday) {
-                    dayInnerHtml += `
-                        <div style="display: flex; flex-direction: column; gap: 3px; margin-top: 2px;">
-                            <div style="font-size: 0.7rem; font-weight: bold; color: #89b4fa; text-transform: uppercase; letter-spacing: 0.5px;">✅ Erledigte Aufgaben</div>
-                            <div style="display: flex; flex-direction: column; gap: 3px;">
-                    `;
-                    dayData.completedTasks.forEach(t => {
-                        const doneTime = t.completedAt ? new Date(t.completedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
-                        dayInnerHtml += `
-                            <div style="background: rgba(137, 180, 250, 0.05); border: 1px solid rgba(137, 180, 250, 0.2); padding: 4px 6px; border-radius: 6px; font-size: 0.74rem; display: flex; justify-content: space-between; align-items: center;">
-                                <span style="color: var(--text);">✔️ ${escapeHtml(t.title)}</span>
-                                <span style="font-size: 0.65rem; color: #89b4fa;">${doneTime ? 'um ' + doneTime + ' Uhr' : 'erledigt'}</span>
-                            </div>
-                        `;
-                    });
-                    dayInnerHtml += `
-                            </div>
-                        </div>
-                    `;
-                }
-            }
-
-            dayInnerHtml += `</div>`;
-
-            const dayBorderColor = isToday ? 'rgba(137, 180, 250, 0.35)' : 'rgba(255, 255, 255, 0.08)';
-            const dayBg = isToday ? 'rgba(137, 180, 250, 0.025)' : 'transparent';
-            const extraDayData = `id="timeline-day-${dateStr}" data-date="${dateStr}" data-day-date="${dateStr}" data-day-label="${dayTitleLabel}"`;
-            return renderSwipeLinkWrapper(
-                dayInnerHtml,
-                dayData.displayDate || formattedDate,
-                'day',
-                dateStr,
-                boxClass,
-                `display: flex; flex-direction: column; width: 100%; background: ${dayBg}; border-top: 1px solid ${dayBorderColor}; border-bottom: 1px solid ${dayBorderColor}; border-left: none; border-right: none; border-radius: 0; box-shadow: none; margin-bottom: 0;`,
-                'margin-bottom: 12px; border-radius: 0;',
-                extraDayData
-            );
-        }
-
-
-
-        function checkAndLoadMoreTimelineIfNoScrollbar() {
-            const topPanel = document.querySelector('.top-panel');
-            const widgetCalendar = document.getElementById('widget-calendar');
-            if (widgetCalendar && topPanel) {
-                if (topPanel.scrollHeight <= topPanel.clientHeight && timelineCanScrollFuture && !isTimelineLoadingFuture) {
-                    const today = new Date();
-                    const newestParts = timelineNewestLoadedDateStr ? timelineNewestLoadedDateStr.split('-').map(Number) : [today.getFullYear(), today.getMonth() + 1, today.getDate()];
-                    const newestDate = new Date(newestParts[0], newestParts[1] - 1, newestParts[2]);
-                    const loadedDays = Math.ceil((newestDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                    if (loadedDays < 90) {
-                        loadMoreFutureTimelineDays().then(() => {
-                            setTimeout(checkAndLoadMoreTimelineIfNoScrollbar, 200);
-                        });
-                    }
-                }
-            }
-        }
-
-
-
-        async function renderTimelineWidget(data, containerDiv, forceIncludeDateStr = null) {
-            let rawDays = [];
-            if (data && data.timeline) {
-                rawDays = data.timeline;
-            } else if (Array.isArray(data)) {
-                rawDays = data;
-            } else if (data && data.days) {
-                rawDays = data.days;
-            }
-
-            const todayStr = getLocalDateString();
-            window.timelineOverdueTasks = (data && data.overdueTasks) || [];
-
-            if (!rawDays || rawDays.length === 0) {
-                rawDays = [{ date: todayStr, displayDate: 'Heute', events: [], diaryEntries: [], completedTasks: [], overdueTasks: window.timelineOverdueTasks }];
-            } else {
-                const todayDay = rawDays.find(d => d.date === todayStr);
-                if (todayDay) {
-                    todayDay.overdueTasks = window.timelineOverdueTasks;
-                }
-            }
-
-            rawDays.sort((a, b) => a.date.localeCompare(b.date));
-            timelineOldestLoadedDateStr = rawDays[0].date;
-            timelineNewestLoadedDateStr = rawDays[rawDays.length - 1].date;
-            timelineCanScrollPast = true;
-            timelineCanScrollFuture = true;
-
-            // Render all days continuously
-            let visibleDays = [...rawDays];
-            visibleDays.sort((a, b) => a.date.localeCompare(b.date)); // Chronological ascending
-
-            // Keep header date input updated
-            const headerDateInput = document.getElementById('header-calendar-date');
-            if (headerDateInput) {
-                headerDateInput.value = forceIncludeDateStr || todayStr;
-            }
-
-            let html = `
-                <div style="text-align: left; padding: 0 0 15px 0; display: flex; flex-direction: column; gap: 10px;">
-                    <div id="timeline-loading-past" style="display: none; text-align: center; padding: 6px; font-size: 0.72rem; color: #fab387; opacity: 0.85;">⬆️ Lade vergangene Tage...</div>
-                    
-                    <!-- Scrollbare Tage-Liste (Oben: Vergangenheit, Unten: Zukunft) -->
-                    <div id="timeline-days-list" style="display: flex; flex-direction: column;">
-            `;
-
-            for (let i = 0; i < visibleDays.length; i++) {
-                html += renderTimelineDayHtml(visibleDays[i]);
-            }
-
-            html += `
-                    </div>
-                    
-                    <div id="timeline-loading-future" style="display: none; text-align: center; padding: 6px; font-size: 0.72rem; color: #2ecc71; opacity: 0.85;">⬇️ Lade zukünftige Tage...</div>
-                </div>
-            `;
-
-            containerDiv.innerHTML = html;
-
-            const scrollTargetDate = forceIncludeDateStr || todayStr;
-            setTimeout(() => {
-                const targetEl = document.getElementById(`timeline-day-${scrollTargetDate}`);
-                if (targetEl) {
-                    scrollElementInsideTopPanel(targetEl, 'start', forceIncludeDateStr ? 'smooth' : 'auto');
-                    if (forceIncludeDateStr) {
-                        flashTimelineDay(targetEl);
-                    }
-                }
-                checkAndLoadMoreTimelineIfNoScrollbar();
-            }, 60);
-        }
-
-
-
-        async function loadMorePastTimelineDays() {
-            if (isTimelineLoadingPast || !timelineOldestLoadedDateStr || !timelineCanScrollPast) return;
-            isTimelineLoadingPast = true;
-
-            const loadingIndicator = document.getElementById('timeline-loading-past');
-            if (loadingIndicator) loadingIndicator.style.display = 'block';
-
-            const topPanel = document.querySelector('.top-panel');
-            const prevScrollHeight = topPanel ? topPanel.scrollHeight : 0;
-            const prevScrollTop = topPanel ? topPanel.scrollTop : 0;
-
-            try {
-                const oldestParts = timelineOldestLoadedDateStr.split('-').map(Number);
-                const endDate = new Date(oldestParts[0], oldestParts[1] - 1, oldestParts[2] - 1, 12, 0, 0);
-                const startDate = new Date(endDate);
-                startDate.setDate(startDate.getDate() - 13); // 14 Tage Vergangenheit nachladen
-
-                const startStr = getLocalDateString(startDate);
-                const endStr = getLocalDateString(endDate);
-
-                const res = await fetch(getApiUrl(`/api/calendar/timeline?start=${startStr}&end=${endStr}`));
-                if (!res.ok) throw new Error("Fehler beim Laden");
-                const data = await res.json();
-                const rawDays = data.days || [];
-
-                timelineOldestLoadedDateStr = startStr;
-
-                const visibleDays = [...rawDays];
-
-                const daysListDiv = document.getElementById('timeline-days-list');
-                if (daysListDiv && visibleDays.length > 0) {
-                    visibleDays.sort((a, b) => a.date.localeCompare(b.date));
-
-                    let prependHtml = '';
-                    for (let i = 0; i < visibleDays.length; i++) {
-                        if (!document.getElementById(`timeline-day-${visibleDays[i].date}`)) {
-                            prependHtml += renderTimelineDayHtml(visibleDays[i]);
-                        }
-                    }
-
-                    if (prependHtml) {
-                        daysListDiv.insertAdjacentHTML('afterbegin', prependHtml);
-                        if (topPanel) {
-                            const newScrollHeight = topPanel.scrollHeight;
-                            topPanel.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
-                        }
-                    }
-                }
-            } catch (e) {
-                console.error("Fehler beim Nachladen vergangener Tage:", e);
-            } finally {
-                isTimelineLoadingPast = false;
-                if (loadingIndicator) loadingIndicator.style.display = 'none';
-            }
-        }
-
-
-
-        async function loadMoreFutureTimelineDays() {
-            if (isTimelineLoadingFuture || !timelineNewestLoadedDateStr || !timelineCanScrollFuture) return;
-            isTimelineLoadingFuture = true;
-
-            const loadingIndicator = document.getElementById('timeline-loading-future');
-            if (loadingIndicator) loadingIndicator.style.display = 'block';
-
-            try {
-                const newestParts = timelineNewestLoadedDateStr.split('-').map(Number);
-                const startDate = new Date(newestParts[0], newestParts[1] - 1, newestParts[2] + 1, 12, 0, 0);
-                const endDate = new Date(startDate);
-                endDate.setDate(endDate.getDate() + 13); // 14 Tage Zukunft
-
-                const startStr = getLocalDateString(startDate);
-                const endStr = getLocalDateString(endDate);
-
-                const res = await fetch(getApiUrl(`/api/calendar/timeline?start=${startStr}&end=${endStr}`));
-                if (!res.ok) throw new Error("Fehler beim Laden");
-                const data = await res.json();
-                const rawDays = data.days || [];
-
-                timelineNewestLoadedDateStr = endStr;
-
-                const visibleDays = [...rawDays];
-
-                const daysListDiv = document.getElementById('timeline-days-list');
-                if (daysListDiv && visibleDays.length > 0) {
-                    visibleDays.sort((a, b) => a.date.localeCompare(b.date));
-
-                    let appendHtml = '';
-                    for (let i = 0; i < visibleDays.length; i++) {
-                        if (!document.getElementById(`timeline-day-${visibleDays[i].date}`)) {
-                            appendHtml += renderTimelineDayHtml(visibleDays[i]);
-                        }
-                    }
-
-                    if (appendHtml) {
-                        daysListDiv.insertAdjacentHTML('beforeend', appendHtml);
-                    }
-                }
-            } catch (e) {
-                console.error("Fehler beim Nachladen zukünftiger Tage:", e);
-            } finally {
-                isTimelineLoadingFuture = false;
-                if (loadingIndicator) loadingIndicator.style.display = 'none';
-            }
-        }
-
-
+        window.navigateCalendarDay = navigateCalendarDay;
 
         async function jumpToTimelineDate(dateStr) {
-            if (!dateStr) return;
-            if (dateStr === 'today') {
+            if (!dateStr || dateStr === 'today') {
                 dateStr = getLocalDateString();
             }
 
@@ -624,65 +99,704 @@
                 document.activeElement.blur();
             }
 
-            const inputEl = document.getElementById('timeline-jump-date-input');
-            if (inputEl) inputEl.value = dateStr;
+            window.currentCalendarDate = dateStr;
+
             const headerDateInput = document.getElementById('header-calendar-date');
             if (headerDateInput) headerDateInput.value = dateStr;
+            const inPageDateInput = document.getElementById('calendar-active-date-picker');
+            if (inPageDateInput) inPageDateInput.value = dateStr;
 
             if (document.body.classList.contains('mobile-mode') && !document.body.classList.contains('view-calendar')) {
-                switchMobileView('calendar');
+                if (typeof switchMobileView === 'function') {
+                    switchMobileView('calendar');
+                }
             }
 
-            let targetEl = document.getElementById(`timeline-day-${dateStr}`);
-            if (targetEl) {
-                const doScroll = () => {
-                    scrollElementInsideTopPanel(targetEl, 'start', 'smooth');
-                    flashTimelineDay(targetEl);
-                };
-                doScroll();
-                requestAnimationFrame(doScroll);
-                setTimeout(doScroll, 80);
+            const widgetCalendar = document.getElementById('widget-calendar');
+            if (!widgetCalendar) return;
+
+            // Check if day data is already cached
+            if (window.calendarTimelineCache && window.calendarTimelineCache[dateStr]) {
+                renderVerticalDayTimeline(dateStr, window.calendarTimelineCache[dateStr], widgetCalendar);
                 return;
             }
 
+            // Otherwise fetch day data from API
             try {
-                const parts = dateStr.split('-').map(Number);
-                const targetObj = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
-                const startObj = new Date(targetObj);
-                startObj.setDate(startObj.getDate() - 7);
-                const endObj = new Date(targetObj);
-                endObj.setDate(endObj.getDate() + 7);
-
-                const startStr = getLocalDateString(startObj);
-                const endStr = getLocalDateString(endObj);
-
-                const res = await fetch(getApiUrl(`/api/calendar/timeline?start=${startStr}&end=${endStr}`));
+                widgetCalendar.innerHTML = `
+                    <div style="padding: 20px; text-align: center; color: var(--accent); font-size: 0.85rem;">
+                        <span style="display: inline-block; animation: spin 1s infinite linear;">⏳</span> Lade Kalender für ${dateStr}...
+                    </div>
+                `;
+                const res = await fetch(getApiUrl(`/api/calendar/timeline?start=${dateStr}&end=${dateStr}`));
                 if (res.ok) {
                     const data = await res.json();
-                    const widgetCalendar = document.getElementById('widget-calendar');
-                    if (widgetCalendar) {
-                        renderTimelineWidget(data, widgetCalendar, dateStr);
-                    }
+                    const dayItem = (data.days && data.days.length > 0) ? data.days[0] : {
+                        date: dateStr,
+                        events: [],
+                        diaryEntries: [],
+                        completedTasks: []
+                    };
+                    window.calendarTimelineCache = window.calendarTimelineCache || {};
+                    window.calendarTimelineCache[dateStr] = dayItem;
+                    renderVerticalDayTimeline(dateStr, dayItem, widgetCalendar);
                 }
             } catch (e) {
                 console.error("Fehler beim Laden des Ziel-Datums:", e);
+                widgetCalendar.innerHTML = `
+                    <div style="padding: 15px; color: var(--off); font-size: 0.8rem; text-align: center;">
+                        Fehler beim Laden des Datums. Bitte versuche es erneut.
+                    </div>
+                `;
             }
         }
-
-
         window.jumpToTimelineDate = jumpToTimelineDate;
 
+        async function renderTimelineWidget(data, containerDiv, forceIncludeDateStr = null) {
+            if (!containerDiv) return;
 
+            const todayStr = getLocalDateString();
+            const targetDate = forceIncludeDateStr || window.currentCalendarDate || todayStr;
+            window.currentCalendarDate = targetDate;
 
-        function flashTimelineDay(el) {
-            if (!el) return;
-            el.classList.add('timeline-jump-highlight');
-            setTimeout(() => {
-                el.classList.remove('timeline-jump-highlight');
-            }, 1800);
+            // Cache all days received
+            window.calendarTimelineCache = window.calendarTimelineCache || {};
+            if (data && data.timeline && Array.isArray(data.timeline)) {
+                data.timeline.forEach(day => {
+                    if (day && day.date) {
+                        window.calendarTimelineCache[day.date] = day;
+                    }
+                });
+            }
+
+            // Also cache overdueTasks if provided
+            if (data && data.overdueTasks) {
+                window.timelineOverdueTasks = data.overdueTasks;
+            }
+
+            // If day is already in cache
+            if (window.calendarTimelineCache[targetDate]) {
+                renderVerticalDayTimeline(targetDate, window.calendarTimelineCache[targetDate], containerDiv);
+                return;
+            }
+
+            // Fetch day if missing
+            await jumpToTimelineDate(targetDate);
         }
+        window.renderTimelineWidget = renderTimelineWidget;
 
+        function renderVerticalDayTimeline(dateStr, dayData, containerDiv) {
+            if (!containerDiv) return;
+            dayData = dayData || { date: dateStr, events: [], diaryEntries: [], completedTasks: [] };
 
+            const todayStr = getLocalDateString();
+            const isToday = (dateStr === todayStr);
+            const isPast = (dateStr < todayStr);
+            const isFuture = (dateStr > todayStr);
+
+            const parts = dateStr.split('-').map(Number);
+            const dateObj = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+            const weekdayLong = dateObj.toLocaleDateString('de-DE', { weekday: 'long' });
+            const dayMonthLong = dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' });
+
+            const yesterdayObj = new Date(); yesterdayObj.setDate(yesterdayObj.getDate() - 1);
+            const yesterdayStr = getLocalDateString(yesterdayObj);
+            const tomorrowObj = new Date(); tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+            const tomorrowStr = getLocalDateString(tomorrowObj);
+
+            let dayBadgeHtml = '';
+            if (isToday) {
+                dayBadgeHtml = '<span class="calendar-nav-badge today">Heute</span>';
+            } else if (dateStr === yesterdayStr) {
+                dayBadgeHtml = '<span class="calendar-nav-badge yesterday">Gestern</span>';
+            } else if (dateStr === tomorrowStr) {
+                dayBadgeHtml = '<span class="calendar-nav-badge tomorrow">Morgen</span>';
+            }
+
+            const rawEvents = dayData.events || [];
+            const diaryEntries = dayData.diaryEntries || [];
+            const completedTasks = dayData.completedTasks || [];
+            const overdueTasks = isToday ? (window.timelineOverdueTasks || dayData.overdueTasks || []) : [];
+
+            // Tomorrow events for bedtime recommendation
+            const nextDayDate = new Date(dateObj);
+            nextDayDate.setDate(nextDayDate.getDate() + 1);
+            const nextDayStr = getLocalDateString(nextDayDate);
+            const tomorrowDayData = (window.calendarTimelineCache && window.calendarTimelineCache[nextDayStr]) ? window.calendarTimelineCache[nextDayStr] : null;
+            const tomorrowEvents = tomorrowDayData ? (tomorrowDayData.events || []) : [];
+            const bedtimeAdvice = getBedtimeRecommendation(tomorrowEvents);
+
+            // Sync top header input
+            const headerDateInput = document.getElementById('header-calendar-date');
+            if (headerDateInput) headerDateInput.value = dateStr;
+
+            let html = `
+                <div class="calendar-day-timeline-wrapper">
+                    <!-- Day Navigation Bar -->
+                    <div class="calendar-day-nav-bar glass-card">
+                        <div class="calendar-nav-controls">
+                            <button type="button" class="calendar-nav-btn" onclick="navigateCalendarDay(-1)" title="Vorheriger Tag">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                            </button>
+                            <button type="button" class="calendar-nav-btn today-btn ${isToday ? 'active' : ''}" onclick="jumpToTimelineDate('today')" title="Zu Heute springen">
+                                Heute
+                            </button>
+                            <button type="button" class="calendar-nav-btn" onclick="navigateCalendarDay(1)" title="Nächster Tag">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            </button>
+                        </div>
+                        <div class="calendar-nav-date-box" onclick="document.getElementById('calendar-active-date-picker').showPicker ? document.getElementById('calendar-active-date-picker').showPicker() : document.getElementById('calendar-active-date-picker').focus()">
+                            <input type="date" id="calendar-active-date-picker" value="${dateStr}" onchange="jumpToTimelineDate(this.value)" class="calendar-native-date-input">
+                            <div class="calendar-date-text">
+                                <span class="calendar-weekday">${weekdayLong},</span>
+                                <span class="calendar-date-number">${dayMonthLong}</span>
+                                ${dayBadgeHtml}
+                            </div>
+                        </div>
+                        <div class="calendar-nav-actions">
+                            <button type="button" class="calendar-action-btn diary-btn" onclick="openDiaryModal('${dateStr}')" title="Tagebucheintrag verfassen">
+                                <span>📝</span> <span class="btn-text">+ Tagebuch</span>
+                            </button>
+                            <button type="button" class="calendar-action-btn event-btn" onclick="openEventEditModal(null, '', '${dateStr}T10:00:00', '${dateStr}T11:00:00', false, '', '', false, '${dateStr}')" title="Neuen Termin an diesem Tag erstellen">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                <span class="btn-text">+ Termin</span>
+                            </button>
+                        </div>
+                    </div>
+            `;
+
+            // Overdue tasks (for today)
+            if (isToday && overdueTasks.length > 0) {
+                const uncompleted = overdueTasks.filter(t => !t.completed && t.status !== 'done');
+                const completed = overdueTasks.filter(t => t.completed || t.status === 'done');
+                const badgeText = completed.length > 0 ? `${uncompleted.length} offen, ${completed.length} erledigt` : `${overdueTasks.length}`;
+                html += `
+                    <div class="calendar-overdue-box glass-card">
+                        <div class="calendar-overdue-header">
+                            ${googleIcon('verified', '13px', 'fill: var(--off);')} Ausstehende Aufgaben (${badgeText})
+                        </div>
+                        <div class="calendar-overdue-list">
+                `;
+                overdueTasks.forEach(t => {
+                    const rawTaskId = String(t.id).replace('task-', '');
+                    const escTitle = escapeHtml(t.title || 'Aufgabe');
+                    const escListTitle = escapeHtml(t.listTitle || 'Standard');
+                    const isDone = !!t.completed || t.status === 'done';
+                    const recurrenceVal = t.recurrence || 'none';
+                    const isRecurring = recurrenceVal && recurrenceVal !== 'none';
+                    const repeatBadge = isRecurring ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrend: ${recurrenceVal}">🔄</span>` : '';
+                    let dueText = '';
+                    if (t.due) {
+                        const dateObj = new Date(t.due);
+                        dueText = dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ' ' + dateObj.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                    }
+                    const textStyle = isDone ? 'text-decoration: line-through; opacity: 0.5;' : '';
+                    const itemHtml = `
+                        <div class="arbeitstisch-task-card ${isDone ? 'is-done' : 'is-overdue'}">
+                            <div style="display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 0;">
+                                <button type="button" 
+                                        class="task-circle-check ${isDone ? 'is-done' : 'is-expired'}" 
+                                        onclick="event.stopPropagation(); toggleTaskCompletion('${rawTaskId}', '${escListTitle}', ${!isDone}, this)"
+                                        style="margin-top: 2px; flex-shrink: 0;"
+                                        title="${isDone ? 'Als unerledigt markieren' : 'Aufgabe abhaken'}">
+                                    ${isDone ? googleIcon('check', '12px', 'fill: #11111b;') : ''}
+                                </button>
+                                <div style="flex: 1; min-width: 0; ${textStyle}">
+                                    <div style="font-weight: 600; font-size: 0.82rem; color: var(--text); word-break: break-word;">
+                                        ${escTitle} ${repeatBadge}
+                                    </div>
+                                    <div style="font-size: 0.68rem; color: ${isDone ? '#a6e3a1' : 'var(--off)'}; margin-top: 2px;">
+                                        ${isDone ? '✓ Erledigt' : '⚠ Fällig seit ' + dueText}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    const extraData = `data-task-id="${rawTaskId}" data-task-title="${escTitle}" data-task-notes="${escapeHtml(t.notes || '')}" data-task-due="${t.due || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}" data-task-completed="${isDone}"`;
+                    html += renderSwipeLinkWrapper(itemHtml, t.title, 'task', rawTaskId, '', '', '', extraData);
+                });
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Events & Tasks Vertical Timeline
+            if (rawEvents.length > 0) {
+                const sortedEvents = [...rawEvents].sort((a, b) => {
+                    const ta = new Date(a.time || a.start || 0).getTime();
+                    const tb = new Date(b.time || b.start || 0).getTime();
+                    return ta - tb;
+                });
+
+                const nowMs = Date.now();
+                let foundNext = false;
+                let prevEventEndMs = null;
+                let prevEventLocation = null;
+
+                html += `<div class="today-vertical-timeline" style="margin-top: 10px;">`;
+
+                sortedEvents.forEach(ev => {
+                    let evIsPast = isPast;
+                    let evIsCurrent = false;
+                    let evIsFuture = isFuture;
+                    let evIsNext = false;
+                    let progressPercent = 0;
+                    let remainingMinutes = 0;
+                    let elapsedMinutes = 0;
+                    let totalMinutes = 0;
+
+                    let currStartMs = null;
+                    let currEndMs = null;
+                    let isExpiredTask = false;
+
+                    if (ev.isTask) {
+                        if (ev.completed) {
+                            evIsPast = true;
+                        } else if (ev.time) {
+                            currStartMs = new Date(ev.time).getTime();
+                            currEndMs = currStartMs + 30 * 60 * 1000;
+                            if (isToday) {
+                                if (nowMs >= currStartMs) isExpiredTask = true;
+                                else {
+                                    evIsFuture = true;
+                                    if (!foundNext) { evIsNext = true; foundNext = true; }
+                                }
+                            }
+                        } else {
+                            if (isToday) {
+                                evIsFuture = true;
+                                if (!foundNext) { evIsNext = true; foundNext = true; }
+                            }
+                        }
+                    } else {
+                        if (ev.isAllDay) {
+                            if (isToday) evIsCurrent = true;
+                        } else if (ev.time || ev.start) {
+                            currStartMs = new Date(ev.time || ev.start).getTime();
+                            currEndMs = (ev.endTime || ev.end) ? new Date(ev.endTime || ev.end).getTime() : currStartMs + 60 * 60 * 1000;
+
+                            if (isToday) {
+                                if (nowMs >= currEndMs) {
+                                    evIsPast = true;
+                                } else if (nowMs >= currStartMs && nowMs < currEndMs) {
+                                    if (!ev.isCancelled) {
+                                        evIsCurrent = true;
+                                        totalMinutes = Math.max(1, Math.round((currEndMs - currStartMs) / 60000));
+                                        elapsedMinutes = Math.max(0, Math.round((nowMs - currStartMs) / 60000));
+                                        remainingMinutes = Math.max(0, Math.round((currEndMs - nowMs) / 60000));
+                                        progressPercent = Math.min(100, Math.max(5, Math.round((elapsedMinutes / totalMinutes) * 100)));
+                                    }
+                                } else {
+                                    evIsFuture = true;
+                                    if (!foundNext && !ev.isCancelled) { evIsNext = true; foundNext = true; }
+                                }
+                            }
+                        }
+                    }
+
+                    // Pauses and travel times between events
+                    if (prevEventEndMs !== null && currStartMs !== null && currStartMs > prevEventEndMs) {
+                        const gapMinutes = Math.round((currStartMs - prevEventEndMs) / 60000);
+                        const locA = (prevEventLocation || '').trim();
+                        const locB = (!ev.isTask && ev.location ? ev.location : '').trim();
+                        const isLocChange = locA && locB && locA.toLowerCase() !== locB.toLowerCase();
+
+                        if (isLocChange && ev.travelMode) {
+                            const transitInfo = ev.travelTransitDetails;
+                            const travelMins = ev.travelDurationMinutes || 15;
+                            let travelStartMs = currStartMs - (travelMins * 60000);
+                            let travelEndMs = currStartMs;
+
+                            if (transitInfo) {
+                                if (transitInfo.journeyStartDateTime) travelStartMs = new Date(transitInfo.journeyStartDateTime).getTime();
+                                if (transitInfo.journeyEndDateTime) travelEndMs = new Date(transitInfo.journeyEndDateTime).getTime();
+                            }
+
+                            const pauseBeforeTravel = Math.round((travelStartMs - prevEventEndMs) / 60000);
+                            if (pauseBeforeTravel >= 3) {
+                                const pStart = new Date(prevEventEndMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                                const pEnd = new Date(travelStartMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                                const isPPast = isPast || (isToday && nowMs >= travelStartMs);
+                                const isPCurr = isToday && nowMs >= prevEventEndMs && nowMs < travelStartMs;
+                                const pRemaining = isPCurr ? Math.max(0, Math.round((travelStartMs - nowMs) / 60000)) : 0;
+                                const pElapsed = isPCurr ? Math.max(0, Math.round((nowMs - prevEventEndMs) / 60000)) : 0;
+                                const pTotal = Math.max(1, pauseBeforeTravel);
+                                const pProgress = isPCurr ? Math.min(100, Math.max(5, Math.round((pElapsed / pTotal) * 100))) : 0;
+                                const pauseLabel = `Pause: ${pStart} – ${pEnd} Uhr (${pauseBeforeTravel} Min.)`;
+                                const pauseId = `pause_${pStart.replace(':', '')}_${pEnd.replace(':', '')}`;
+
+                                const pauseItemHtml = `
+                                    <div class="timeline-pause-row ${isPCurr ? 'is-current' : ''}">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 6px;">
+                                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                                <span class="timeline-time-badge pause-time-badge">${pStart} – ${pEnd} Uhr</span>
+                                                <strong style="color: rgba(255,255,255,0.9); font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">${googleIcon('coffee', '13px', 'fill: #f9e2af;')} Pause vor Abreise (${pauseBeforeTravel} Min.)</strong>
+                                            </div>
+                                            ${isPCurr ? `<span class="timeline-active-badge pause-active-badge"><span class="active-pulse-dot"></span> Läuft gerade (${pProgress}% • noch ${pRemaining} Min.)</span>` : ''}
+                                        </div>
+                                    </div>
+                                `;
+
+                                html += `
+                                    <div class="timeline-step is-pause ${isPPast ? 'is-past' : (isPCurr ? 'is-current' : 'is-future')}">
+                                        <div class="timeline-step-indicator">
+                                            ${isPCurr ? `
+                                                <div class="timeline-step-line timeline-current-line" title="Pause läuft: ${pElapsed} von ${pTotal} Min">
+                                                    <div class="timeline-line-progress-fill pause-progress-fill" style="height: ${pProgress}%;"></div>
+                                                </div>
+                                            ` : `
+                                                <div class="timeline-step-line"></div>
+                                            `}
+                                        </div>
+                                        <div class="timeline-step-body">
+                                            ${renderSwipeLinkWrapper(pauseItemHtml, pauseLabel, 'pause', pauseId, 'pause-swipe-item', 'background: transparent; border: none; padding: 0;', 'margin-bottom: 0;')}
+                                        </div>
+                                    </div>
+                                `;
+                            }
+
+                            // Travel block
+                            const travelStartStr = new Date(travelStartMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                            const travelEndStr = new Date(travelEndMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                            const isTPast = isPast || (isToday && nowMs >= travelEndMs);
+                            const isTCurr = isToday && nowMs >= travelStartMs && nowMs < travelEndMs;
+                            const tElapsed = isTCurr ? Math.max(0, Math.round((nowMs - travelStartMs) / 60000)) : 0;
+                            const tTotal = Math.max(1, travelMins);
+                            const tProgress = isTCurr ? Math.min(100, Math.max(5, Math.round((tElapsed / tTotal) * 100))) : 0;
+                            const tRemaining = isTCurr ? Math.max(0, Math.round((travelEndMs - nowMs) / 60000)) : 0;
+
+                            const gMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(locA)}&destination=${encodeURIComponent(locB)}&travelmode=${ev.travelMode}`;
+                            const travelItemHtml = `
+                                <div class="arbeitstisch-item ${isTPast ? 'is-past' : ''} ${isTCurr ? 'is-current' : ''}">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                            <span class="timeline-time-badge travel-time-badge">${travelStartStr} – ${travelEndStr} Uhr</span>
+                                            <strong style="font-size: 0.8rem; color: #a6e3a1; display: inline-flex; align-items: center; gap: 4px;">${googleIcon('directions_bike', '14px', 'fill: #a6e3a1;')} Wegezeit nach ${escapeHtml(locB)}</strong>
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <a href="${gMapsUrl}" target="_blank" rel="noopener" class="timeline-maps-btn" onclick="event.stopPropagation();" title="In Google Maps öffnen">
+                                                ${googleIcon('map', '12px', 'fill: currentColor;')} Maps ↗
+                                            </a>
+                                            ${isTCurr ? `<span class="timeline-active-badge travel-active-badge"><span class="active-pulse-dot"></span> Unterwegs (${tProgress}% • noch ${tRemaining} Min.)</span>` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+
+                            html += `
+                                <div class="timeline-step is-travel ${isTPast ? 'is-past' : (isTCurr ? 'is-current' : 'is-future')}">
+                                    <div class="timeline-step-indicator">
+                                        ${isTCurr ? `
+                                            <div class="timeline-step-line timeline-current-line" title="Wegezeit läuft">
+                                                <div class="timeline-line-progress-fill travel-progress-fill" style="height: ${tProgress}%;"></div>
+                                            </div>
+                                        ` : `
+                                            <div class="timeline-step-line"></div>
+                                        `}
+                                    </div>
+                                    <div class="timeline-step-body">
+                                        ${renderSwipeLinkWrapper(travelItemHtml, 'Wegezeit', 'travel', String(ev.id), '', '', '')}
+                                    </div>
+                                </div>
+                            `;
+                        } else if (gapMinutes >= 15) {
+                            // Standard Pause
+                            const pStart = new Date(prevEventEndMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                            const pEnd = new Date(currStartMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                            const isPPast = isPast || (isToday && nowMs >= currStartMs);
+                            const isPCurr = isToday && nowMs >= prevEventEndMs && nowMs < currStartMs;
+                            const pRemaining = isPCurr ? Math.max(0, Math.round((currStartMs - nowMs) / 60000)) : 0;
+                            const pElapsed = isPCurr ? Math.max(0, Math.round((nowMs - prevEventEndMs) / 60000)) : 0;
+                            const pTotal = Math.max(1, gapMinutes);
+                            const pProgress = isPCurr ? Math.min(100, Math.max(5, Math.round((pElapsed / pTotal) * 100))) : 0;
+
+                            const pauseItemHtml = `
+                                <div class="timeline-pause-row ${isPCurr ? 'is-current' : ''}">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 6px;">
+                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                            <span class="timeline-time-badge pause-time-badge">${pStart} – ${pEnd} Uhr</span>
+                                            <strong style="color: rgba(255,255,255,0.85); font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">${googleIcon('coffee', '13px', 'fill: #f9e2af;')} Pause (${gapMinutes} Min.)</strong>
+                                        </div>
+                                        ${isPCurr ? `<span class="timeline-active-badge pause-active-badge"><span class="active-pulse-dot"></span> Läuft gerade (${pProgress}% • noch ${pRemaining} Min.)</span>` : ''}
+                                    </div>
+                                </div>
+                            `;
+
+                            html += `
+                                <div class="timeline-step is-pause ${isPPast ? 'is-past' : (isPCurr ? 'is-current' : 'is-future')}">
+                                    <div class="timeline-step-indicator">
+                                        ${isPCurr ? `
+                                            <div class="timeline-step-line timeline-current-line" title="Pause läuft">
+                                                <div class="timeline-line-progress-fill pause-progress-fill" style="height: ${pProgress}%;"></div>
+                                            </div>
+                                        ` : `
+                                            <div class="timeline-step-line"></div>
+                                        `}
+                                    </div>
+                                    <div class="timeline-step-body">
+                                        ${renderSwipeLinkWrapper(pauseItemHtml, 'Pause', 'pause', `pause_${pStart}`, 'pause-swipe-item', 'background: transparent; border: none; padding: 0;', 'margin-bottom: 0;')}
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    }
+
+                    // Render Step Item (Event or Task)
+                    let stepClass = 'timeline-step';
+                    let statusBadgeHtml = '';
+
+                    if (isExpiredTask) {
+                        stepClass += ' is-expired-task';
+                    } else if (evIsPast) {
+                        stepClass += ' is-past';
+                    } else if (evIsCurrent) {
+                        stepClass += ' is-current';
+                        statusBadgeHtml = (totalMinutes > 0)
+                            ? `<span class="timeline-active-badge"><span class="active-pulse-dot"></span> Läuft gerade (${progressPercent}% • noch ${remainingMinutes} Min.)</span>`
+                            : `<span class="timeline-active-badge"><span class="active-pulse-dot"></span> Läuft gerade</span>`;
+                    } else {
+                        stepClass += ' is-future';
+                        if (evIsNext) {
+                            stepClass += ' is-next';
+                            statusBadgeHtml = '<span class="timeline-next-badge">Als Nächstes</span>';
+                        }
+                    }
+
+                    if (!ev.isTask) {
+                        if (ev.isBirthday) stepClass += ' is-birthday';
+                        if (ev.originalStart) stepClass += ' is-rescheduled';
+                        if (ev.isCancelled) {
+                            stepClass += ' is-cancelled';
+                            statusBadgeHtml = '<span class="timeline-cancelled-badge">🚫 Fällt aus</span>';
+                        }
+                    }
+
+                    let lineHtml = '';
+                    if (evIsCurrent && totalMinutes > 0) {
+                        lineHtml = `
+                            <div class="timeline-step-line timeline-current-line" title="Termin läuft: ${elapsedMinutes} von ${totalMinutes} Min (${progressPercent}%)">
+                                <div class="timeline-line-progress-fill" style="height: ${progressPercent}%;"></div>
+                            </div>
+                        `;
+                    } else if (evIsCurrent) {
+                        lineHtml = `
+                            <div class="timeline-step-line timeline-current-line" title="Läuft gerade">
+                                <div class="timeline-line-progress-fill" style="height: 100%;"></div>
+                            </div>
+                        `;
+                    } else if (ev.isCancelled) {
+                        lineHtml = '<div class="timeline-step-line timeline-cancelled-line" title="Termin fällt aus"></div>';
+                    } else {
+                        lineHtml = '<div class="timeline-step-line"></div>';
+                    }
+
+                    if (ev.isTask) {
+                        stepClass += ' is-task';
+                        const rawTaskId = String(ev.id).replace('task-', '');
+                        const escTitle = escapeHtml(ev.title || 'Aufgabe');
+                        const escNotes = escapeHtml(ev.description || '');
+                        const escListTitle = escapeHtml(ev.listTitle || 'Standard');
+                        const recurrenceVal = ev.recurrence || 'none';
+                        const isDone = !!ev.completed || ev.status === 'done';
+                        const repeatBadge = (ev.recurring || recurrenceVal !== 'none') ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrend: ${recurrenceVal}">🔄</span>` : '';
+                        const timeBadge = ev.time ? `<span class="timeline-time-badge task-time-badge">${new Date(ev.time).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr</span>` : '';
+
+                        let personsHtml = '';
+                        if (ev.persons && ev.persons.length > 0) {
+                            ev.persons.forEach(p => {
+                                personsHtml += `<span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer;">👤 ${escapeHtml(p.name)}</span>`;
+                            });
+                        }
+
+                        const taskContent = `
+                            <div class="arbeitstisch-item is-task-item ${isDone ? 'is-past' : ''} ${isExpiredTask ? 'is-expired' : ''}">
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                        ${timeBadge}
+                                        <strong style="color: ${isDone ? '#a6e3a1' : (isExpiredTask ? 'var(--off)' : 'inherit')}; font-size: 0.8rem;">[Aufgabe]</strong>
+                                        <span style="font-weight: 600; font-size: 0.82rem; ${isDone ? 'text-decoration: line-through; opacity: 0.6;' : ''}">${escTitle}</span>
+                                        ${repeatBadge}
+                                        ${personsHtml}
+                                    </div>
+                                    ${statusBadgeHtml}
+                                </div>
+                            </div>
+                        `;
+
+                        const extraData = `data-task-id="${rawTaskId}" data-task-title="${escTitle}" data-task-notes="${escNotes}" data-task-due="${ev.time || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}" data-task-completed="${isDone}"`;
+
+                        html += `
+                            <div class="${stepClass}">
+                                <div class="timeline-step-indicator">
+                                    <button type="button" 
+                                            class="timeline-step-dot dot-task-check ${isDone ? 'is-done' : ''} ${isExpiredTask ? 'is-expired' : ''}" 
+                                            onclick="event.stopPropagation(); toggleTaskCompletion('${rawTaskId}', '${escListTitle}', ${!isDone}, this)"
+                                            title="${isDone ? 'Als unerledigt markieren' : 'Aufgabe abhaken'}">
+                                        ${isDone ? googleIcon('check', '12px', 'fill: #11111b;') : ''}
+                                    </button>
+                                </div>
+                                <div class="timeline-step-body">
+                                    ${renderSwipeLinkWrapper(taskContent, ev.title, 'task', rawTaskId, '', '', '', extraData)}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        // Calendar event
+                        let timeRangeStr = 'Ganztägig';
+                        if (!ev.isAllDay && (ev.time || ev.start)) {
+                            const sStr = new Date(ev.time || ev.start).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                            const eStr = (ev.endTime || ev.end) ? new Date(ev.endTime || ev.end).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+                            timeRangeStr = eStr ? `${sStr} – ${eStr} Uhr` : `${sStr} Uhr`;
+                        }
+
+                        let personsHtml = '';
+                        if (ev.persons && ev.persons.length > 0) {
+                            ev.persons.forEach(p => {
+                                personsHtml += `<span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer;">👤 ${escapeHtml(p.name)}</span>`;
+                            });
+                        }
+
+                        const occDateStr = ev.occurrenceDate || dateStr;
+                        const eventContent = `
+                            <div class="arbeitstisch-item ${evIsPast ? 'is-past' : ''} ${evIsCurrent ? 'is-current' : ''}">
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                        <span class="timeline-time-badge event-time-badge">${timeRangeStr}</span>
+                                        <strong class="arbeitstisch-item-title" style="font-size: 0.82rem; ${ev.isCancelled ? 'text-decoration: line-through; opacity: 0.6;' : ''}">${escapeHtml(ev.title || 'Termin')}</strong>
+                                        ${ev.recurring ? '🔄' : ''}
+                                        ${personsHtml}
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        ${statusBadgeHtml}
+                                        <button type="button" class="timeline-edit-btn" onclick="event.stopPropagation(); openEventDetailModal('${ev.id}', '${escapeHtml(ev.title)}', '${ev.time || ev.start || ''}', '${ev.endTime || ev.end || ''}', ${ev.isAllDay ? 'true' : 'false'}, '${escapeHtml(ev.description || '')}', ${ev.recurring ? 'true' : 'false'}, '${occDateStr}', false, '${escapeHtml(ev.location || '')}')" title="Termin-Details">
+                                            ✏️
+                                        </button>
+                                    </div>
+                                </div>
+                                ${ev.location ? `
+                                    <div style="font-size: 0.72rem; color: #89b4fa; margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+                                        ${googleIcon('location_on', '12px', 'fill: currentColor;')} ${escapeHtml(ev.location)}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+
+                        const extraData = `data-event-id="${ev.id}" data-event-title="${escapeHtml(ev.title)}" data-event-start="${ev.time || ev.start || ''}" data-event-end="${ev.endTime || ev.end || ''}" data-event-allday="${ev.isAllDay ? 'true' : 'false'}" data-event-desc="${escapeHtml(ev.description || '')}" data-event-recurring="${ev.recurring ? 'true' : 'false'}" data-event-occ="${occDateStr}" data-event-location="${escapeHtml(ev.location || '')}"`;
+
+                        html += `
+                            <div class="${stepClass}">
+                                <div class="timeline-step-indicator">
+                                    ${lineHtml}
+                                </div>
+                                <div class="timeline-step-body">
+                                    ${renderSwipeLinkWrapper(eventContent, ev.title, 'event', String(ev.id), '', '', '', extraData)}
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    if (currEndMs !== null) prevEventEndMs = currEndMs;
+                    if (!ev.isTask && ev.location) prevEventLocation = ev.location;
+                });
+
+                // Sleep & next day recommendation at bottom (for today and future)
+                if (!isPast && bedtimeAdvice) {
+                    html += `
+                        <div class="timeline-step timeline-step-sleep">
+                            <div class="timeline-step-indicator">
+                                <div class="timeline-step-line"></div>
+                                <div class="timeline-step-dot dot-sleep">${googleIcon('bedtime', '11px', 'fill: #cba6f7;')}</div>
+                            </div>
+                            <div class="timeline-step-body">
+                                <div class="timeline-sleep-card">
+                                    <div class="timeline-sleep-title">
+                                        ${googleIcon('bedtime', '13px', 'fill: #cba6f7;')} Nächster Tag & Schlafempfehlung
+                                    </div>
+                                    <div class="timeline-sleep-meta">
+                                        <span class="timeline-sleep-badge">${escapeHtml(bedtimeAdvice.adviceText)}</span>
+                                    </div>
+                                    <div class="timeline-sleep-time-box">
+                                        Schlafempfehlung: spätestens um <span class="timeline-sleep-target">${bedtimeAdvice.bedtimeStr}</span> ins Bett gehen
+                                    </div>
+                                    <div class="timeline-sleep-duration">
+                                        🛌 Für 8 Std. erholsamen Schlaf (Wecker um ${bedtimeAdvice.wakeUpStr})
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                html += `</div>`;
+            }
+
+            // Tagebucheinträge (Diary Entries) for this day!
+            html += `
+                <div class="calendar-diary-section glass-card" style="margin-top: 12px; padding: 12px; border-radius: 12px; border: 1px solid rgba(250, 179, 135, 0.25);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="font-size: 0.76rem; font-weight: 700; color: #fab387; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 5px;">
+                            <span>📝</span> Tagebucheinträge (${diaryEntries.length})
+                        </div>
+                        <button type="button" class="calendar-action-btn diary-btn" onclick="openDiaryModal('${dateStr}')" style="padding: 4px 8px; font-size: 0.72rem;">
+                            + Eintrag
+                        </button>
+                    </div>
+            `;
+
+            if (diaryEntries.length > 0) {
+                html += `<div style="display: flex; flex-direction: column; gap: 8px;">`;
+                diaryEntries.forEach(e => {
+                    const timeStr = e.createdAt ? new Date(e.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+                    const escTitle = escapeHtml(e.title || "Tagebucheintrag");
+                    const diaryContentHtml = `
+                        <div class="diary-entry-card" style="background: rgba(250, 179, 135, 0.06); border: 1px solid rgba(250, 179, 135, 0.2); padding: 9px 12px; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <strong style="color: #fab387; font-size: 0.82rem;">${escTitle}</strong>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 0.68rem; opacity: 0.5;">${timeStr ? timeStr + ' Uhr' : ''}</span>
+                                    <button type="button" onclick="event.stopPropagation(); deleteJournalEntry(${e.id}, '${dateStr}')" style="background: none; border: none; color: var(--off); opacity: 0.6; cursor: pointer; padding: 2px 4px; font-size: 0.75rem;" title="Löschen">🗑️</button>
+                                </div>
+                            </div>
+                            <div style="white-space: pre-wrap; word-break: break-word; line-height: 1.35; font-size: 0.78rem; opacity: 0.9; color: var(--text);">${escapeHtml(e.content)}</div>
+                        </div>
+                    `;
+                    const extraData = `data-journal-id="${e.id}" data-journal-title="${escTitle}" data-journal-date="${dateStr}"`;
+                    html += renderSwipeLinkWrapper(diaryContentHtml, escTitle, 'journal', e.id, '', '', '', extraData);
+                });
+                html += `</div>`;
+            } else {
+                html += `
+                    <div style="padding: 10px; text-align: center; color: rgba(255, 255, 255, 0.45); font-size: 0.75rem; border: 1px dashed rgba(250, 179, 135, 0.15); border-radius: 8px;">
+                        Noch keine Tagebucheinträge für ${isToday ? 'heute' : (isPast ? 'diesen Tag' : 'diesen Tag')} eingetragen.
+                    </div>
+                `;
+            }
+
+            html += `</div>`;
+
+            // Empty state if completely no events and no entries
+            if (rawEvents.length === 0 && overdueTasks.length === 0 && diaryEntries.length === 0) {
+                html += `
+                    <div class="calendar-empty-day glass-card" style="margin-top: 10px; padding: 22px 15px; text-align: center; border-radius: 12px; border: 1px dashed rgba(255, 255, 255, 0.12); color: rgba(255, 255, 255, 0.6); font-size: 0.82rem; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                        <div>✨ Keine Termine oder Aufgaben für diesen Tag vorhanden.</div>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
+                            <button type="button" class="nav-btn" onclick="openEventEditModal(null, '', '${dateStr}T10:00:00', '${dateStr}T11:00:00', false, '', '', false, '${dateStr}')" style="padding: 6px 12px; font-size: 0.75rem;">
+                                + Termin erstellen
+                            </button>
+                            <button type="button" class="nav-btn" onclick="openDiaryModal('${dateStr}')" style="padding: 6px 12px; font-size: 0.75rem; color: #fab387; border-color: rgba(250, 179, 135, 0.3);">
+                                + Tagebuch schreiben
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `</div>`;
+
+            containerDiv.innerHTML = html;
+        }
+        window.renderVerticalDayTimeline = renderVerticalDayTimeline;
 
         async function deleteCalendarEvent(eventId, occurrenceDate, isRecurring) {
             const isRec = isRecurring === true || isRecurring === 'true';
@@ -701,12 +815,15 @@
                 if (deleteType === 'occurrence' && occurrenceDate) {
                     args.datum = occurrenceDate;
                 }
-                const res = await callTool('loesche_termin', args);
-                loadTopWidgets();
+                await callTool('loesche_termin', args);
+                if (typeof jumpToTimelineDate === 'function') {
+                    await jumpToTimelineDate(window.currentCalendarDate);
+                }
+                if (typeof loadTopWidgets === 'function') {
+                    loadTopWidgets();
+                }
             } catch (e) {
                 console.error("Fehler beim Löschen des Termins:", e);
             }
         }
-
-
         window.deleteCalendarEvent = deleteCalendarEvent;

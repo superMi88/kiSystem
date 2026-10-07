@@ -279,13 +279,18 @@
             try {
                 const res = await fetch(getApiUrl(`/api/journal/entries/${id}`), { method: 'DELETE' });
                 if (res.ok) {
+                    if (window.calendarTimelineCache && dateStr) {
+                        delete window.calendarTimelineCache[dateStr];
+                    }
+                    if (typeof jumpToTimelineDate === 'function') {
+                        await jumpToTimelineDate(dateStr || window.currentCalendarDate);
+                    }
                     loadTopWidgets();
                 }
             } catch (e) {
                 console.error("Fehler beim Löschen des Tagebucheintrags:", e);
             }
         }
-
 
         window.deleteJournalEntry = deleteJournalEntry;
 
@@ -356,32 +361,6 @@
                 console.error("Konnte keine Verbindung zum Server herstellen:", err);
             }
 
-            // Scroll-Listener für bidirektionales Infinite Scroll in der Kalender- & Tagebuch-Timeline
-            const topPanel = document.querySelector('.top-panel');
-            if (topPanel) {
-                let lastScrollTop = topPanel.scrollTop;
-                topPanel.addEventListener('scroll', () => {
-                    const isCalendarView = document.body.classList.contains('view-calendar');
-                    if (!isCalendarView) return;
-
-                    const widgetCalendar = document.getElementById('widget-calendar');
-                    if (!widgetCalendar || widgetCalendar.offsetParent === null) return;
-
-                    const currentScrollTop = topPanel.scrollTop;
-                    const isScrollingUp = currentScrollTop < lastScrollTop;
-                    const isScrollingDown = currentScrollTop > lastScrollTop;
-                    lastScrollTop = currentScrollTop;
-
-                    // Nach oben scrollen -> Vergangenheit laden
-                    if (isScrollingUp && currentScrollTop < 80 && !isTimelineLoadingPast && timelineCanScrollPast) {
-                        loadMorePastTimelineDays();
-                    }
-                    // Nach unten scrollen -> Zukunft laden
-                    if (isScrollingDown && topPanel.scrollHeight - currentScrollTop - topPanel.clientHeight < 120 && !isTimelineLoadingFuture && timelineCanScrollFuture) {
-                        loadMoreFutureTimelineDays();
-                    }
-                }, { passive: true });
-            }
             requestNotificationPermissions();
             checkMailNotificationsForeground(true);
             handleMailHashRouting();
