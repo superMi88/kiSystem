@@ -6,12 +6,13 @@
                 const widgets = await res.json();
                 topWidgetsContainer.innerHTML = '';
                 
-                // 1. Arbeitstisch Dashboard
-                const dashDiv = document.createElement('div');
-                dashDiv.id = 'widget-dashboard';
-                dashDiv.style.marginBottom = '15px';
-                renderArbeitstischWidget(widgets, dashDiv);
-                topWidgetsContainer.appendChild(dashDiv);
+                // 1. Kalender (Neuer Hauptkalender an Stelle von 'Heute')
+                const calDiv = document.createElement('div');
+                calDiv.id = 'widget-calendar';
+                calDiv.style.marginBottom = '15px';
+                const calWidget = widgets.find(w => w.type === 'calendar_overview');
+                renderTimelineWidget(calWidget ? calWidget.data : null, calDiv, window.currentCalendarDate, widgets);
+                topWidgetsContainer.appendChild(calDiv);
 
                 // 2. Agent-Briefing Dashboard (Dedicated Tab)
                 const briefingDiv = document.createElement('div');
@@ -23,21 +24,17 @@
                 // 3. Render normal widgets
                 widgets.forEach(widget => {
                     if (widget.pluginName === 'Notifications') return;
+                    if (widget.type === 'calendar_overview') return; // Bereits an Stelle 1 gerendert
                     const widgetDiv = document.createElement('div');
                     widgetDiv.style.marginBottom = '15px';
                     
                     if (widget.pluginName) {
                         widgetDiv.id = 'widget-' + widget.pluginName.toLowerCase();
-                    } else if (widget.type === 'calendar_overview') {
-                        widgetDiv.id = 'widget-calendar';
                     } else if (widget.type === 'timer_list') {
                         widgetDiv.id = 'widget-timer';
                     }
                     
-                    if (widget.type === 'calendar_overview') {
-                        widgetDiv.id = 'widget-calendar';
-                        renderTimelineWidget(widget.data, widgetDiv);
-                    } else if (widget.type === 'timer_list') {
+                    if (widget.type === 'timer_list') {
                         let html = `<div class="timer-list-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%;">`;
                         if (widget.data.timers.length === 0) {
                             html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 0; padding: 10px; text-align: center; background: rgba(0,0,0,0.15); border-radius: 8px;">Keine aktiven Timer.</p>`;

@@ -341,6 +341,7 @@ body.mobile-mode.view-plugins #top-widgets-container > div {
 }
 
 /* Show only the active plugin widget and bottom scroll spacer */
+body.mobile-mode.view-dashboard #top-widgets-container > #widget-calendar,
 body.mobile-mode.view-dashboard #top-widgets-container > #widget-dashboard,
 body.mobile-mode.view-briefing #top-widgets-container > #widget-briefing,
 body.mobile-mode.view-calendar #top-widgets-container > #widget-calendar,

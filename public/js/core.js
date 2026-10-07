@@ -81,6 +81,7 @@ const fileInput = document.getElementById('file-input');
             const contexts = document.querySelectorAll('.header-context');
             contexts.forEach(el => el.style.display = 'none');
             
+            if (viewName === 'dashboard') viewName = 'calendar';
             let targetId = 'header-context-' + (viewName || 'chat');
             let targetEl = document.getElementById(targetId);
             if (!targetEl) {
@@ -462,9 +463,9 @@ const fileInput = document.getElementById('file-input');
             const titleEl = document.getElementById('plugin-view-title');
             if (titleEl) {
                 const titles = {
-                    'dashboard': 'Heute',
+                    'dashboard': 'Kalender',
                     'briefing': 'Agent-Briefing',
-                    'calendar': 'Kalender & Tagebuch',
+                    'calendar': 'Kalender',
                     'timer': 'Timer & Wecker',
                     'projects': 'Projekte',
                     'memory': 'Personen & Gedächtnis',
@@ -477,9 +478,9 @@ const fileInput = document.getElementById('file-input');
             const mobTitleEl = document.getElementById('mobile-view-title');
             if (mobTitleEl) {
                 const titles = {
-                    'dashboard': 'Heute',
+                    'dashboard': 'Kalender',
                     'briefing': 'Agent-Briefing',
-                    'calendar': 'Kalender & Tagebuch',
+                    'calendar': 'Kalender',
                     'timer': 'Timer',
                     'projects': 'Projekte',
                     'memory': 'Gedächtnis',
@@ -557,7 +558,7 @@ const fileInput = document.getElementById('file-input');
                 }
             }
 
-            // Update bottom navigation tabs (Chat & Arbeitsbereich & Briefing)
+            // Update bottom navigation tabs (Chat & Kalender & Briefing)
             const tabChat = document.getElementById('tab-btn-chat');
             const tabDashboard = document.getElementById('tab-btn-dashboard');
             const tabBriefing = document.getElementById('tab-btn-briefing');
@@ -567,7 +568,7 @@ const fileInput = document.getElementById('file-input');
                 if (tabBriefing) tabBriefing.classList.remove('active');
                 if (viewName === 'chat') {
                     tabChat.classList.add('active');
-                } else if (viewName === 'dashboard') {
+                } else if (viewName === 'dashboard' || viewName === 'calendar') {
                     tabDashboard.classList.add('active');
                 } else if (viewName === 'briefing' && tabBriefing) {
                     tabBriefing.classList.add('active');
@@ -591,13 +592,13 @@ const fileInput = document.getElementById('file-input');
         function toggleDashboardChat() {
             if (document.body.classList.contains('mail-read-active')) {
                 if (typeof closeMailReadModal === 'function') closeMailReadModal();
-                switchMobileView('dashboard');
+                switchMobileView('calendar');
                 return;
             }
-            if (document.body.classList.contains('view-dashboard')) {
+            if (document.body.classList.contains('view-dashboard') || document.body.classList.contains('view-calendar')) {
                 switchMobileView('chat');
             } else {
-                switchMobileView('dashboard');
+                switchMobileView('calendar');
             }
         }
 
@@ -707,7 +708,7 @@ const fileInput = document.getElementById('file-input');
 
 
         function focusWidget(name) {
-            if (name === 'arbeitstisch' || name === 'heute') name = 'dashboard';
+            if (name === 'arbeitstisch' || name === 'heute' || name === 'dashboard') name = 'calendar';
             if (typeof isClosingMailReadModal !== 'undefined' && !isClosingMailReadModal && document.body.classList.contains('mail-read-active') && name !== 'mail') {
                 if (typeof closeMailReadModal === 'function') {
                     closeMailReadModal();
@@ -1003,7 +1004,7 @@ const fileInput = document.getElementById('file-input');
             if (document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
                 closeMailReadModal();
             }
-            focusWidget('dashboard');
+            focusWidget('calendar');
         };
 
 

@@ -152,8 +152,11 @@
         }
         window.jumpToTimelineDate = jumpToTimelineDate;
 
-        async function renderTimelineWidget(data, containerDiv, forceIncludeDateStr = null) {
+        async function renderTimelineWidget(data, containerDiv, forceIncludeDateStr = null, widgets = null) {
             if (!containerDiv) return;
+            if (widgets) {
+                window.allCurrentWidgets = widgets;
+            }
 
             const todayStr = getLocalDateString();
             const targetDate = forceIncludeDateStr || window.currentCalendarDate || todayStr;
@@ -791,6 +794,102 @@
                     </div>
                 `;
             }
+            // Pinned Tasks & Timers for Today
+            if (isToday && window.allCurrentWidgets) {
+                const widgets = window.allCurrentWidgets;
+                const taskWidget = widgets.find(w => w.type === 'custom' && w.data && w.data.widgetType === 'tasks_overview');
+                const tasksList = (taskWidget && taskWidget.data && taskWidget.data.tasks) ? taskWidget.data.tasks : [];
+                const pinnedTasks = tasksList.filter(t => t.isStarred && !t.completed && t.status !== 'done');
+                
+                if (pinnedTasks.length > 0) {
+                    html += `
+                        <div class="arbeitstisch-card glass-card" style="margin-top: 14px; border-radius: 12px; padding: 12px; border: 1px solid rgba(250, 179, 135, 0.25);">
+                            <div class="arbeitstisch-card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <div class="arbeitstisch-card-title" style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="display: inline-flex; align-items: center;">${googleIcon('keep', '14px', 'fill: #fab387;')}</span>
+                                    <h4 style="margin: 0; font-size: 0.8rem; font-weight: 700; color: #fab387; text-transform: uppercase; letter-spacing: 0.5px;">Angepinnte Aufgaben</h4>
+                                    <span style="background: rgba(250, 179, 135, 0.2); color: #fab387; font-size: 0.68rem; padding: 1px 6px; border-radius: 10px; font-weight: 600;">${pinnedTasks.length}</span>
+                                </div>
+                                <button type="button" onclick="focusWidget('tasks')" class="nav-btn" style="padding: 3px 8px; font-size: 0.72rem;">Aufgaben ➔</button>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                    `;
+                    pinnedTasks.forEach(t => {
+                        const rawId = String(t.id).replace('task-', '');
+                        const escTitle = escapeHtml(t.title || 'Aufgabe');
+                        const listTitle = escapeHtml(t.listTitle || t.tasklistId || 'Standard');
+                        const dueObj = t.due ? new Date(t.due) : null;
+                        let dueBadge = '';
+                        if (dueObj && !isNaN(dueObj.getTime())) {
+                            const dueDateStr = dueObj.toISOString().split('T')[0];
+                            if (dueDateStr < todayStr) {
+                                dueBadge = `<span style="font-size: 0.65rem; color: var(--off); font-weight: bold; background: rgba(243, 139, 168, 0.15); padding: 1px 5px; border-radius: 4px;">Überfällig</span>`;
+                            } else if (dueDateStr === todayStr) {
+                                dueBadge = `<span style="font-size: 0.65rem; color: var(--accent); font-weight: bold; background: rgba(137, 180, 250, 0.15); padding: 1px 5px; border-radius: 4px;">Heute</span>`;
+                            }
+                        }
+                        const taskItemHtml = `
+                            <div class="arbeitstisch-item pinned-task-item" style="border-left: 3.5px solid #fab387; padding: 8px 12px; background: rgba(250, 179, 135, 0.04); border: 1px solid rgba(250, 179, 135, 0.12); border-left: 3.5px solid #fab387; border-radius: 8px; display: flex; align-items: center; gap: 8px; width: 100%;">
+                                <button type="button" 
+                                        class="task-circle-check" 
+                                        onclick="event.stopPropagation(); toggleTaskCompletion('${rawId}', '${listTitle}', true, this)" 
+                                        style="flex-shrink: 0;"
+                                        title="Aufgabe abhaken">
+                                </button>
+                                <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; cursor: pointer;" onclick="handleEntityClick(event, 'task', '${rawId}')">
+                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                        <span style="font-size: 0.8rem; font-weight: 500; color: #ffffff;">${escTitle}</span>
+                                        ${dueBadge}
+                                    </div>
+                                </div>
+                                <button type="button" class="pin-btn is-pinned" onclick="toggleTaskStar('${rawId}', event)" title="Aufgabe entpinnen" style="margin-left: auto; background: none; border: none; cursor: pointer;">
+                                    ${googleIcon('keep', '15px', 'fill: #fab387;')}
+                                </button>
+                            </div>
+                        `;
+                        html += renderSwipeLinkWrapper(taskItemHtml, t.title || 'Aufgabe', 'task', rawId);
+                    });
+                    html += `</div></div>`;
+                }
+
+                // Timers
+                const timerWidget = widgets.find(w => w.type === 'timer_list');
+                const activeTimers = (timerWidget && timerWidget.data && timerWidget.data.timers) ? timerWidget.data.timers : [];
+                if (activeTimers.length > 0) {
+                    html += `
+                        <div class="arbeitstisch-card glass-card" style="margin-top: 14px; border-radius: 12px; padding: 12px; border: 1px solid rgba(137, 180, 250, 0.2);">
+                            <div class="arbeitstisch-card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <div class="arbeitstisch-card-title" style="display: flex; align-items: center; gap: 6px;">
+                                    <span>⏱️</span>
+                                    <h4 style="margin: 0; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px;">Timer (${activeTimers.length})</h4>
+                                </div>
+                                <button type="button" onclick="openTimerModal()" class="nav-btn" style="padding: 3px 8px; font-size: 0.72rem;">+ Timer</button>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                    `;
+                    activeTimers.forEach(t => {
+                        const escTitle = escapeHtml(t.title || 'Timer');
+                        html += `
+                            <div class="timer-card" id="timer-card-${t.id}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" onclick="openTimerDetailModal('${t.id}', '${escTitle}', '${t.createdAt}', '${t.expiresAt}')" style="padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); width: 100%; box-sizing: border-box; cursor: pointer;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <span style="font-size: 0.82rem; font-weight: bold; color: var(--text);">${escTitle}</span>
+                                    <span style="font-size: 0.65rem; opacity: 0.5;">Bis ${new Date(t.expiresAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                                <div class="timer-countdown" style="font-family: monospace; font-size: 1.05rem; font-weight: bold; color: var(--accent); margin-bottom: 4px;">--:--:--</div>
+                                <div class="timer-progress-bg" style="width: 100%; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden;">
+                                    <div class="timer-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--on)); border-radius: 2px; transition: width 0.5s linear;"></div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += `</div></div>`;
+                }
+            }
+
+            html += `
+                <!-- Spacer so cards never sit behind floating input bar -->
+                <div class="arbeitstisch-scroll-spacer" style="height: 180px; min-height: 180px; width: 100%; flex-shrink: 0; pointer-events: none; display: block;"></div>
+            `;
 
             html += `</div>`;
 
