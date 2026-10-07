@@ -142,8 +142,48 @@ export async function runAutomaticMigration(prisma: PrismaClient) {
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "AgentNotification" ADD COLUMN IF NOT EXISTS "reasoning" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "AgentNotification" ADD COLUMN IF NOT EXISTS "agentName" TEXT;`);
     console.log("[Migration] Tabelle AgentNotification erfolgreich verifiziert/erstellt.");
   } catch (notifErr: any) {
     console.warn("[Migration] Hinweis: Tabelle AgentNotification:", notifErr.message);
+  }
+
+  // Schema-Migration für Event Standort & Routenplanung
+  try {
+    console.log("[Migration] Überprüfe Spalten für Event-Standort & Routenplanung...");
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "location" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "travelMode" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "travelDurationMinutes" INTEGER;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "travelDistanceText" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "travelOriginLocation" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "travelAiSuggestion" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "travelTransitDetails" JSONB;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "RecurrencePattern" ADD COLUMN IF NOT EXISTS "location" TEXT;`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "RouteCache" (
+        "id" SERIAL PRIMARY KEY,
+        "origin" TEXT NOT NULL,
+        "destination" TEXT NOT NULL,
+        "travelMode" TEXT NOT NULL,
+        "durationMinutes" INTEGER NOT NULL,
+        "durationText" TEXT NOT NULL,
+        "distanceMeters" INTEGER,
+        "distanceText" TEXT,
+        "summary" TEXT,
+        "googleMapsUrl" TEXT,
+        "rawDetails" JSONB,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "RouteCache_origin_destination_travelMode_key"
+      ON "RouteCache"("origin", "destination", "travelMode");
+    `);
+    console.log("[Migration] Event-Standort & RouteCache Tabelle erfolgreich verifiziert/erstellt.");
+  } catch (routeErr: any) {
+    console.warn("[Migration] Hinweis: Spaltenmigration für Event/RouteCache:", routeErr.message);
   }
 }

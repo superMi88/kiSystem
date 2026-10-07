@@ -491,7 +491,9 @@ export const mailPlugin: Plugin = {
               personId: e.personId,
               personName: personName,
               personEmail: e.person?.email || null,
-              agentRunId: (e as any).agentRunId || null
+              agentRunId: (e as any).agentRunId || (e as any).agentRun?.id || null,
+              agentRunStatus: (e as any).agentRun?.status || null,
+              agentRunSummary: (e as any).agentRun?.summary || null
             };
           }),
           unreadCount: recentResult.unreadCount,

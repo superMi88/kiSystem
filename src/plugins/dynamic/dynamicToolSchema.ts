@@ -19,6 +19,7 @@ export interface DynamicToolParameters {
 export interface DynamicToolDefinition {
   name: string;
   description: string;
+  detailedInstructions?: string;
   parameters: DynamicToolParameters;
   returnValues?: any;
   endpointUrl: string;

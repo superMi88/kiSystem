@@ -12,7 +12,8 @@
     "test:tools": "npm run build && node build/test_cross_project_integration.js",
     "generate-env": "node scripts/generate-env.js",
     "cap:sync": "npm run generate-env && npx cap sync",
-    "cap:open": "npx cap open android"
+    "cap:open": "npx cap open android",
+    "test:mail": "node scripts/test-mail.js"
   },
   "main": "main.cjs",
   "dependencies": {

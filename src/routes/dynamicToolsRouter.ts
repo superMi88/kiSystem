@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 import { DynamicToolManager } from "../plugins/dynamic/DynamicToolManager.js";
+import { toggleToolDisabled } from "../settings.js";
 
 /**
  * Erstellt den Express-Router für dynamische KI-Tools
@@ -162,11 +163,21 @@ export function createDynamicToolsRouter(dynamicToolManager: DynamicToolManager,
   router.patch("/:name/toggle", async (req: Request, res: Response) => {
     try {
       const { isEnabled } = req.body;
-      const tool = await dynamicToolManager.toggleTool(req.params.name, isEnabled);
-      if (!tool) {
-        return res.status(404).json({ success: false, error: `Tool '${req.params.name}' nicht gefunden.` });
+      const name = req.params.name;
+
+      // 1. Zuerst prüfen, ob es ein dynamisches Tool ist
+      if (dynamicToolManager.hasTool(name)) {
+        const tool = await dynamicToolManager.toggleTool(name, isEnabled);
+        return res.json({ success: true, tool });
       }
-      res.json({ success: true, tool });
+
+      // 2. Prüfen, ob es ein internes Plugin-Tool ist
+      if (pluginManager && typeof pluginManager.hasInternalTool === "function" && pluginManager.hasInternalTool(name)) {
+        const newStatus = toggleToolDisabled(name, isEnabled);
+        return res.json({ success: true, tool: { name, isEnabled: newStatus, isDynamic: false } });
+      }
+
+      return res.status(404).json({ success: false, error: `Tool '${name}' nicht gefunden.` });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
     }

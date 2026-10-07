@@ -3,11 +3,13 @@ import { PrismaClient } from "@prisma/client";
 export interface ToolDefinition {
   name: string;
   description: string;
+  detailedInstructions?: string;
   parameters?: any;
 }
 
 export interface PluginTool {
   definition: ToolDefinition;
+  detailedInstructions?: string;
   handler: (args: any, context: { prisma: PrismaClient }) => Promise<any>;
 }
 

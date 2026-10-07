@@ -43,6 +43,11 @@ model AgentNotification {
   id             Int           @id @default(autoincrement())
   title          String        // Titel (z. B. "Neuer Terminvorschlag: Keramik bemalen")
   message        String        // Text oder Frage der Benachrichtigung
+  reasoning      String?       // Gedankengang / Begründung des Agenten
+  agentName      String?       // Name des meldenden Agenten (z. B. "E-Mail-Agent")
+  agentAvatar    String?       // Profilbild / Avatar-Emoji des Agenten
+  agentColor     String?       // Eigene Farbe des Agenten (Hex-Code, z. B. "#fab387")
+  actionData     Json?         // Strukturierte Aktionsdaten für das gesicherte System
   type           String        @default("info") // "info", "question", "action_required"
   priority       String        @default("normal") // "low", "normal", "high"
   sourceType     String        @default("mail") // "mail", "system", "task", etc.
@@ -158,6 +163,13 @@ model Event {
   originalStart          DateTime?          // Ursprüngliche Startzeit (falls der Termin verschoben wurde)
   originalEnd            DateTime?          // Ursprüngliche Endzeit (falls der Termin verschoben wurde)
   isPlanned              Boolean            @default(false) // Kennzeichnung 'In Planung' (noch nicht fest terminiert)
+  location               String?            // Standort / Adresse des Termins (z. B. "Alexanderplatz 1, Berlin")
+  travelMode             String?            // Gewähltes Reisemittel: "driving", "transit", "bicycling", "walking"
+  travelDurationMinutes  Int?               // Berechnete Reisezeit in Minuten
+  travelDistanceText     String?            // Lesbare Distanzangabe (z. B. "12,4 km")
+  travelOriginLocation   String?            // Startort der Reise (Standort des vorherigen Termins)
+  travelAiSuggestion     String?            // Vorschlag des Routenplaner-Agenten
+  travelTransitDetails   Json?              // Detaillierter ÖPNV-/Bahnverlauf (Linien, Abfahrten, Umstiegszeiten)
 
   createdAt              DateTime           @default(now()) // Erstellungszeitpunkt
   updatedAt              DateTime           @updatedAt // Letzte Aktualisierung
@@ -168,6 +180,7 @@ model RecurrencePattern {
   id              Int       @id @default(autoincrement()) // Eindeutige ID des Wiederholungsmusters
   title           String    // Titel des Serientermins
   description     String?   // Optionale Beschreibung der Serie
+  location        String?   // Standort / Adresse der Serie
   originalStart   DateTime  // Startzeitpunkt des allerersten Termins der Serie
   originalEnd     DateTime  // Endzeitpunkt des allerersten Termins der Serie
   isAllDay        Boolean   @default(false) // Flag, ob die Serie ganztägig ist
@@ -307,6 +320,7 @@ model DynamicTool {
   id           Int      @id @default(autoincrement())
   name         String   @unique
   description  String
+  detailedInstructions String?
   parameters   Json
   returnValues Json?
   endpointUrl  String
@@ -319,10 +333,21 @@ model DynamicTool {
   updatedAt    DateTime @updatedAt
 }
 
+/// [Routenplaner Agent] Cacht Google Maps Routenberechnungen zur Vermeidung doppelter API-Kosten.
+model RouteCache {
+  id              Int      @id @default(autoincrement())
+  origin          String   // Start-Standort (normalisiert)
+  destination     String   // Ziel-Standort (normalisiert)
+  travelMode      String   // "driving", "transit", "bicycling", "walking"
+  durationMinutes Int      // Dauer in Minuten
+  durationText    String   // z. B. "24 Min."
+  distanceMeters  Int?     // Distanz in Metern
+  distanceText    String?  // z. B. "12,4 km"
+  summary         String?  // Routen-Zusammenfassung (z. B. "Über B2 / S3")
+  googleMapsUrl   String?  // Direkter Google Maps Navigations-Link
+  rawDetails      Json?    // Optionale Rohdaten
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-
-
-
-
-
-
+  @@unique([origin, destination, travelMode])
+}

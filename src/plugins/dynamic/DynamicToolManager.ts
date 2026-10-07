@@ -55,7 +55,9 @@ export class DynamicToolManager {
         const raw = fs.readFileSync(this.filePath, "utf8");
         const data = JSON.parse(raw);
         if (Array.isArray(data)) {
+          const outdated = ['send_announcement', 'get_announcement_template', 'get_announcement_instructions', 'discord_get_announcement_instructions'];
           for (const item of data) {
+            if (outdated.includes(item.name)) continue;
             const validation = validateDynamicToolDefinition(item);
             if (validation.valid) {
               this.tools.set(item.name, item);
@@ -93,6 +95,7 @@ export class DynamicToolManager {
           const toolDef: DynamicToolDefinition = {
             name: record.name,
             description: record.description,
+            detailedInstructions: record.detailedInstructions || undefined,
             parameters: typeof record.parameters === "string" ? JSON.parse(record.parameters) : record.parameters,
             returnValues: record.returnValues
               ? (typeof record.returnValues === "string" ? JSON.parse(record.returnValues) : record.returnValues)
@@ -136,6 +139,7 @@ export class DynamicToolManager {
             where: { name: tool.name },
             update: {
               description: tool.description,
+              detailedInstructions: tool.detailedInstructions || null,
               parameters: tool.parameters as any,
               returnValues: (tool.returnValues || null) as any,
               endpointUrl: tool.endpointUrl,
@@ -148,6 +152,7 @@ export class DynamicToolManager {
             create: {
               name: tool.name,
               description: tool.description,
+              detailedInstructions: tool.detailedInstructions || null,
               parameters: tool.parameters as any,
               returnValues: (tool.returnValues || null) as any,
               endpointUrl: tool.endpointUrl,
@@ -180,6 +185,7 @@ export class DynamicToolManager {
     const fullDef: DynamicToolDefinition = {
       name: toolDef.name,
       description: toolDef.description,
+      detailedInstructions: toolDef.detailedInstructions || existing?.detailedInstructions,
       parameters: toolDef.parameters,
       returnValues: toolDef.returnValues || existing?.returnValues,
       endpointUrl: toolDef.endpointUrl,
@@ -315,6 +321,18 @@ export class DynamicToolManager {
   /**
    * Gibt alle registrierten Tools zurück (sensible Auth-Tokens werden maskiert)
    */
+  /**
+   * Gibt alle eindeutigen Provider-Namen der registrierten Tools zurück
+   */
+  getProviders(): string[] {
+    const set = new Set<string>();
+    for (const tool of this.tools.values()) {
+      if (tool.provider) set.add(tool.provider);
+    }
+    if (set.size === 0) set.add("discord-bot");
+    return Array.from(set);
+  }
+
   getTools(filter?: { provider?: string; enabledOnly?: boolean }): DynamicToolDefinition[] {
     let list = Array.from(this.tools.values());
 

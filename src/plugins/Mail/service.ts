@@ -958,6 +958,15 @@ export class MailService {
               email: true,
               aliases: { select: { name: true, isPrimary: true } }
             }
+          },
+          agentRun: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              summary: true,
+              createdAt: true
+            }
           }
         }
       }),

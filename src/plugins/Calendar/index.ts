@@ -1,5 +1,6 @@
 import { Plugin } from "../types.js";
 import { SchemaType } from "@google/generative-ai";
+import { RouteService } from "../../services/routeService.js";
 
 function getFuzzyTimeRange(date: Date, fuzzy: string): { start: Date; end: Date } {
   const start = new Date(date);
@@ -74,7 +75,8 @@ function getOccurrences(pattern: any, startRange: Date, endRange: Date, override
           isRecurring: true,
           recurrenceId: pattern.id,
           originalOccurrenceDate: new Date(currentStart),
-          fuzzyTime: pattern.fuzzyTime
+          fuzzyTime: pattern.fuzzyTime,
+          location: pattern.location || null
         });
       }
     }
@@ -270,7 +272,14 @@ export async function getEventsForRange(start: Date, end: Date, prisma: any): Pr
       originalStart: e.originalStart ? e.originalStart.toISOString() : null,
       originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null,
       fuzzyTime: e.fuzzyTime,
-      isPlanned: e.isPlanned
+      isPlanned: e.isPlanned,
+      location: e.location || null,
+      travelMode: e.travelMode || null,
+      travelDurationMinutes: e.travelDurationMinutes || null,
+      travelDistanceText: e.travelDistanceText || null,
+      travelOriginLocation: e.travelOriginLocation || null,
+      travelAiSuggestion: e.travelAiSuggestion || null,
+      travelTransitDetails: e.travelTransitDetails || null
     })),
     ...occurrences.map((o: any) => ({
       id: o.id,
@@ -285,7 +294,14 @@ export async function getEventsForRange(start: Date, end: Date, prisma: any): Pr
       cancellationReason: null,
       originalStart: null,
       originalEnd: null,
-      fuzzyTime: o.fuzzyTime
+      fuzzyTime: o.fuzzyTime,
+      location: o.location || null,
+      travelMode: null,
+      travelDurationMinutes: null,
+      travelDistanceText: null,
+      travelOriginLocation: null,
+      travelAiSuggestion: null,
+      travelTransitDetails: null
     })),
     ...dbTasks.map((t: any) => {
       const d = t.due ? new Date(t.due) : null;
@@ -372,9 +388,12 @@ export async function getTimelineRangeData(startDate: Date, endDate: Date, prism
   // 4. Overdue tasks
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  let overdueTasks: any[] = [];
+  const endOfToday = new Date(today);
+  endOfToday.setHours(23, 59, 59, 999);
+
+  let uncompletedOverdueTasks: any[] = [];
   try {
-    overdueTasks = await prisma.task.findMany({
+    uncompletedOverdueTasks = await prisma.task.findMany({
       where: {
         completed: false,
         isDeleted: false,
@@ -386,6 +405,26 @@ export async function getTimelineRangeData(startDate: Date, endDate: Date, prism
     });
   } catch (e) {
     console.warn("Fehler beim Laden überfälliger Aufgaben für Timeline:", e);
+  }
+
+  let completedOverdueTasksToday: any[] = [];
+  try {
+    completedOverdueTasksToday = await prisma.task.findMany({
+      where: {
+        completed: true,
+        isDeleted: false,
+        due: {
+          lt: today
+        },
+        completedAt: {
+          gte: today,
+          lte: endOfToday
+        }
+      },
+      orderBy: { completedAt: "asc" }
+    });
+  } catch (e) {
+    console.warn("Fehler beim Laden heute erledigter überfälliger Aufgaben:", e);
   }
 
   // Days map (ascending chronological order: past at top, future at bottom)
@@ -468,19 +507,30 @@ export async function getTimelineRangeData(startDate: Date, endDate: Date, prism
       title: t.title,
       notes: t.notes,
       completedAt: t.completedAt,
-      listTitle: t.listTitle
+      listTitle: t.listTitle,
+      due: t.due ? (t.due instanceof Date ? t.due.toISOString() : t.due) : null,
+      recurrence: t.recurrence,
+      status: t.status,
+      completed: true
     });
   });
 
-  const overdueMapped = overdueTasks.map((t: any) => ({
+  const allOverdueToday = [
+    ...uncompletedOverdueTasks.map((t: any) => ({ ...t, completed: false, completedAt: null })),
+    ...completedOverdueTasksToday.map((t: any) => ({ ...t, completed: true }))
+  ];
+
+  const overdueMapped = allOverdueToday.map((t: any) => ({
     id: String(t.id),
     title: t.title,
     notes: t.notes || "",
-    due: t.due ? t.due.toISOString() : null,
+    due: t.due ? (t.due instanceof Date ? t.due.toISOString() : t.due) : null,
     listTitle: t.listTitle,
     recurrence: t.recurrence,
     isTask: true,
     isOverdue: true,
+    completed: !!t.completed,
+    completedAt: t.completedAt ? (t.completedAt instanceof Date ? t.completedAt.toISOString() : t.completedAt) : null,
     projectId: t.projectId
   }));
 
@@ -547,7 +597,8 @@ export const calendarPlugin: Plugin = {
             wiederholungsTyp: { type: SchemaType.STRING, description: "Typ der Wiederholung: 'DAILY', 'WEEKLY' oder 'MONTHLY' (optional)" },
             wiederholungsEnde: { type: SchemaType.STRING, description: "Enddatum der Wiederholung YYYY-MM-DD (optional)" },
             tageszeit: { type: SchemaType.STRING, description: "Uhrzeit-Abschnitt, falls nicht minutengenau: 'morgens', 'vormittag', 'mittags', 'nachmittag' oder 'abends' (optional)" },
-            inPlanung: { type: SchemaType.BOOLEAN, description: "Ob der Termin noch in Planung ist (noch nicht fest terminiert, optional)" }
+            inPlanung: { type: SchemaType.BOOLEAN, description: "Ob der Termin noch in Planung ist (noch nicht fest terminiert, optional)" },
+            standort: { type: SchemaType.STRING, description: "Standort/Adresse des Termins (z.B. 'Alexanderplatz 1, Berlin' oder 'Büro') für Routenplanung und Google Maps (optional)" }
           },
           required: ["titel", "datum"]
         } as any
@@ -561,6 +612,7 @@ export const calendarPlugin: Plugin = {
         const recurrenceEnd = args.wiederholungsEnde ? new Date(args.wiederholungsEnde) : null;
         const isAllDay = !!args.ganztaegig;
         const fuzzyTime = args.tageszeit || null;
+        const location = args.standort || args.ort || null;
 
         if (fuzzyTime) {
           const range = getFuzzyTimeRange(start, fuzzyTime);
@@ -579,7 +631,8 @@ export const calendarPlugin: Plugin = {
                 isAllDay,
                 recurrenceType,
                 recurrenceEnd,
-                fuzzyTime
+                fuzzyTime,
+                location
               }
             });
           } else {
@@ -591,9 +644,17 @@ export const calendarPlugin: Plugin = {
                 end,
                 isAllDay,
                 fuzzyTime,
-                isPlanned: !!args.inPlanung
+                isPlanned: !!args.inPlanung,
+                location
               }
             });
+          }
+
+          // Automatische Prüfung auf Ortswechsel und Routenplanung anstoßen
+          try {
+            await RouteService.checkAndPlanRoutesForDay(start, prisma);
+          } catch (rErr) {
+            console.warn("[Calendar] Routenprüfung nach Terminerstellung:", rErr);
           }
 
           const startOfDay = new Date(start);
@@ -808,7 +869,10 @@ export const calendarPlugin: Plugin = {
             ausfallGrund: { type: SchemaType.STRING, description: "Grund für den Ausfall (optional)" },
             geloescht: { type: SchemaType.BOOLEAN, description: "Ob der Termin an diesem Tag gelöscht werden soll (optional)" },
             tageszeit: { type: SchemaType.STRING, description: "Uhrzeit-Abschnitt, falls nicht minutengenau: 'morgens', 'vormittag', 'mittags', 'nachmittag' oder 'abends' (optional)" },
-            inPlanung: { type: SchemaType.BOOLEAN, description: "Ob der Termin noch in Planung ist (optional)" }
+            inPlanung: { type: SchemaType.BOOLEAN, description: "Ob der Termin noch in Planung ist (optional)" },
+            standort: { type: SchemaType.STRING, description: "Neuer Standort/Ort des Termins (optional)" },
+            verkehrsmittel: { type: SchemaType.STRING, description: "Neues Verkehrsmittel für die Wegezeit/Anreise zum Termin: 'driving' (Auto), 'transit' (Bahn/ÖPNV), 'bicycling' (Fahrrad) oder 'walking' (Zu Fuß) (optional)" },
+            reisezeit_minuten: { type: SchemaType.NUMBER, description: "Manuell angepasste Wegezeit/Reisedauer in Minuten (optional)" }
           },
           required: ["eventId", "datum"]
         } as any
@@ -851,6 +915,14 @@ export const calendarPlugin: Plugin = {
               if (args.ausfallGrund !== undefined) data.cancellationReason = args.ausfallGrund;
               if (args.geloescht !== undefined) data.isDeleted = !!args.geloescht;
               if (args.inPlanung !== undefined) data.isPlanned = !!args.inPlanung;
+              if (args.standort !== undefined) {
+                data.location = args.standort === "" ? null : args.standort;
+                data.travelDurationMinutes = null;
+                data.travelMode = null;
+                data.travelDistanceText = null;
+                data.travelOriginLocation = null;
+                data.travelTransitDetails = null;
+              }
 
               if (args.tageszeit !== undefined) {
                 const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
@@ -907,6 +979,51 @@ export const calendarPlugin: Plugin = {
               if (args.ausfallGrund !== undefined) data.cancellationReason = args.ausfallGrund;
               if (args.geloescht !== undefined) data.isDeleted = !!args.geloescht;
               if (args.inPlanung !== undefined) data.isPlanned = !!args.inPlanung;
+              if (args.standort !== undefined) {
+                data.location = args.standort === "" ? null : args.standort;
+                data.travelDurationMinutes = null;
+                data.travelMode = null;
+                data.travelDistanceText = null;
+                data.travelOriginLocation = null;
+                data.travelTransitDetails = null;
+              }
+
+              if (args.verkehrsmittel !== undefined) {
+                const vMode = String(args.verkehrsmittel).toLowerCase();
+                const validModes = ['driving', 'transit', 'bicycling', 'walking'];
+                if (validModes.includes(vMode)) {
+                  data.travelMode = vMode;
+                  const origin = (currentEvent && currentEvent.travelOriginLocation) || undefined;
+                  const dest = args.standort !== undefined ? (args.standort || undefined) : (currentEvent ? currentEvent.location : undefined);
+                  if (origin && dest) {
+                    try {
+                      const targetTime = data.start || (currentEvent ? currentEvent.start : undefined);
+                      const route = await RouteService.calculateRoute(origin, dest, vMode as any, prisma, {
+                        arrivalTime: targetTime,
+                        targetEventStart: targetTime
+                      });
+                      data.travelDurationMinutes = route.durationMinutes;
+                      data.travelDistanceText = route.distanceText;
+                      data.travelTransitDetails = (route.transitDetails as any) || (route.journeyStartDateTime ? {
+                        journeyStartTime: route.journeyStartTime,
+                        journeyEndTime: route.journeyEndTime,
+                        journeyStartDateTime: route.journeyStartDateTime,
+                        journeyEndDateTime: route.journeyEndDateTime,
+                        pauseBeforeMinutes: route.pauseBeforeMinutes,
+                        pauseAfterMinutes: route.pauseAfterMinutes,
+                        durationMinutes: route.durationMinutes
+                      } : null);
+                      data.travelOriginLocation = origin;
+                    } catch (rErr) {
+                      console.warn("[Calendar] Fehler bei Routenneuberechnung in bearbeite_termin:", rErr);
+                    }
+                  }
+                }
+              }
+
+              if (args.reisezeit_minuten !== undefined) {
+                data.travelDurationMinutes = Math.round(Number(args.reisezeit_minuten));
+              }
 
               if (args.tageszeit !== undefined) {
                 const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
@@ -941,6 +1058,9 @@ export const calendarPlugin: Plugin = {
               if (args.neuer_titel !== undefined) data.title = args.neuer_titel;
               if (args.neue_beschreibung !== undefined) data.description = args.neue_beschreibung;
               if (args.ganztaegig !== undefined) data.isAllDay = !!args.ganztaegig;
+              if (args.standort !== undefined) {
+                data.location = args.standort === "" ? null : args.standort;
+              }
 
               if (args.tageszeit !== undefined) {
                 const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
@@ -972,6 +1092,51 @@ export const calendarPlugin: Plugin = {
               if (args.ausgefallen !== undefined) data.isCancelled = !!args.ausgefallen;
               if (args.ausfallGrund !== undefined) data.cancellationReason = args.ausfallGrund;
               if (args.inPlanung !== undefined) data.isPlanned = !!args.inPlanung;
+              if (args.standort !== undefined) {
+                data.location = args.standort === "" ? null : args.standort;
+                data.travelDurationMinutes = null;
+                data.travelMode = null;
+                data.travelDistanceText = null;
+                data.travelOriginLocation = null;
+                data.travelTransitDetails = null;
+              }
+
+              if (args.verkehrsmittel !== undefined) {
+                const vMode = String(args.verkehrsmittel).toLowerCase();
+                const validModes = ['driving', 'transit', 'bicycling', 'walking'];
+                if (validModes.includes(vMode)) {
+                  data.travelMode = vMode;
+                  const origin = (currentEvent && currentEvent.travelOriginLocation) || undefined;
+                  const dest = args.standort !== undefined ? (args.standort || undefined) : (currentEvent ? currentEvent.location : undefined);
+                  if (origin && dest) {
+                    try {
+                      const targetTime = data.start || (currentEvent ? currentEvent.start : undefined);
+                      const route = await RouteService.calculateRoute(origin, dest, vMode as any, prisma, {
+                        arrivalTime: targetTime,
+                        targetEventStart: targetTime
+                      });
+                      data.travelDurationMinutes = route.durationMinutes;
+                      data.travelDistanceText = route.distanceText;
+                      data.travelTransitDetails = (route.transitDetails as any) || (route.journeyStartDateTime ? {
+                        journeyStartTime: route.journeyStartTime,
+                        journeyEndTime: route.journeyEndTime,
+                        journeyStartDateTime: route.journeyStartDateTime,
+                        journeyEndDateTime: route.journeyEndDateTime,
+                        pauseBeforeMinutes: route.pauseBeforeMinutes,
+                        pauseAfterMinutes: route.pauseAfterMinutes,
+                        durationMinutes: route.durationMinutes
+                      } : null);
+                      data.travelOriginLocation = origin;
+                    } catch (rErr) {
+                      console.warn("[Calendar] Fehler bei Routenneuberechnung in bearbeite_termin:", rErr);
+                    }
+                  }
+                }
+              }
+
+              if (args.reisezeit_minuten !== undefined) {
+                data.travelDurationMinutes = Math.round(Number(args.reisezeit_minuten));
+              }
 
               if (args.tageszeit !== undefined) {
                 const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
@@ -1007,6 +1172,13 @@ export const calendarPlugin: Plugin = {
           const endOfDay = new Date(targetDate);
           endOfDay.setHours(23, 59, 59, 999);
 
+          // Automatische Prüfung auf Ortswechsel und Routenplanung anstoßen
+          try {
+            await RouteService.checkAndPlanRoutesForDay(new Date(targetDate), prisma);
+          } catch (rErr) {
+            console.warn("[Calendar] Routenprüfung nach Terminbearbeitung:", rErr);
+          }
+
           const events = await getEventsForRange(startOfDay, endOfDay, prisma);
 
           return { 
@@ -1028,6 +1200,13 @@ export const calendarPlugin: Plugin = {
     try {
       const today = new Date();
       today.setHours(12, 0, 0, 0);
+
+      // Vorab Routen & Fragen für heute prüfen
+      try {
+        await RouteService.checkAndPlanRoutesForDay(today, prisma);
+      } catch (rErr) {
+        console.warn("[Calendar] Routenprüfung in getTopWidgets:", rErr);
+      }
 
       const pastDays = new Date(today);
       pastDays.setDate(today.getDate() - 5);

@@ -1,66 +1,67 @@
 [
   {
     "name": "discord_send_announcement",
-    "description": "Erstellt und veröffentlicht eine Ankündigung auf einem Discord-Server in einem bestimmten Textkanal mit Embed und optionalen Rollen-Pings (@everyone, @here oder Rollennamen/IDs).\n\n[WICHTIGE VORLAGEN- & FORMATIERUNGSRICHTLINIEN]:\nEvent-Vorlage:\n- Titel mit Emoji\n- Datum & Uhrzeit\n- Treffpunkt\n\n[VERFÜGBARE DISCORD SERVER (Wähle zwingend eine dieser IDs für 'guildId')]:\n- Server \"TestbotServer2\" (ID: \"970393899073933352\")\n- Server \"Testserver bot\" (ID: \"938083998377320479\")\n\n[STANDARD-KANAL]:\nStandard-Kanal: #announcment (Kanal-ID: \"1485153814674804913\")\n\n[STANDARD PINGBARE ROLLEN (IDs für 'roles')]:\n- Rolle \"Spielevent\" (Rollen-ID: \"1485161646933414039\")\n- Rolle \"Servernews\" (Rollen-ID: \"1485161644546986184\")\n- Rolle \"Giveaway\" (Rollen-ID: \"1485161641523023872\")\n- Rolle \"Waldspiel\" (Rollen-ID: \"1485161638687539300\")",
+    "description": "Veröffentlicht eine Ankündigung auf dem Discord-Server mit Embed und optionalen Rollen-Pings.",
+    "detailedInstructions": "[RICHTLINIEN & VORGABEN FÜR DISCORD-ANKÜNDIGUNGEN]\n1. Vorlagen & Format: Nutze vorab das Tool 'discord_get_announcement_instructions' oder 'get_instructions', um Vorlagen (z. B. für Servernews oder Spielevents) und Formatierungsregeln abzurufen.\n2. Entwürfe & Bestätigungen: Wenn der Benutzer eine Ankündigung anfragt oder eine Bestätigung wünscht (z. B. \"mach mit ja/nein\"), erstelle den Entwurf und rufe das Tool 'erstelle_benachrichtigung' (typ='question') auf.\n3. Vorschau-Pflicht: Im Parameter 'nachricht' von 'erstelle_benachrichtigung' MUSST du zwingend den VOLLSTÄNDIGEN Entwurfstext (Titel, Beschreibung/Inhalt, Zielkanal, Rollen) als lesbare Vorschau einfügen! Zeige den Entwurf auch in deinem Begleittext. Sag niemals nur 'Ich habe einen Entwurf vorbereitet'.\n4. Parameter: 'guildId' (numerische Discord Server-ID) ist ein Pflichtfeld. 'channel' und 'roles' sind optional; falls weggelassen, werden die Standard-Einstellungen verwendet.",
     "parameters": {
       "type": "OBJECT",
+      "required": [
+        "title",
+        "description",
+        "guildId"
+      ],
       "properties": {
-        "title": {
-          "type": "STRING",
-          "description": "Titel der Ankündigung für das Embed"
-        },
-        "description": {
-          "type": "STRING",
-          "description": "Hauptinhalt und Details der Ankündigung"
-        },
-        "channel": {
-          "type": "STRING",
-          "description": "Optionale Kanal-ID. Falls weggelassen, wird automatisch der Standard-Kanal #announcment (ID: \"1485153814674804913\") verwendet."
-        },
         "roles": {
           "type": "ARRAY",
           "items": {
             "type": "STRING"
           },
-          "description": "Optionale Rollen-IDs für Pings (z.B. [\"1485161646933414039\"], [\"everyone\"], [\"here\"]). Verfügbare Rollen:\n- Rolle \"Spielevent\" (Rollen-ID: \"1485161646933414039\")\n- Rolle \"Servernews\" (Rollen-ID: \"1485161644546986184\")\n- Rolle \"Giveaway\" (Rollen-ID: \"1485161641523023872\")\n- Rolle \"Waldspiel\" (Rollen-ID: \"1485161638687539300\")"
+          "description": "Optionale Rollen-IDs für Pings. Falls weggelassen, werden die konfigurierten Standard-Rollen verwendet."
         },
-        "followupMessage": {
+        "title": {
           "type": "STRING",
-          "description": "Optionaler Zusatztext unter dem Embed (z.B. Anhang, Download-Link oder wichtige Notiz)"
+          "description": "Titel der Ankündigung für das Embed"
+        },
+        "channel": {
+          "type": "STRING",
+          "description": "Optionale Kanal-ID. Falls weggelassen, wird der Standard-Kanal verwendet."
         },
         "guildId": {
           "type": "STRING",
           "description": "Die numerische Snowflake-ID des Discord-Servers. PFLICHTFELD: Es MUSS zwingend eine gültige Server-ID übergeben werden, kein Servername!\nVerfügbare Server:\n- Server \"TestbotServer2\" (ID: \"970393899073933352\")\n- Server \"Testserver bot\" (ID: \"938083998377320479\")"
+        },
+        "description": {
+          "type": "STRING",
+          "description": "Hauptinhalt und Details der Ankündigung"
+        },
+        "followupMessage": {
+          "type": "STRING",
+          "description": "Optionaler Zusatztext unter dem Embed (z.B. Anhang, Download-Link oder wichtige Notiz)"
         }
-      },
-      "required": [
-        "title",
-        "description",
-        "guildId"
-      ]
+      }
     },
     "returnValues": {
       "type": "OBJECT",
       "properties": {
-        "success": {
-          "type": "BOOLEAN"
+        "url": {
+          "type": "STRING"
         },
-        "message": {
+        "error": {
           "type": "STRING"
         },
         "guildId": {
           "type": "STRING"
+        },
+        "message": {
+          "type": "STRING"
+        },
+        "success": {
+          "type": "BOOLEAN"
         },
         "channelId": {
           "type": "STRING"
         },
         "messageId": {
-          "type": "STRING"
-        },
-        "url": {
-          "type": "STRING"
-        },
-        "error": {
           "type": "STRING"
         }
       }
@@ -74,83 +75,6 @@
     "provider": "discord-bot",
     "isEnabled": true,
     "createdAt": "2026-09-21T07:37:23.304Z",
-    "updatedAt": "2026-09-23T01:26:57.844Z"
-  },
-  {
-    "name": "send_announcement",
-    "description": "Erstellt und veröffentlicht eine Ankündigung auf einem Discord-Server in einem bestimmten Textkanal mit Embed und optionalen Rollen-Pings (@everyone, @here oder Rollennamen/IDs).\n\n[WICHTIGE VORLAGEN- & FORMATIERUNGSRICHTLINIEN]:\nEvent-Vorlage:\n- Titel mit Emoji\n- Datum & Uhrzeit\n- Treffpunkt\n\n[VERFÜGBARE DISCORD SERVER (Wähle zwingend eine dieser IDs für 'guildId')]:\n- Server \"TestbotServer2\" (ID: \"970393899073933352\")\n- Server \"Testserver bot\" (ID: \"938083998377320479\")\n\n[STANDARD-KANAL]:\nStandard-Kanal: #announcment (Kanal-ID: \"1485153814674804913\")\n\n[STANDARD PINGBARE ROLLEN (IDs für 'roles')]:\n- Rolle \"Spielevent\" (Rollen-ID: \"1485161646933414039\")\n- Rolle \"Servernews\" (Rollen-ID: \"1485161644546986184\")\n- Rolle \"Giveaway\" (Rollen-ID: \"1485161641523023872\")\n- Rolle \"Waldspiel\" (Rollen-ID: \"1485161638687539300\")",
-    "parameters": {
-      "type": "OBJECT",
-      "properties": {
-        "title": {
-          "type": "STRING",
-          "description": "Titel der Ankündigung für das Embed"
-        },
-        "description": {
-          "type": "STRING",
-          "description": "Hauptinhalt und Details der Ankündigung"
-        },
-        "channel": {
-          "type": "STRING",
-          "description": "Optionale Kanal-ID. Falls weggelassen, wird automatisch der Standard-Kanal #announcment (ID: \"1485153814674804913\") verwendet."
-        },
-        "roles": {
-          "type": "ARRAY",
-          "items": {
-            "type": "STRING"
-          },
-          "description": "Optionale Rollen-IDs für Pings (z.B. [\"1485161646933414039\"], [\"everyone\"], [\"here\"]). Verfügbare Rollen:\n- Rolle \"Spielevent\" (Rollen-ID: \"1485161646933414039\")\n- Rolle \"Servernews\" (Rollen-ID: \"1485161644546986184\")\n- Rolle \"Giveaway\" (Rollen-ID: \"1485161641523023872\")\n- Rolle \"Waldspiel\" (Rollen-ID: \"1485161638687539300\")"
-        },
-        "followupMessage": {
-          "type": "STRING",
-          "description": "Optionaler Zusatztext unter dem Embed (z.B. Anhang, Download-Link oder wichtige Notiz)"
-        },
-        "guildId": {
-          "type": "STRING",
-          "description": "Die numerische Snowflake-ID des Discord-Servers. PFLICHTFELD: Es MUSS zwingend eine gültige Server-ID übergeben werden, kein Servername!\nVerfügbare Server:\n- Server \"TestbotServer2\" (ID: \"970393899073933352\")\n- Server \"Testserver bot\" (ID: \"938083998377320479\")"
-        }
-      },
-      "required": [
-        "title",
-        "description",
-        "guildId"
-      ]
-    },
-    "returnValues": {
-      "type": "OBJECT",
-      "properties": {
-        "success": {
-          "type": "BOOLEAN"
-        },
-        "message": {
-          "type": "STRING"
-        },
-        "guildId": {
-          "type": "STRING"
-        },
-        "channelId": {
-          "type": "STRING"
-        },
-        "messageId": {
-          "type": "STRING"
-        },
-        "url": {
-          "type": "STRING"
-        },
-        "error": {
-          "type": "STRING"
-        }
-      }
-    },
-    "endpointUrl": "http://localhost:3001/api/plugins/announcement/send",
-    "authentication": {
-      "type": "apiKey",
-      "header": "x-api-key",
-      "token": "lia_sec_d89f2a71e84c982b53b0e1293a7e4a"
-    },
-    "provider": "discord-bot",
-    "isEnabled": true,
-    "createdAt": "2026-09-21T07:37:23.319Z",
-    "updatedAt": "2026-09-23T01:26:57.874Z"
+    "updatedAt": "2026-09-26T06:27:27.052Z"
   }
 ]

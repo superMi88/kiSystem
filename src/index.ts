@@ -13,7 +13,7 @@ import { exec } from "child_process";
 import os from "os";
 
 import { PluginManager } from "./plugins/index.js";
-import { getSettings, saveSettings } from "./settings.js";
+import { getSettings, saveSettings, AVAILABLE_TRIGGERS, saveAgentConfig, deleteAgentConfig, toggleAgentStatus } from "./settings.js";
 import { runAutomaticMigration } from "./migrate.js";
 import { getEventsForRange, getTimelineRangeData } from "./plugins/Calendar/index.js";
 import { calculateNextDueDate } from "./plugins/Tasks/index.js";
@@ -22,6 +22,7 @@ import { MailService } from "./plugins/Mail/service.js";
 import { runTrainTripMonitor } from "./plugins/Mail/dbBahnService.js";
 import { createDynamicToolsRouter } from "./routes/dynamicToolsRouter.js";
 import { AgentRunService } from "./services/agentRunService.js";
+import { RouteService, TravelMode } from "./services/routeService.js";
 
 dotenv.config();
 
@@ -80,7 +81,13 @@ app.get("/conversations", async (req, res) => {
 
   const conversations = await prisma.conversation.findMany({
     where,
-    orderBy: { createdAt: 'desc' }
+    orderBy: { createdAt: 'desc' },
+    include: {
+      notifications: {
+        where: { isDismissed: false },
+        select: { id: true, type: true, isDismissed: true }
+      }
+    }
   });
   res.json(conversations);
 });
@@ -105,7 +112,11 @@ app.get("/conversations/:id/meta", async (req, res) => {
       where: { conversationId: req.params.id },
       orderBy: { createdAt: 'asc' }
     });
-    res.json({ conversation, messages });
+    const notifications = await prisma.agentNotification.findMany({
+      where: { conversationId: req.params.id },
+      orderBy: { createdAt: 'asc' }
+    });
+    res.json({ conversation, messages, notifications });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -131,6 +142,53 @@ app.get("/api/agent-runs/mail/:id", async (req, res) => {
     const run = await AgentRunService.getAgentRunForEmail(emailId, prisma);
     res.json({ agentRun: run });
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/agent-runs/discord", async (req, res) => {
+  try {
+    const { content, author, guild, channel, messageId, conversationId } = req.body;
+    if (!content) {
+      return res.status(400).json({ error: "Parameter 'content' ist erforderlich." });
+    }
+    console.log(`[API] Trigger Discord Agent Run von ${author?.displayName || author?.username || 'Unbekannt'} ("${content.slice(0, 50)}")...`);
+    const result = await AgentRunService.executeDiscordRun(
+      {
+        content,
+        author: author || { id: "unknown", username: "unknown" },
+        guild,
+        channel,
+        messageId,
+        conversationId
+      },
+      prisma,
+      pluginManager
+    );
+    res.json(result);
+  } catch (err: any) {
+    console.error("[API] Fehler bei Discord Agent Run Ausführung:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/agent-runs/:id/continue", async (req, res) => {
+  try {
+    const conversationId = req.params.id;
+    const { message } = req.body;
+    if (!message) {
+      return res.status(400).json({ error: "Parameter 'message' ist erforderlich." });
+    }
+    console.log(`[API] Continue Agent Run ${conversationId} mit: "${message}"...`);
+    const result = await AgentRunService.continueRun(
+      conversationId,
+      message,
+      prisma,
+      pluginManager
+    );
+    res.json(result);
+  } catch (err: any) {
+    console.error("[API] Fehler beim Fortsetzen des Agent Runs:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -197,13 +255,235 @@ app.post("/api/notifications/:id/respond", async (req, res) => {
       }
     });
 
-    // 2. Wenn Aktion 'reply' ist und eine Conversation verknüpft ist, Agenten ausführen
+    // 2. Gesicherte direkte Ausführung von vorgeschlagenen Aktionen (Termin, Aufgabe, Mail)
+    let executedAction: any = null;
+    const actionData = (notif as any).actionData;
+
+    if (action === "execute_action" && actionData) {
+      if (actionData.actionType === "create_event" && actionData.eventData) {
+        const ev = actionData.eventData;
+        const evDate = ev.date || ev.datum;
+        const evTitle = ev.title || ev.titel || "Neuer Termin";
+        const evLocation = ev.location || ev.ort || null;
+        const evDesc = ev.description || ev.beschreibung || null;
+        const isAllDay = !!(ev.isAllDay || ev.ganztaegig);
+        const sTime = ev.startTime || ev.startzeit;
+        const eTime = ev.endTime || ev.endzeit;
+
+        let start: Date;
+        let end: Date;
+
+        if (isAllDay || !sTime) {
+          start = new Date(`${evDate}T00:00:00`);
+          end = new Date(`${evDate}T23:59:59`);
+        } else {
+          start = new Date(`${evDate}T${sTime}:00`);
+          if (eTime) {
+            end = new Date(`${evDate}T${eTime}:00`);
+          } else {
+            end = new Date(start.getTime() + 60 * 60 * 1000);
+          }
+        }
+
+        const desc = [
+          evDesc,
+          evLocation ? `Ort: ${evLocation}` : null
+        ].filter(Boolean).join("\n\n") || null;
+
+        const createdEvent = await prisma.event.create({
+          data: {
+            title: evTitle,
+            description: desc,
+            start,
+            end,
+            isAllDay
+          }
+        });
+
+        executedAction = {
+          type: "event_created",
+          event: createdEvent,
+          message: `Termin "${createdEvent.title}" wurde verbindlich in den Kalender eingetragen.`
+        };
+
+        if (notif.conversationId) {
+          await prisma.chatMessage.create({
+            data: {
+              conversationId: notif.conversationId,
+              role: "system",
+              text: `✅ **Gesichert bestätigt:** Termin "${createdEvent.title}" für ${start.toLocaleString("de-DE")} wurde fest im Kalender eingetragen.`
+            }
+          });
+        }
+      } else if (actionData.actionType === "create_task" && actionData.taskData) {
+        const td = actionData.taskData;
+        const taskTitle = td.title || td.titel || "Neue Aufgabe";
+        const taskNotes = td.notes || td.notizen || null;
+        const dueRaw = td.dueDate || td.due || td.faelligkeit;
+        const due = dueRaw ? new Date(dueRaw.includes("T") ? dueRaw : dueRaw + "T00:00:00") : null;
+
+        const createdTask = await prisma.task.create({
+          data: {
+            title: taskTitle,
+            notes: taskNotes,
+            due,
+            listTitle: "Standard"
+          }
+        });
+
+        executedAction = {
+          type: "task_created",
+          task: createdTask,
+          message: `Aufgabe "${createdTask.title}" wurde in deine Aufgabenliste eingetragen.`
+        };
+
+        if (notif.conversationId) {
+          await prisma.chatMessage.create({
+            data: {
+              conversationId: notif.conversationId,
+              role: "system",
+              text: `✅ **Gesichert bestätigt:** Aufgabe "${createdTask.title}" wurde erfolgreich angelegt.`
+            }
+          });
+        }
+      } else if (actionData.actionType === "send_mail_reply" && actionData.replyData) {
+        const rd = actionData.replyData;
+        let account = null;
+        if (rd.emailId) {
+          const originalMail = await prisma.cachedEmail.findUnique({
+            where: { id: Number(rd.emailId) }
+          });
+          if (originalMail?.accountId) {
+            account = await prisma.mailAccount.findUnique({ where: { id: originalMail.accountId } });
+          }
+        }
+        if (!account) {
+          account = await prisma.mailAccount.findFirst({
+            where: { isDeleted: false }
+          });
+        }
+
+        if (account) {
+          const sendRes = await MailService.sendEmail(
+            account.id,
+            {
+              to: rd.to,
+              subject: rd.subject,
+              body: rd.body
+            },
+            prisma
+          );
+          executedAction = {
+            type: "mail_sent",
+            sendResult: sendRes,
+            message: sendRes.success ? `Antwort-E-Mail an ${rd.to} wurde erfolgreich versendet.` : `Fehler beim Senden: ${sendRes.error}`
+          };
+          if (notif.conversationId) {
+            await prisma.chatMessage.create({
+              data: {
+                conversationId: notif.conversationId,
+                role: "system",
+                text: sendRes.success
+                  ? `✅ **Gesichert bestätigt & versendet:** E-Mail an "${rd.to}" mit Betreff "${rd.subject}" wurde versendet.`
+                  : `❌ **Fehler beim Versenden:** ${sendRes.error}`
+              }
+            });
+          }
+        } else {
+          executedAction = {
+            type: "mail_error",
+            message: "Kein aktives E-Mail-Konto zum Senden konfiguriert."
+          };
+        }
+      } else if (actionData.actionType === "set_route_mode" && actionData.toEventId && actionData.origin) {
+        let chosenMode: TravelMode = "driving";
+        const txt = (replyText || label || "").toLowerCase();
+        if (txt.includes("bahn") || txt.includes("transit") || txt.includes("öpnv")) {
+          chosenMode = "transit";
+        } else if (txt.includes("fahrrad") || txt.includes("bicycling") || txt.includes("rad")) {
+          chosenMode = "bicycling";
+        } else if (txt.includes("fuß") || txt.includes("walking")) {
+          chosenMode = "walking";
+        } else {
+          chosenMode = "driving";
+        }
+
+        try {
+          const routeRes = await RouteService.setEventTravelMode(
+            Number(actionData.toEventId),
+            actionData.origin,
+            chosenMode,
+            prisma
+          );
+          executedAction = {
+            type: "route_mode_set",
+            travelMode: chosenMode,
+            route: routeRes.route,
+            message: `Reiseweg (${routeRes.route.durationText}, ${routeRes.route.distanceText || ""}) wurde gespeichert.`
+          };
+
+          if (notif.conversationId) {
+            await prisma.chatMessage.create({
+              data: {
+                conversationId: notif.conversationId,
+                role: "system",
+                text: `✅ **Reiseroute geplant:** Fahrt von "${actionData.origin}" nach "${actionData.destination}" per **${label || chosenMode}** dauert ca. ${routeRes.route.durationText} (${routeRes.route.distanceText || ""}).`
+              }
+            });
+          }
+        } catch (rErr: any) {
+          console.error("[API] Fehler beim Setzen des TravelMode via Notification:", rErr);
+        }
+      }
+    } else if (action === "set_route_mode" && actionData?.toEventId && actionData?.origin) {
+      let chosenMode: TravelMode = "driving";
+      const txt = (replyText || label || "").toLowerCase();
+      if (txt.includes("bahn") || txt.includes("transit") || txt.includes("öpnv")) {
+        chosenMode = "transit";
+      } else if (txt.includes("fahrrad") || txt.includes("bicycling") || txt.includes("rad")) {
+        chosenMode = "bicycling";
+      } else if (txt.includes("fuß") || txt.includes("walking")) {
+        chosenMode = "walking";
+      } else {
+        chosenMode = "driving";
+      }
+
+      try {
+        const routeRes = await RouteService.setEventTravelMode(
+          Number(actionData.toEventId),
+          actionData.origin,
+          chosenMode,
+          prisma
+        );
+        executedAction = {
+          type: "route_mode_set",
+          travelMode: chosenMode,
+          route: routeRes.route,
+          message: `Reiseweg (${routeRes.route.durationText}, ${routeRes.route.distanceText || ""}) wurde gespeichert.`
+        };
+
+        if (notif.conversationId) {
+          await prisma.chatMessage.create({
+            data: {
+              conversationId: notif.conversationId,
+              role: "system",
+              text: `✅ **Reiseroute geplant:** Fahrt von "${actionData.origin}" nach "${actionData.destination}" per **${label || chosenMode}** dauert ca. ${routeRes.route.durationText} (${routeRes.route.distanceText || ""}).`
+            }
+          });
+        }
+      } catch (rErr: any) {
+        console.error("[API] Fehler beim Setzen des TravelMode via Notification:", rErr);
+      }
+    }
+
+    // 3. Wenn Aktion 'reply' ist oder ein replyText vorliegt und eine Conversation verknüpft ist, Agenten ausführen
     let aiResponse = null;
-    if (action === "reply" && notif.conversationId) {
+    const shouldReply = (action === "reply" || Boolean(replyText)) && notif.conversationId;
+    if (shouldReply) {
       const responseText = replyText || label;
       console.log(`[API] Führe Folgeaktion für Benachrichtigung ${notifId} in Conv ${notif.conversationId} aus ("${responseText}")...`);
       aiResponse = await AgentRunService.continueRun(
-        notif.conversationId,
+        notif.conversationId!,
         responseText,
         prisma,
         pluginManager
@@ -213,10 +493,61 @@ app.post("/api/notifications/:id/respond", async (req, res) => {
     res.json({
       success: true,
       notification: updatedNotif,
+      executedAction,
       aiResponse
     });
   } catch (err: any) {
     console.error("[API] Fehler beim Beantworten der Benachrichtigung:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== Routen- & Wegeberechnung API ====================
+app.post("/api/routes/select-mode", async (req, res) => {
+  try {
+    const { eventId, fromLocation, travelMode, prevEventEnd, targetEventStart } = req.body;
+    if (!eventId || !fromLocation || !travelMode) {
+      return res.status(400).json({ error: "eventId, fromLocation und travelMode sind erforderlich." });
+    }
+    const result = await RouteService.setEventTravelMode(Number(eventId), fromLocation, travelMode, prisma, {
+      prevEventEnd,
+      targetEventStart
+    });
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error("[API] Fehler in /api/routes/select-mode:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/routes/calculate", async (req, res) => {
+  try {
+    const { origin, destination, travelMode, arrivalTime, departureTime, prevEventEnd, targetEventStart } = req.body;
+    if (!origin || !destination) {
+      return res.status(400).json({ error: "origin und destination sind erforderlich." });
+    }
+    const mode: TravelMode = travelMode || "driving";
+    const route = await RouteService.calculateRoute(origin, destination, mode, prisma, {
+      arrivalTime: arrivalTime || targetEventStart,
+      departureTime,
+      prevEventEnd,
+      targetEventStart: targetEventStart || arrivalTime
+    });
+    res.json({ success: true, route });
+  } catch (err: any) {
+    console.error("[API] Fehler in /api/routes/calculate:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/routes/check-today", async (req, res) => {
+  try {
+    const dateStr = req.body?.date;
+    const date = dateStr ? new Date(dateStr) : new Date();
+    const result = await RouteService.checkAndPlanRoutesForDay(date, prisma);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error("[API] Fehler in /api/routes/check-today:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -341,7 +672,8 @@ app.get("/api/calendar/timeline", async (req, res) => {
 });
 
 app.post("/api/tools/call", async (req, res) => {
-  const { name, arguments: args } = req.body;
+  const { name } = req.body;
+  const args = req.body.arguments || req.body.args || {};
   try {
     const result = await pluginManager.executeTool(name, args);
     res.json(result);
@@ -401,9 +733,9 @@ app.post("/tasks/complete", async (req, res) => {
 });
 
 /**
- * Projects & Tasks Star / Status API
+ * Projects & Tasks Star / Pin / Status API
  */
-app.post("/api/projects/:id/star", async (req, res) => {
+const handleProjectPin = async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
     const { isStarred } = req.body;
@@ -419,12 +751,14 @@ app.post("/api/projects/:id/star", async (req, res) => {
     });
     res.json({ success: true, project: updated });
   } catch (e: any) {
-    console.error("Fehler beim Umschalten des Projekt-Sterns:", e);
+    console.error("Fehler beim Umschalten des Projekt-Pins:", e);
     res.status(500).json({ error: e.message });
   }
-});
+};
+app.post("/api/projects/:id/star", handleProjectPin);
+app.post("/api/projects/:id/pin", handleProjectPin);
 
-app.post("/api/tasks/:id/star", async (req, res) => {
+const handleTaskPin = async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
     const { isStarred } = req.body;
@@ -440,10 +774,12 @@ app.post("/api/tasks/:id/star", async (req, res) => {
     });
     res.json({ success: true, task: updated });
   } catch (e: any) {
-    console.error("Fehler beim Umschalten des Aufgaben-Sterns:", e);
+    console.error("Fehler beim Umschalten des Aufgaben-Pins:", e);
     res.status(500).json({ error: e.message });
   }
-});
+};
+app.post("/api/tasks/:id/star", handleTaskPin);
+app.post("/api/tasks/:id/pin", handleTaskPin);
 
 app.post("/api/tasks/:id/status", async (req, res) => {
   try {
@@ -1251,6 +1587,102 @@ app.post("/api/mail/notifications/test", async (req, res) => {
   }
 });
 
+app.post("/api/mail/test-inject", async (req, res) => {
+  try {
+    const { preset, subject, body, from, fromName, to } = req.body || {};
+
+    let mailSubject = subject;
+    let mailBody = body;
+    let mailFrom = from || "test@beispiel.de";
+    let mailFromName = fromName || "Test Absender";
+    const mailTo = to || "benutzer@kisystem.local";
+
+    if (preset === "question" || (!mailSubject && !preset)) {
+      mailSubject = mailSubject || "Terminanfrage: Keramik bemalen am Samstag 15:00 Uhr";
+      mailFromName = (mailFromName === "Test Absender") ? "Sarah" : mailFromName;
+      mailFrom = (mailFrom === "test@beispiel.de") ? "sarah@friends.de" : mailFrom;
+      mailBody = mailBody || "Hallo!\nHast du Lust am Samstag um 15:00 Uhr mit mir Keramik bemalen zu gehen? Sag mir bitte kurz Bescheid, ob du Zeit hast!\nLiebe Grüße, Sarah";
+    } else if (preset === "info") {
+      mailSubject = mailSubject || "Wichtige Mitteilung: Paketankündigung für heute";
+      mailFromName = (mailFromName === "Test Absender") ? "DHL Paket" : mailFromName;
+      mailFrom = (mailFrom === "test@beispiel.de") ? "noreply@dhl.de" : mailFrom;
+      mailBody = mailBody || "Guten Tag,\nIhr Paket von Amazon wird voraussichtlich heute zwischen 14:00 und 16:30 Uhr zugestellt. Sie können den Lieferstatus online verfolgen.";
+    } else if (preset === "spam" || preset === "newsletter") {
+      mailSubject = mailSubject || "Mega Sale: 50% Rabatt auf die neue Frühlingskollektion!";
+      mailFromName = (mailFromName === "Test Absender") ? "ModeStore Newsletter" : mailFromName;
+      mailFrom = (mailFrom === "test@beispiel.de") ? "newsletter@modestore.de" : mailFrom;
+      mailBody = mailBody || "Hallo Fashion-Fan,\nNur dieses Wochenende sparst du 50% auf alle Artikel! Klicke hier zum Shoppen. Wenn du keine Newsletter mehr erhalten möchtest, klicke hier zum Abmelden.";
+    }
+
+    // 1. Account ermitteln oder Dummy-Konto anlegen
+    let account = await prisma.mailAccount.findFirst({
+      where: { isDeleted: false },
+      orderBy: { id: "asc" }
+    });
+
+    if (!account) {
+      account = await prisma.mailAccount.create({
+        data: {
+          name: "Lokales Test-Postfach",
+          email: "test@kisystem.local",
+          password: "test-password",
+          imapHost: "localhost",
+          imapPort: 993,
+          imapTls: false,
+          smtpHost: "localhost",
+          smtpPort: 587,
+          smtpTls: false,
+          color: "#89b4fa"
+        }
+      });
+    }
+
+    // 2. Höchste UID für dieses Konto ermitteln
+    const maxUidRecord = await prisma.cachedEmail.findFirst({
+      where: { accountId: account.id },
+      orderBy: { uid: "desc" },
+      select: { uid: true }
+    });
+    const nextUid = (maxUidRecord?.uid || 0) + 1;
+
+    // 3. E-Mail in CachedEmail einfügen
+    const cleanSnippet = (mailBody || "").replace(/\s+/g, " ").trim().slice(0, 160);
+    const createdMail = await prisma.cachedEmail.create({
+      data: {
+        accountId: account.id,
+        uid: nextUid,
+        messageId: `<test-${Date.now()}@kisystem.local>`,
+        subject: mailSubject,
+        from: mailFrom,
+        fromName: mailFromName,
+        to: mailTo,
+        date: new Date(),
+        bodyText: mailBody,
+        bodyHtml: `<p>${(mailBody || "").replace(/\n/g, "<br>")}</p>`,
+        snippet: cleanSnippet,
+        isRead: false,
+        hasAttachments: false
+      }
+    });
+
+    console.log(`[Test-Inject] ✉️ Test-Mail #${createdMail.id} "${createdMail.subject}" angelegt.`);
+
+    // 4. Hook aufrufen (löst Agent Run aus)
+    if (typeof MailService.onNewEmail === "function") {
+      MailService.onNewEmail(createdMail, prisma);
+    }
+
+    res.json({
+      success: true,
+      message: `Test-Mail #${createdMail.id} erfolgreich angelegt und Agent Run gestartet.`,
+      email: createdMail
+    });
+  } catch (err: any) {
+    console.error("[Test-Inject] Fehler:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.post("/api/persons/merge", async (req, res) => {
   const { sourceId, targetId } = req.body;
   if (!sourceId || !targetId) {
@@ -1325,16 +1757,107 @@ app.get("/settings", (req, res) => {
 });
 
 app.post("/settings", (req, res) => {
-  const { hotkey, disabledPlugins, autostart, aiModel } = req.body;
+  const { hotkey, disabledPlugins, autostart, aiModel, agentSettings } = req.body;
   const current = getSettings();
   const updated = {
     hotkey: hotkey !== undefined ? hotkey : current.hotkey,
-    disabledPlugins: disabledPlugins !== undefined ? disabledPlugins : current.disabledPlugins,
+    disabledPlugins: [], // Plugins sind immer aktiv
     autostart: autostart !== undefined ? autostart : current.autostart,
-    aiModel: aiModel !== undefined ? aiModel : current.aiModel
+    aiModel: aiModel !== undefined ? aiModel : current.aiModel,
+    agentSettings: agentSettings !== undefined ? agentSettings : current.agentSettings
   };
   saveSettings(updated);
   res.json(updated);
+});
+
+app.get("/settings/agents", (req, res) => {
+  const settings = getSettings();
+  const plugins = pluginManager.getPluginsInfo().map(p => ({
+    name: p.name,
+    description: p.description,
+  }));
+  const dynamicProviders = (pluginManager.dynamicTools as any).getProviders
+    ? (pluginManager.dynamicTools as any).getProviders()
+    : ["discord-bot"];
+
+  res.json({
+    agentSettings: settings.agentSettings || {},
+    availableTriggers: AVAILABLE_TRIGGERS,
+    plugins,
+    dynamicProviders
+  });
+});
+
+app.post("/settings/agents", (req, res) => {
+  try {
+    const { id, name, description, avatar, color, trigger, triggerDescription, systemPrompt, allowedPlugins, pluginPermissions, detailedPermissions, allowedDynamicProviders, allowAllDynamicTools, isEnabled } = req.body;
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "Der Name des Agenten ist erforderlich." });
+    }
+    const rawKey = (id && id.trim()) ? id.trim() : name.trim();
+    const key = rawKey.toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+
+    const updated = saveAgentConfig(key, {
+      name: name.trim(),
+      description: description || "",
+      avatar: avatar || undefined,
+      color: color || undefined,
+      trigger: trigger || "manual",
+      triggerDescription,
+      systemPrompt,
+      allowedPlugins: allowedPlugins || ["*"],
+      pluginPermissions,
+      detailedPermissions,
+      allowedDynamicProviders: allowedDynamicProviders || [],
+      allowAllDynamicTools: allowAllDynamicTools ?? true,
+      isEnabled: isEnabled !== false
+    });
+    res.json({ success: true, key, agent: updated[key], agentSettings: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/settings/agents/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    deleteAgentConfig(id);
+    const settings = getSettings();
+    res.json({ success: true, agentSettings: settings.agentSettings || {} });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.patch("/settings/agents/:id/toggle", (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isEnabled } = req.body || {};
+    const newStatus = toggleAgentStatus(id, isEnabled);
+    const settings = getSettings();
+    res.json({ success: true, isEnabled: newStatus, agentSettings: settings.agentSettings || {} });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post("/api/agent-runs/trigger", async (req, res) => {
+  try {
+    const { agentId, trigger, prompt, title, metadata } = req.body;
+    if (!prompt) {
+      return res.status(400).json({ error: "Parameter 'prompt' ist erforderlich." });
+    }
+    console.log(`[API] Manueller/Externer Trigger Agent Run mit Prompt: "${prompt.slice(0, 50)}"... agentId=${agentId}, trigger=${trigger}`);
+    const result = await AgentRunService.executeTriggerRun(
+      { agentId, trigger, prompt, title, metadata },
+      prisma,
+      pluginManager
+    );
+    res.json(result);
+  } catch (err: any) {
+    console.error("[API] Fehler bei Trigger Agent Run:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get("/settings/plugins", (req, res) => {
@@ -1376,14 +1899,12 @@ app.post("/chat", async (req, res) => {
       conversationId = newConv.id;
     }
 
-    // 1. Vorherigen Chatverlauf abrufen (bevor die aktuelle Nachricht in die DB geschrieben wird, um Duplikate zu vermeiden)
-    const chatHistory = conversationId ? (await prisma.chatMessage.findMany({
+    // 1. Vorherigen Chatverlauf abrufen (strikt validiert für Gemini: startet mit user, endet mit model)
+    const rawPrevMessages = conversationId ? await prisma.chatMessage.findMany({
       where: { conversationId },
       orderBy: { createdAt: 'asc' }
-    })).map(m => ({
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.text }]
-    })) : [];
+    }) : [];
+    const chatHistory = AgentRunService.formatGeminiChatHistory(rawPrevMessages, 14);
 
     // 2. Speichere Benutzer-Nachricht in DB
     if (message || audio || (attachments && attachments.length > 0)) {
@@ -1422,7 +1943,6 @@ app.post("/chat", async (req, res) => {
           text: `Du bist ein hilfsbereiter, proaktiver persönlicher KI-Assistent. 
 Heute ist ${dateString}, ${todayIso}, es ist ${timeString} Uhr (deutsche Lokalzeit, Mitteleuropäische Sommerzeit, UTC+2). 
 Nutze '${todayIso}' als heutiges Datum als Basis für alle Datumsberechnungen (z.B. morgen = nächster Tag im Format YYYY-MM-DD).
-
 WERKZEUGAUFRUFE (TOOLS) - OBERSTE REGEL:
 - Wenn der Benutzer eine Aktion wünscht (z.B. Aufgabe erstellen, Mails anzeigen/holen, Timer/Wecker stellen, Projekt erstellen, Termin eintragen, Notiz speichern usw.), rufe das passende Werkzeug SOFORT als Function Call auf. Antworte NICHT nur mit Text oder leeren Floskeln, sondern führe die Aktion direkt aus!
 - Verwende in Werkzeug-Parametern IMMER reine JSON-Werte (Strings oder Zahlen). Führe NIEMALS Python-Code oder Formeln wie 'from datetime import date' in den Argumenten aus, sondern berechne Datums-Strings im Voraus als z.B. "${todayIso}".
@@ -1446,6 +1966,9 @@ Du hast Zugriff auf ein Tagebuch (Journal) mit täglichen Einträgen, Kalenderte
 WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
 - Du darfst NIEMALS dem Benutzer behaupten, dass eine Aufgabe, ein Termin, ein Timer/Wecker, ein Projekt oder eine Notiz erstellt, geändert oder gelöscht wurde, wenn du das entsprechende Werkzeug NICHT aufgerufen hast ODER wenn der Aufruf fehlgeschlagen ist (status: 'error')!
 - Gib NIEMALS Scheinerfolgsmeldungen aus. Jede Erfolgsmeldung muss auf einer echten Rückmeldung des Werkzeugs basieren. Wenn ein Tool fehlschlägt, informiere den Benutzer ehrlich über den Fehler.
+- TRANSPARENTE ENTWÜRFE & BENACHRICHTIGUNGEN:
+  Wenn du 'erstelle_benachrichtigung' für eine Bestätigung oder Rückfrage aufrufst (z. B. Ankündigung veröffentlichen, Mail senden), MUSST du im Parameter 'nachricht' zwingend den VOLLSTÄNDIGEN Text/Inhalt des Entwurfs (Titel, kompletter Ankündigungstext, Kanal, Pings etc.) als lesbare Vorschau einfügen! Behalte den Entwurfstext niemals für dich!
+
 - TRANSPARENTE ERSTELLUNGSBERICHTE: Wenn du etwas anlegst (Aufgabe, Termin, Timer/Wecker), berichte dem Benutzer detailliert und transparent, was genau erstellt wurde:
   * Bei Aufgaben: Nenne Titel, Fälligkeitsdatum/Uhrzeit, Aufgabenliste/Projekt und ob sie 'In Planung' ist.
   * Bei Terminen: Nenne Titel, Datum, Start- und Enduhrzeit sowie Wiederholung (falls vorhanden).
@@ -1461,25 +1984,44 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
     // Resolve any app:// link entities in the message and inject their contents as context for the AI
     let resolvedContext = "";
     if (message) {
-      const entityRegex = /\[([^\]]+)\]\((app:\/\/([^/]+)\/(\d+))\)/g;
+      const entityRegex = /\[([^\]]+)\]\((app:\/\/([^/]+)\/([^)]+))\)/g;
       let match;
       const resolvedEntities = new Set<string>();
 
       while ((match = entityRegex.exec(message)) !== null) {
+        const linkText = match[1];
         const fullUrl = match[2];
         const type = match[3];
-        const id = parseInt(match[4], 10);
-        const entityKey = `${type}-${id}`;
+        const rawId = match[4];
+        const entityKey = `${type}-${rawId}`;
 
         if (!resolvedEntities.has(entityKey)) {
           resolvedEntities.add(entityKey);
           try {
-            const entity = await pluginManager.resolveEntity(type, id);
-            if (entity) {
-              resolvedContext += `\n--- Verlinktes Element: [${match[1]}] (${fullUrl}) ---\n${JSON.stringify(entity, null, 2)}\n`;
+            if (type === "pause") {
+              resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: Pause / Freies Zeitfenster im Tagesablauf\nBezeichnung: ${linkText}\nID / Zeitfenster: ${rawId}\nHinweis für KI: Der Nutzer verlinkt diese freie Pause im Kalender (z.B. um in dieser freien Zeit einen neuen Termin einzutragen oder eine Aufgabe einzuplanen). Wenn der Nutzer einen Termin in dieser Pause erstellen möchte, nutze das Tool 'fuege_termin_hinzu' und wähle die Uhrzeit passend innerhalb des Zeitfensters dieser Pause.\n`;
+            } else if (type === "travel") {
+              const numId = parseInt(rawId.replace(/^rec-/, ''), 10);
+              let eventRecord: any = null;
+              if (!isNaN(numId)) {
+                eventRecord = await prisma.event.findUnique({ where: { id: numId } });
+              }
+              if (eventRecord) {
+                resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: Wegezeit / Anreise zum Termin\nZugehöriger Termin: "${eventRecord.title}" (ID: ${eventRecord.id})\nZielort: ${eventRecord.location || "Nicht angegeben"}\nStartort / Startadresse: ${eventRecord.travelOriginLocation || "Nicht hinterlegt"}\nAktuelles Verkehrsmittel: ${eventRecord.travelMode || "Nicht gewählt"}\nReisedauer: ${eventRecord.travelDurationMinutes ? eventRecord.travelDurationMinutes + " Minuten" : "Unbekannt"}\nDistanz: ${eventRecord.travelDistanceText || "Unbekannt"}\nTermin-Beginn: ${new Date(eventRecord.start).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr (${new Date(eventRecord.start).toISOString()})\nÖPNV-Details: ${eventRecord.travelTransitDetails ? JSON.stringify(eventRecord.travelTransitDetails) : "Keine"}\nHinweis für KI: Der Nutzer hat diese Wegezeit verlinkt.\n- Wenn der Nutzer ein anderes Verkehrsmittel wählen möchte (z.B. Bahn, Auto, Fahrrad oder zu Fuß): Nutze das Tool 'bearbeite_termin' mit eventId="${eventRecord.id}" und dem Parameter 'verkehrsmittel' ('driving' | 'transit' | 'bicycling' | 'walking').\n- Wenn der Nutzer die Wegezeit oder Abfahrtszeit anpassen/verschieben möchte: Nutze 'bearbeite_termin' mit eventId="${eventRecord.id}" und passe 'neues_datum' oder 'reisezeit_minuten' an.\n`;
+              } else {
+                resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: Wegezeit / Route\nBezeichnung: ${linkText}\nTermin-ID: ${rawId}\nHinweis für KI: Der Nutzer bezieht sich auf diese Wegezeit und möchte möglicherweise das Verkehrsmittel oder die Zeit anpassen. Nutze 'bearbeite_termin' mit eventId="${rawId}".\n`;
+              }
+            } else {
+              const numId = parseInt(rawId, 10);
+              if (!isNaN(numId)) {
+                const entity = await pluginManager.resolveEntity(type, numId);
+                if (entity) {
+                  resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\n${JSON.stringify(entity, null, 2)}\n`;
+                }
+              }
             }
           } catch (err) {
-            console.error(`Fehler beim Auflösen der Entity ${type}:${id}`, err);
+            console.error(`Fehler beim Auflösen der Entity ${type}:${rawId}`, err);
           }
         }
       }
@@ -1650,24 +2192,9 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
       }
     }
 
-    // Prepend tool calls info with truthful execution status to the message
+    // Kompakte, zugeklappte Zusammenfassung der Aktionen anhängen
     if (executedTools.length > 0) {
-      const toolSummaries = executedTools.map(t => {
-        const argsStr = Object.entries(t.args || {})
-          .map(([k, v]) => {
-            const val = typeof v === 'string' ? `"${v}"` : JSON.stringify(v);
-            return `${k}: ${val}`;
-          })
-          .join(", ");
-        if (t.status === "success") {
-          return `✅ *Aktion ausgeführt:* \`${t.name}(${argsStr})\``;
-        } else if (t.status === "error") {
-          return `❌ *Aktion fehlgeschlagen:* \`${t.name}\` (${t.message || 'Fehler'})`;
-        } else {
-          return `⚠️ *Aufruflimit erreicht:* \`${t.name}\``;
-        }
-      }).join("\n");
-      aiText = `${toolSummaries}\n\n${aiText}`;
+      aiText = `${aiText.trim()}${AgentRunService.formatExecutedToolsSummary(executedTools)}`;
     }
 
     // Speichere KI-Antwort in DB
@@ -1677,7 +2204,23 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
       });
     }
 
-    res.json({ text: aiText, conversationId, widget: widgetData });
+    let createdNotifications: any[] = [];
+    if (conversationId) {
+      createdNotifications = await prisma.agentNotification.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: "desc" },
+        take: 5
+      });
+    }
+    const latestNotif = createdNotifications.length > 0 ? createdNotifications[0] : null;
+
+    res.json({ 
+      text: aiText, 
+      conversationId, 
+      widget: widgetData,
+      notification: latestNotif,
+      notifications: createdNotifications
+    });
 
   } catch (error: any) {
     console.error("Detailed Error:", error);

@@ -100,7 +100,7 @@ export const tasksPlugin: Plugin = {
             recurrence: { type: SchemaType.STRING, description: "Wiederholungsintervall: 'daily', 'weekly', 'monthly', 'yearly' oder 'none' (optional)" },
             projectId: { type: SchemaType.INTEGER, description: "Die ID des Projekts, dem die Aufgabe zugeordnet ist (optional)" },
             inPlanung: { type: SchemaType.BOOLEAN, description: "Ob die Aufgabe noch 'In Planung' / Vorschlag ist (optional)" },
-            isStarred: { type: SchemaType.BOOLEAN, description: "Ob die Aufgabe mit einem Stern versehen und im Arbeitstisch angezeigt werden soll (optional)" },
+            isStarred: { type: SchemaType.BOOLEAN, description: "Ob die Aufgabe mit einem Stern versehen und angepinnt werden soll (optional)" },
             status: { type: SchemaType.STRING, description: "Status der Aufgabe: 'suggestion' (Vorschlag), 'in_progress' (In Arbeit) oder 'done' (Fertig). Standard ist 'in_progress'." }
           },
           required: ["titel"]
@@ -313,7 +313,7 @@ export const tasksPlugin: Plugin = {
             recurrence: { type: SchemaType.STRING, description: "Neues Wiederholungsintervall: 'daily', 'weekly', 'monthly', 'yearly' oder 'none' (optional)" },
             projectId: { type: SchemaType.INTEGER, description: "Die neue ID des Projekts oder 'null' zum Entfernen (optional)" },
             inPlanung: { type: SchemaType.BOOLEAN, description: "Ob die Aufgabe noch 'In Planung' / Vorschlag ist (optional)" },
-            isStarred: { type: SchemaType.BOOLEAN, description: "Ob die Aufgabe mit einem Stern versehen und im Arbeitstisch angezeigt werden soll (optional)" },
+            isStarred: { type: SchemaType.BOOLEAN, description: "Ob die Aufgabe mit einem Stern versehen und angepinnt werden soll (optional)" },
             status: { type: SchemaType.STRING, description: "Status der Aufgabe: 'suggestion' (Vorschlag), 'in_progress' (In Arbeit) oder 'done' (Fertig) (optional)" }
           },
           required: ["taskId"]

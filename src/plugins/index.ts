@@ -1,3 +1,4 @@
+import { createInstructionsPlugin } from "./Instructions/index.js";
 import { PrismaClient } from "@prisma/client";
 import { Plugin, PluginTool } from "./types.js";
 import { appLauncherPlugin } from "./AppLauncher/index.js";
@@ -10,9 +11,26 @@ import { tasksPlugin } from "./Tasks/index.js";
 import { journalPlugin } from "./Journal/index.js";
 import { mailPlugin } from "./Mail/index.js";
 import { notificationsPlugin } from "./Notifications/index.js";
-import { getSettings } from "../settings.js";
+import { getSettings, getAgentConfig, getAgentPluginPermission, getAgentDetailedPluginPermission, PluginPermissionLevel } from "../settings.js";
 
 import { DynamicToolManager } from "./dynamic/DynamicToolManager.js";
+
+export const MUTATING_PLUGIN_TOOLS: Record<string, string[]> = {
+  Calendar: ["fuege_termin_hinzu", "bearbeite_termin", "loesche_termin", "wiederherstellen_termin"],
+  Tasks: ["erstelle_aufgabe", "aktualisiere_aufgabe", "loesche_aufgabe", "erledige_aufgabe", "wiedereroeffnen_aufgabe", "wiederherstellen_aufgabe"],
+  Mail: ["sende_mail", "antworte_mail"],
+  Projects: ["erstelle_projekt", "bearbeite_projekt", "loesche_projekt", "erstelle_notiz", "bearbeite_notiz", "loesche_notiz"],
+  Journal: ["eintrag_ins_tagebuch"],
+  AppLauncher: ["starte_programm"],
+  Timer: ["erstelle_timer", "loesche_timer", "bearbeite_timer"],
+  Memory: ["merke_ueber_mich", "merke_ueber_person", "bearbeite_erinnerung", "loesche_erinnerung", "loesche_person", "wiederherstellen_person", "setze_person_geburtstag", "aktualisiere_person_biografie", "fuege_person_fakt_hinzu", "loesche_person_fakt", "wiederherstellen_person_fakt", "setze_person_favorit", "verwalte_person_alias"]
+};
+
+export const PROPOSAL_PLUGIN_TOOLS: Record<string, string> = {
+  schlage_mail_antwort_vor: "Mail",
+  schlage_termin_vor: "Calendar",
+  schlage_aufgabe_vor: "Tasks"
+};
 
 export class PluginManager {
   private plugins: Plugin[] = [];
@@ -23,6 +41,7 @@ export class PluginManager {
     this.dynamicTools = new DynamicToolManager(prisma);
 
     // Hier werden die Plugins registriert
+    this.registerPlugin(createInstructionsPlugin(() => this));
     this.registerPlugin(appLauncherPlugin);
     this.registerPlugin(memoryPlugin);
     this.registerPlugin(calendarPlugin);
@@ -50,13 +69,18 @@ export class PluginManager {
     console.log(`Plugin geladen: ${plugin.name} (${plugin.tools.length} Tools)`);
   }
 
+  /**
+   * Prüft, ob ein Tool ein internes Plugin-Tool ist
+   */
+  hasInternalTool(name: string): boolean {
+    return this.plugins.some(p => p.tools.some(t => t.definition.name === name));
+  }
+
   getPluginsInfo() {
-    const settings = getSettings();
-    const disabled = settings.disabledPlugins || [];
     const internalPlugins = this.plugins.map(p => ({
       name: p.name,
       description: p.description,
-      enabled: !disabled.includes(p.name),
+      enabled: true,
       isDynamic: false
     }));
 
@@ -74,21 +98,80 @@ export class PluginManager {
     return internalPlugins;
   }
 
-  getGeminiTools() {
+  getGeminiTools(agentType?: string) {
     const settings = getSettings();
-    const disabled = settings.disabledPlugins || [];
+    const disabledTools = settings.disabledTools || [];
+    const agentConfig = agentType ? getAgentConfig(agentType) : null;
+    if (agentConfig && agentConfig.isEnabled === false) return [];
     
     const activeTools: any[] = [];
     for (const plugin of this.plugins) {
-      if (disabled.includes(plugin.name)) continue;
+      const detailed = agentConfig
+        ? getAgentDetailedPluginPermission(agentConfig, plugin.name)
+        : { read: "yes" as const, write: "yes" as const };
+
+      // Wenn sowohl Lesen als auch Schreiben für dieses Plugin gesperrt sind, komplett überspringen
+      // (Notifications und Instructions bleiben als Basisfunktionen erhalten)
+      if (detailed.read === "no" && detailed.write === "no" && plugin.name !== "Notifications" && plugin.name !== "Instructions") {
+        continue;
+      }
+
+      const mutatingForPlugin = MUTATING_PLUGIN_TOOLS[plugin.name] || [];
+
       for (const tool of plugin.tools) {
-        activeTools.push(tool.definition);
+        if (disabledTools.includes(tool.definition.name)) continue;
+
+        // Prüfen, ob es sich um ein Vorschlag-Tool für ein bestimmtes Ziel-Plugin handelt
+        if (plugin.name === "Notifications" && PROPOSAL_PLUGIN_TOOLS[tool.definition.name]) {
+          const targetPlugin = PROPOSAL_PLUGIN_TOOLS[tool.definition.name];
+          const targetDetailed = agentConfig
+            ? getAgentDetailedPluginPermission(agentConfig, targetPlugin)
+            : { read: "yes" as const, write: "yes" as const };
+          // Wenn Aktionen für das Zielplugin auf "nein" stehen, darf der Agent auch keine Vorschläge machen
+          if (targetDetailed.write === "no") {
+            continue;
+          }
+        }
+
+        const isMutating = mutatingForPlugin.includes(tool.definition.name);
+
+        // Mutierende Tools prüfen:
+        if (isMutating) {
+          // Bei "no" oder "ask" werden direkte Ausführungstools dem Agenten NIEMALS übergeben!
+          if (detailed.write === "no" || detailed.write === "ask") {
+            continue;
+          }
+        } else {
+          // Lese-Tools prüfen (für Nicht-Basisfunktionen):
+          if (detailed.read === "no" && plugin.name !== "Notifications" && plugin.name !== "Instructions") {
+            continue;
+          }
+        }
+
+        activeTools.push({
+          name: tool.definition.name,
+          description: tool.definition.description,
+          parameters: tool.definition.parameters
+        });
       }
     }
 
     // Dynamische Tools für Gemini anfügen
-    const dynamicDeclarations = this.dynamicTools.getGeminiDeclarations();
-    activeTools.push(...dynamicDeclarations);
+    if (!agentConfig || agentConfig.allowAllDynamicTools || (agentConfig.allowedDynamicProviders && agentConfig.allowedDynamicProviders.length > 0)) {
+      const dynamicDeclarations = this.dynamicTools.getGeminiDeclarations();
+      if (agentConfig && agentConfig.allowedDynamicProviders && !agentConfig.allowAllDynamicTools) {
+        const allowedProviders = agentConfig.allowedDynamicProviders;
+        const filteredDeclarations = dynamicDeclarations.filter((d: any) => {
+          const toolDef = this.dynamicTools.getTool(d.name);
+          return toolDef && toolDef.provider && allowedProviders.includes(toolDef.provider);
+        });
+        const enabledFiltered = filteredDeclarations.filter((d: any) => !disabledTools.includes(d.name));
+        activeTools.push(...enabledFiltered);
+      } else {
+        const enabledDeclarations = dynamicDeclarations.filter((d: any) => !disabledTools.includes(d.name));
+        activeTools.push(...enabledDeclarations);
+      }
+    }
 
     return activeTools;
   }
@@ -116,20 +199,71 @@ export class PluginManager {
     return activeTools;
   }
 
-  async executeTool(name: string, args: any) {
+  async executeTool(name: string, args: any, agentType?: string) {
+    const settings = getSettings();
+    const disabledTools = settings.disabledTools || [];
+    const agentConfig = agentType ? getAgentConfig(agentType) : null;
+    if (agentConfig && agentConfig.isEnabled === false) {
+      throw new Error(`Zugriff verweigert: Der Agent '${agentConfig.name || agentType}' ist aktuell deaktiviert.`);
+    }
+
+    if (disabledTools.includes(name)) {
+      throw new Error(`Zugriff verweigert: Das Werkzeug '${name}' ist aktuell systemweit deaktiviert.`);
+    }
+
     // 1. Zuerst prüfen, ob es sich um ein dynamisches Remote-Tool handelt
     if (this.dynamicTools.hasTool(name)) {
+      if (agentConfig && !agentConfig.allowAllDynamicTools) {
+        const toolDef = this.dynamicTools.getTool(name);
+        const allowedProviders = agentConfig.allowedDynamicProviders || [];
+        if (toolDef && toolDef.provider && !allowedProviders.includes(toolDef.provider)) {
+          throw new Error(`Zugriff verweigert: Tool '${name}' von Provider '${toolDef.provider}' ist für den Agenten '${agentType}' nicht freigegeben.`);
+        }
+      }
       return await this.dynamicTools.executeTool(name, args);
     }
 
     // 2. Ansonsten Standard-Plugin suchen
-    const settings = getSettings();
-    const disabled = settings.disabledPlugins || [];
-    
     const plugin = this.plugins.find(p => p.tools.some(t => t.definition.name === name));
     if (!plugin) throw new Error(`Tool ${name} nicht gefunden.`);
-    if (disabled.includes(plugin.name)) {
-      throw new Error(`Das Plugin '${plugin.name}' ist deaktiviert.`);
+
+    // Agenten-Berechtigungsprüfung
+    if (agentConfig) {
+      const detailed = getAgentDetailedPluginPermission(agentConfig, plugin.name);
+
+      // Vorschlag-Tool Prüfung
+      if (plugin.name === "Notifications" && PROPOSAL_PLUGIN_TOOLS[name]) {
+        const targetPlugin = PROPOSAL_PLUGIN_TOOLS[name];
+        const targetDetailed = getAgentDetailedPluginPermission(agentConfig, targetPlugin);
+        if (targetDetailed.write === "no") {
+          throw new Error(
+            `Zugriff verweigert: Der Agent '${agentConfig.name || agentType}' darf für '${targetPlugin}' keine Aktionen vorschlagen oder durchführen (Berechtigung: Nein).`
+          );
+        }
+      }
+
+      const mutatingForPlugin = MUTATING_PLUGIN_TOOLS[plugin.name] || [];
+      const isMutating = mutatingForPlugin.includes(name);
+
+      if (isMutating) {
+        if (detailed.write === "ask") {
+          throw new Error(
+            `Zugriff verweigert: Der Agent '${agentConfig.name || agentType}' hat für '${plugin.name}' die Berechtigungsstufe 'Nur mit Abfrage'. ` +
+            `Aktionen dürfen nicht eigenständig ausgeführt werden. Bitte nutze stattdessen das entsprechende Vorschlag-Werkzeug (z. B. schlage_termin_vor, schlage_aufgabe_vor, schlage_mail_antwort_vor).`
+          );
+        }
+        if (detailed.write === "no") {
+          throw new Error(
+            `Zugriff verweigert: Der Agent '${agentConfig.name || agentType}' hat keine Berechtigung, Aktionen für '${plugin.name}' auszuführen (Berechtigung: Nein).`
+          );
+        }
+      } else {
+        if (detailed.read === "no" && plugin.name !== "Notifications" && plugin.name !== "Instructions") {
+          throw new Error(
+            `Zugriff verweigert: Das Lesen von Daten für '${plugin.name}' ist für den Agenten '${agentConfig.name || agentType}' gesperrt (Berechtigung: Nein).`
+          );
+        }
+      }
     }
 
     const tool = plugin.tools.find(t => t.definition.name === name);
@@ -139,23 +273,24 @@ export class PluginManager {
 
   getToolsOverview() {
     const settings = getSettings();
-    const disabled = settings.disabledPlugins || [];
+    const disabledTools = settings.disabledTools || [];
 
     const dynamicTools = this.dynamicTools.getTools().map(t => ({
       ...t,
-      isDynamic: true
+      isDynamic: true,
+      isEnabled: t.isEnabled !== false && !disabledTools.includes(t.name)
     }));
 
     const internalTools: any[] = [];
     for (const plugin of this.plugins) {
-      const isPluginEnabled = !disabled.includes(plugin.name);
       for (const tool of plugin.tools) {
         internalTools.push({
           name: tool.definition.name,
           description: tool.definition.description,
+          detailedInstructions: (tool as any).detailedInstructions || (tool.definition as any).detailedInstructions || undefined,
           parameters: tool.definition.parameters,
           pluginName: plugin.name,
-          isEnabled: isPluginEnabled,
+          isEnabled: !disabledTools.includes(tool.definition.name),
           isDynamic: false
         });
       }
