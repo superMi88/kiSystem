@@ -2,6 +2,42 @@ import { Plugin } from "../types.js";
 import { SchemaType } from "@google/generative-ai";
 import { getAgentConfig } from "../../settings.js";
 
+export function getCanonicalAgent(sourceType?: string, agentNameHint?: string) {
+  const s = (sourceType || "").toLowerCase().trim();
+  const a = (agentNameHint || "").toLowerCase().trim();
+
+  // 1. Discord Bot Agent
+  if (s === "discord" || a.includes("discord")) {
+    const conf = getAgentConfig("discord");
+    return {
+      id: "discord",
+      name: conf?.name || "Discord Bot Agent",
+      avatar: (conf?.avatar || "🌐").replace(/^\?\?$/, "🌐"),
+      color: conf?.color || "#89b4fa"
+    };
+  }
+
+  // 2. E-Mail Agent (strictly for incoming mail triage / mail reply)
+  if (s === "mail" || a === "mail" || a === "e-mail-agent" || a === "e-mail agent" || a === "mail agent") {
+    const conf = getAgentConfig("mail");
+    return {
+      id: "mail",
+      name: conf?.name || "E-Mail Agent",
+      avatar: (conf?.avatar || "✉️").replace(/^\?\?$/, "✉️"),
+      color: conf?.color || "#fab387"
+    };
+  }
+
+  // 3. Haupt-Assistent (Web / App) for all other actions (chat, manual, route, calendar, system)
+  const conf = getAgentConfig("default");
+  return {
+    id: "default",
+    name: conf?.name || "Haupt-Assistent (Web / App)",
+    avatar: (conf?.avatar || "🤖").replace(/^\?\?$/, "🤖"),
+    color: conf?.color || "#cba6f7"
+  };
+}
+
 export const notificationsPlugin: Plugin = {
   name: "Notifications",
   description: "Verwaltet Benachrichtigungen, Fragen und Handlungsbedarf von autonomen Agent Runs für den Arbeitstisch.",
@@ -106,15 +142,29 @@ export const notificationsPlugin: Plugin = {
           }
         }
 
-        const agentConfig = getAgentConfig(args.agentName || args.sourceType || "mail");
-        const agentName = agentConfig?.name || args.agentName || (args.sourceType === "mail" ? "E-Mail-Agent" : "Autonomer Agent");
-        const agentAvatar = agentConfig?.avatar || (args.sourceType === "mail" ? "✉️" : "🤖");
-        const agentColor = agentConfig?.color || (args.sourceType === "mail" ? "#fab387" : "#89b4fa");
+        const canonical = getCanonicalAgent(args.sourceType, args.agentName);
+        const agentName = canonical.name;
+        const agentAvatar = canonical.avatar;
+        const agentColor = canonical.color;
+        const resolvedSourceType = args.sourceType || (canonical.id === "mail" ? "mail" : (canonical.id === "discord" ? "discord" : "system"));
+
+        // Wenn es sich um einen E-Mail-Entwurf handelt und kein Bearbeitungs-Button existiert:
+        const isEmailDraft = (args.titel && args.titel.toLowerCase().includes("mail")) ||
+                             (args.nachricht && (args.nachricht.includes("Betreff:") || args.nachricht.includes("Empfänger:")));
+        if (isEmailDraft && Array.isArray(buttons)) {
+          const hasEditBtn = buttons.some((b: any) => b.action === "open_composer" || (b.label && b.label.toLowerCase().includes("bearbeit")));
+          if (!hasEditBtn) {
+            // Nach dem ersten Button (z.B. "Ja" oder "Senden") den "Bearbeiten" Button einfügen
+            buttons.splice(1, 0, { label: "Bearbeiten", action: "open_composer", style: "secondary" });
+          }
+        }
+
+        const notifMsg = args.nachricht || args.message || args.begruendung || args.titel || "Benachrichtigung";
 
         const notif = await prisma.agentNotification.create({
           data: {
-            title: args.titel,
-            message: args.nachricht,
+            title: args.titel || "Benachrichtigung",
+            message: notifMsg,
             reasoning: args.begruendung || args.reasoning || null,
             agentName,
             agentAvatar,
@@ -122,7 +172,7 @@ export const notificationsPlugin: Plugin = {
             actionData: args.actionData || null,
             type: args.typ || "info",
             priority: args.prioritaet || "normal",
-            sourceType: args.sourceType || "mail",
+            sourceType: resolvedSourceType,
             sourceId: args.sourceId ? String(args.sourceId) : null,
             conversationId: validConversationId,
             buttons: buttons || null
@@ -165,10 +215,10 @@ Gib Datum (YYYY-MM-DD), Startzeit (HH:MM), Titel und Begründung an.`,
         } as any
       },
       handler: async (args, { prisma }) => {
-        const agentConfig = getAgentConfig(args.agentName || args.sourceType || "mail");
-        const agentAvatar = agentConfig?.avatar || "✉️";
-        const agentColor = agentConfig?.color || "#fab387";
-        const agentName = agentConfig?.name || args.agentName || "E-Mail-Agent";
+        const canonical = getCanonicalAgent(args.sourceType || "mail", args.agentName);
+        const agentAvatar = canonical.avatar;
+        const agentColor = canonical.color;
+        const agentName = canonical.name;
 
         let dateDisplay = args.datum;
         try {
@@ -261,10 +311,10 @@ Erstelle niemals selbst Aufgaben per erstelle_aufgabe, sondern schlage sie immer
         } as any
       },
       handler: async (args, { prisma }) => {
-        const agentConfig = getAgentConfig(args.agentName || args.sourceType || "mail");
-        const agentAvatar = agentConfig?.avatar || "✉️";
-        const agentColor = agentConfig?.color || "#fab387";
-        const agentName = agentConfig?.name || args.agentName || "E-Mail-Agent";
+        const canonical = getCanonicalAgent(args.sourceType || "mail", args.agentName);
+        const agentAvatar = canonical.avatar;
+        const agentColor = canonical.color;
+        const agentName = canonical.name;
 
         let dateDisplay = args.faelligkeit ? `Fällig am: ${args.faelligkeit}` : "Ohne festes Datum";
 
@@ -337,6 +387,11 @@ Formuliere im Parameter 'antwortText' einen vollständigen, professionellen und 
             antwortText: { type: SchemaType.STRING, description: "Der vollständige, vorgeschlagene Antworttext" },
             mailZusammenfassung: { type: SchemaType.STRING, description: "Kurze Zusammenfassung (1-2 Sätze), worum es in der empfangenen E-Mail ging" },
             begruendung: { type: SchemaType.STRING, description: "Begründung/Gedankengang für diesen Antwortvorschlag" },
+            anhaenge: {
+              type: SchemaType.ARRAY,
+              description: "Optionale Dateinamen oder Pfade von anzuhängenden Dokumenten/Dateien",
+              items: { type: SchemaType.STRING }
+            },
             agentName: { type: SchemaType.STRING, description: "Name des Agenten (optional)" },
             conversationId: { type: SchemaType.STRING, description: "ID der Konversation (optional)" }
           },
@@ -344,10 +399,10 @@ Formuliere im Parameter 'antwortText' einen vollständigen, professionellen und 
         } as any
       },
       handler: async (args, { prisma }) => {
-        const agentConfig = getAgentConfig(args.agentName || "mail");
-        const agentAvatar = agentConfig?.avatar || "✉️";
-        const agentColor = agentConfig?.color || "#fab387";
-        const agentName = agentConfig?.name || "E-Mail-Agent";
+        const canonical = getCanonicalAgent("mail", "mail");
+        const agentAvatar = canonical.avatar;
+        const agentColor = canonical.color;
+        const agentName = canonical.name;
 
         let validConversationId: string | null = null;
         if (args.conversationId) {
@@ -358,13 +413,41 @@ Formuliere im Parameter 'antwortText' einen vollständigen, professionellen und 
           if (convExists) validConversationId = convExists.id;
         }
 
+        let senderAccount = null;
+        if (args.mailId) {
+          const originalMail = await prisma.cachedEmail.findUnique({
+            where: { id: Number(args.mailId) },
+            include: { account: true }
+          });
+          if (originalMail?.account) {
+            senderAccount = originalMail.account;
+          }
+        }
+        if (!senderAccount) {
+          senderAccount = await prisma.mailAccount.findFirst({
+            where: { isDeleted: false },
+            orderBy: { id: "asc" }
+          });
+        }
+
+        const senderFromStr = senderAccount
+          ? (senderAccount.name && senderAccount.name !== senderAccount.email
+              ? `${senderAccount.name} <${senderAccount.email}>`
+              : senderAccount.email)
+          : null;
+
         const actionData = {
           actionType: "send_mail_reply",
           replyData: {
             mailId: Number(args.mailId),
             to: args.empfaenger,
             subject: args.betreff,
-            body: args.antwortText
+            body: args.antwortText,
+            attachments: args.anhaenge || [],
+            accountId: senderAccount?.id || null,
+            from: senderFromStr,
+            fromEmail: senderAccount?.email || null,
+            accountName: senderAccount?.name || null
           }
         };
 
@@ -381,7 +464,7 @@ Formuliere im Parameter 'antwortText' einen vollständigen, professionellen und 
 
         const notif = await prisma.agentNotification.create({
           data: {
-            title: `✉️ Antwortentwurf: ${args.betreff}`,
+            title: "✉️ E-Mail-Antwort",
             message: messageText,
             reasoning: args.begruendung,
             agentName,
@@ -400,6 +483,119 @@ Formuliere im Parameter 'antwortText' einen vollständigen, professionellen und 
         return {
           status: "success",
           message: `Antwortvorschlag für Mail #${args.mailId} wurde zur Bestätigung angelegt. Die Antwort wird erst nach Klick auf 'Ja' versendet.`,
+          notificationId: notif.id
+        };
+      }
+    },
+    {
+      definition: {
+        name: "schlage_mail_vor",
+        description: "Schlägt dem Benutzer einen vollständigen neuen E-Mail-Entwurf (mit Betreff, Empfänger, Inhalt und optionalen Anhängen) zur Bestätigung oder Bearbeitung auf dem Arbeitstisch / Chat vor. Die E-Mail wird erst nach Bestätigung gesendet oder kann vorab im Editor bearbeitet werden.",
+        detailedInstructions: `[SCHLAGE_MAIL_VOR]
+Nutze dieses Tool IMMER, wenn der Benutzer um das Erstellen, Verfassen oder Versenden einer E-Mail bittet.
+Trage im Parameter 'inhalt' den VOLLSTÄNDIGEN Text der E-Mail ein (inkl. Anrede, Inhalt, Grußformel).
+Gib 'empfaenger', 'betreff' und 'inhalt' an. Wenn Dokumente angehängt werden sollen (z.B. aus 'suche_dateien'), gib diese im Array 'anhaenge' an.`,
+        parameters: {
+          type: SchemaType.OBJECT,
+          properties: {
+            empfaenger: { type: SchemaType.STRING, description: "E-Mail-Adresse des Empfängers" },
+            betreff: { type: SchemaType.STRING, description: "Betreff der E-Mail" },
+            inhalt: { type: SchemaType.STRING, description: "Der vollständige Entwurfstext der E-Mail" },
+            anhaenge: {
+              type: SchemaType.ARRAY,
+              description: "Optionale Liste von Dateinamen oder Pfaden anzuhängender Dateien (z.B. ['Anschreiben_Vorlage.txt'])",
+              items: { type: SchemaType.STRING }
+            },
+            kontoId: { type: SchemaType.INTEGER, description: "Optionale ID des Absender-Kontos" },
+            begruendung: { type: SchemaType.STRING, description: "Begründung/Gedankengang für diesen Entwurf" },
+            agentName: { type: SchemaType.STRING, description: "Name des vorschlagenden Agenten (Standard: 'KI-Agent')" },
+            conversationId: { type: SchemaType.STRING, description: "ID der Konversation (optional)" }
+          },
+          required: ["empfaenger", "betreff", "inhalt"]
+        } as any
+      },
+      handler: async (args, { prisma }) => {
+        const isMailTriage = args.sourceType === "mail" || (args.agentName && (args.agentName.toLowerCase() === "mail" || args.agentName.toLowerCase() === "e-mail agent"));
+        const canonical = getCanonicalAgent(isMailTriage ? "mail" : "system", isMailTriage ? "mail" : "default");
+        const agentName = canonical.name;
+        const agentAvatar = canonical.avatar;
+        const agentColor = canonical.color;
+
+        let validConversationId: string | null = null;
+        if (args.conversationId) {
+          const convExists = await prisma.conversation.findUnique({
+            where: { id: String(args.conversationId) },
+            select: { id: true }
+          });
+          if (convExists) validConversationId = convExists.id;
+        }
+
+        // Absender-Konto ermitteln (übergebenes Konto oder erstes aktives Postfach)
+        let senderAccount = null;
+        if (args.kontoId) {
+          senderAccount = await prisma.mailAccount.findUnique({
+            where: { id: Number(args.kontoId) }
+          });
+        }
+        if (!senderAccount) {
+          senderAccount = await prisma.mailAccount.findFirst({
+            where: { isDeleted: false },
+            orderBy: { id: "asc" }
+          });
+        }
+
+        const senderFromStr = senderAccount
+          ? (senderAccount.name && senderAccount.name !== senderAccount.email
+              ? `${senderAccount.name} <${senderAccount.email}>`
+              : senderAccount.email)
+          : null;
+
+        const actionData = {
+          actionType: "send_mail",
+          mailData: {
+            to: args.empfaenger,
+            subject: args.betreff,
+            body: args.inhalt,
+            attachments: args.anhaenge || [],
+            accountId: senderAccount?.id || (args.kontoId ? Number(args.kontoId) : null),
+            from: senderFromStr,
+            fromEmail: senderAccount?.email || null,
+            accountName: senderAccount?.name || null
+          }
+        };
+
+        const buttons = [
+          { label: "Ja, abschicken", action: "execute_action", style: "primary" },
+          { label: "Bearbeiten", action: "open_composer", style: "secondary" },
+          { label: "Verwerfen", action: "dismiss", style: "secondary" }
+        ];
+
+        const mailSummary = args.begruendung || "";
+        const messageText = mailSummary
+          ? `**Inhalt / Kontext:**\n${mailSummary}\n\nIch habe folgenden E-Mail-Entwurf vorbereitet. Soll ich diese E-Mail so abschicken oder möchtest du sie im Editor anpassen?`
+          : `Ich habe folgenden E-Mail-Entwurf für **${args.empfaenger}** vorbereitet. Soll ich diese E-Mail so abschicken oder möchtest du sie im Editor anpassen?`;
+
+        const notif = await prisma.agentNotification.create({
+          data: {
+            title: "✉️ E-Mail-Entwurf",
+            message: messageText,
+            reasoning: args.begruendung || null,
+            agentName,
+            agentAvatar,
+            agentColor,
+            actionData,
+            type: "action_required",
+            priority: "normal",
+            sourceType: isMailTriage ? "mail" : "system",
+            sourceId: null,
+            conversationId: validConversationId,
+            buttons
+          }
+        });
+
+        return {
+          status: "success",
+          message: `E-Mail-Entwurf an '${args.empfaenger}' wurde auf dem Arbeitstisch zur Bestätigung angelegt. Die E-Mail wird erst nach Klick auf 'Ja, abschicken' versendet oder kann im Editor bearbeitet werden.`,
           notificationId: notif.id
         };
       }

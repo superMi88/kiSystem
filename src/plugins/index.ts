@@ -11,6 +11,8 @@ import { tasksPlugin } from "./Tasks/index.js";
 import { journalPlugin } from "./Journal/index.js";
 import { mailPlugin } from "./Mail/index.js";
 import { notificationsPlugin } from "./Notifications/index.js";
+import { locationsPlugin } from "./Locations/index.js";
+import { MediaPlugin } from "./Media/index.js";
 import { getSettings, getAgentConfig, getAgentPluginPermission, getAgentDetailedPluginPermission, PluginPermissionLevel } from "../settings.js";
 
 import { DynamicToolManager } from "./dynamic/DynamicToolManager.js";
@@ -23,7 +25,9 @@ export const MUTATING_PLUGIN_TOOLS: Record<string, string[]> = {
   Journal: ["eintrag_ins_tagebuch"],
   AppLauncher: ["starte_programm"],
   Timer: ["erstelle_timer", "loesche_timer", "bearbeite_timer"],
-  Memory: ["merke_ueber_mich", "merke_ueber_person", "bearbeite_erinnerung", "loesche_erinnerung", "loesche_person", "wiederherstellen_person", "setze_person_geburtstag", "aktualisiere_person_biografie", "fuege_person_fakt_hinzu", "loesche_person_fakt", "wiederherstellen_person_fakt", "setze_person_favorit", "verwalte_person_alias"]
+  Memory: ["merke_ueber_mich", "merke_ueber_person", "bearbeite_erinnerung", "loesche_erinnerung", "loesche_person", "wiederherstellen_person", "setze_person_geburtstag", "aktualisiere_person_biografie", "fuege_person_fakt_hinzu", "loesche_person_fakt", "wiederherstellen_person_fakt", "setze_person_favorit", "verwalte_person_alias"],
+  Locations: ["erstelle_ort", "bearbeite_ort", "loesche_ort", "verknuepfe_person_ort", "entferne_person_ort_verknuepfung", "erstelle_wegzeit_termin"],
+  Media: ["verknuepfe_datei", "aktualisiere_datei_beschreibung"]
 };
 
 export const PROPOSAL_PLUGIN_TOOLS: Record<string, string> = {
@@ -52,6 +56,8 @@ export class PluginManager {
     this.registerPlugin(journalPlugin);
     this.registerPlugin(mailPlugin);
     this.registerPlugin(notificationsPlugin);
+    this.registerPlugin(locationsPlugin);
+    this.registerPlugin(MediaPlugin);
   }
 
   async init(): Promise<void> {
@@ -354,7 +360,7 @@ export class PluginManager {
     return activeConfigs;
   }
 
-  async resolveEntity(type: string, id: number) {
+  async resolveEntity(type: string, id: number | string) {
     const plugin = this.plugins.find(p => p.entityConfig?.type === type);
     if (!plugin) throw new Error(`Plugin für Entity-Typ '${type}' nicht gefunden.`);
     if (!plugin.resolveEntity) throw new Error(`Plugin '${plugin.name}' unterstützt keine Entity-Auflösung.`);

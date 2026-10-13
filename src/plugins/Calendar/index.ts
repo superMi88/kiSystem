@@ -1,6 +1,6 @@
 import { Plugin } from "../types.js";
 import { SchemaType } from "@google/generative-ai";
-import { RouteService } from "../../services/routeService.js";
+import { RouteService, TravelMode, parseFlexibleDate, formatGermanDate, formatGermanTime } from "../../services/routeService.js";
 
 function getFuzzyTimeRange(date: Date, fuzzy: string): { start: Date; end: Date } {
   const start = new Date(date);
@@ -264,6 +264,9 @@ export async function getEventsForRange(start: Date, end: Date, prisma: any): Pr
       description: e.description || "",
       time: e.start.toISOString(),
       endTime: e.end.toISOString(),
+      startzeitLocal: formatGermanTime(new Date(e.start)),
+      endzeitLocal: formatGermanTime(new Date(e.end)),
+      uhrzeit: e.isAllDay ? "Ganztägig" : `${formatGermanTime(new Date(e.start))} - ${formatGermanTime(new Date(e.end))} Uhr (deutsche Lokalzeit)`,
       isAllDay: e.isAllDay,
       recurring: e.recurrenceId !== null,
       occurrenceDate: e.originalOccurrenceDate ? e.originalOccurrenceDate.toISOString().split('T')[0] : null,
@@ -287,6 +290,9 @@ export async function getEventsForRange(start: Date, end: Date, prisma: any): Pr
       description: o.description || "",
       time: o.start.toISOString(),
       endTime: o.end.toISOString(),
+      startzeitLocal: formatGermanTime(new Date(o.start)),
+      endzeitLocal: formatGermanTime(new Date(o.end)),
+      uhrzeit: o.isAllDay ? "Ganztägig" : `${formatGermanTime(new Date(o.start))} - ${formatGermanTime(new Date(o.end))} Uhr (deutsche Lokalzeit)`,
       isAllDay: o.isAllDay,
       recurring: true,
       occurrenceDate: o.originalOccurrenceDate.toISOString().split('T')[0],
@@ -312,6 +318,7 @@ export async function getEventsForRange(start: Date, end: Date, prisma: any): Pr
         description: t.notes || "",
         time: t.due ? t.due.toISOString() : null,
         endTime: t.due ? t.due.toISOString() : null,
+        faelligkeitLocal: d ? `${formatGermanDate(d)} um ${formatGermanTime(d)} Uhr (deutsche Zeit)` : undefined,
         isAllDay: isAllDayTask,
         isTask: true,
         completed: t.completed,
@@ -461,12 +468,23 @@ export async function getTimelineRangeData(startDate: Date, endDate: Date, prism
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     const key = `${y}-${m}-${day}`;
-    if (!daysMap[key]) {
-      const weekday = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace(/\.$/, '');
-      const dayAndMonth = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-      daysMap[key] = { date: key, displayDate: `${weekday}. ${dayAndMonth}`, events: [], diaryEntries: [], completedTasks: [] };
+    if (daysMap[key]) {
+      daysMap[key].events.push(ev);
+    } else {
+      // Check if event spans into one of the requested days
+      const evStart = new Date(eventTime);
+      const evEnd = ev.endTime ? new Date(ev.endTime) : evStart;
+      for (const dKey of Object.keys(daysMap)) {
+        const parts = dKey.split('-').map(Number);
+        const dayStart = new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0);
+        const dayEnd = new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59, 999);
+        if (evStart <= dayEnd && evEnd >= dayStart) {
+          if (!daysMap[dKey].events.some((existing: any) => existing.id === ev.id)) {
+            daysMap[dKey].events.push(ev);
+          }
+        }
+      }
     }
-    daysMap[key].events.push(ev);
   });
 
   // Populate diary entries
@@ -476,11 +494,7 @@ export async function getTimelineRangeData(startDate: Date, endDate: Date, prism
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     const key = `${y}-${m}-${day}`;
-    if (!daysMap[key]) {
-      const weekday = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace(/\.$/, '');
-      const dayAndMonth = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-      daysMap[key] = { date: key, displayDate: `${weekday}. ${dayAndMonth}`, events: [], diaryEntries: [], completedTasks: [] };
-    }
+    if (!daysMap[key]) return;
     daysMap[key].diaryEntries.push({
       id: e.id,
       title: e.title || "Tagebucheintrag",
@@ -497,11 +511,7 @@ export async function getTimelineRangeData(startDate: Date, endDate: Date, prism
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     const key = `${y}-${m}-${day}`;
-    if (!daysMap[key]) {
-      const weekday = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace(/\.$/, '');
-      const dayAndMonth = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-      daysMap[key] = { date: key, displayDate: `${weekday}. ${dayAndMonth}`, events: [], diaryEntries: [], completedTasks: [] };
-    }
+    if (!daysMap[key]) return;
     daysMap[key].completedTasks.push({
       id: t.id,
       title: t.title,
@@ -563,10 +573,11 @@ export const calendarPlugin: Plugin = {
         } as any
       },
       handler: async (args, { prisma }) => {
-        const startOfDay = new Date(args.datum);
+        const baseD = parseFlexibleDate(args.datum) || new Date();
+        const startOfDay = new Date(baseD);
         startOfDay.setHours(0, 0, 0, 0);
         
-        const endOfDay = new Date(args.datum);
+        const endOfDay = new Date(baseD);
         endOfDay.setHours(23, 59, 59, 999);
 
         const events = await getEventsForRange(startOfDay, endOfDay, prisma);
@@ -589,8 +600,8 @@ export const calendarPlugin: Plugin = {
           type: SchemaType.OBJECT,
           properties: {
             titel: { type: SchemaType.STRING, description: "Titel des Termins" },
-            datum: { type: SchemaType.STRING, description: "Datum/Startzeit (YYYY-MM-DD oder ISO-String)" },
-            enddatum: { type: SchemaType.STRING, description: "Enddatum/-uhrzeit (YYYY-MM-DD oder ISO-String) (optional)" },
+            datum: { type: SchemaType.STRING, description: "Datum/Startzeit in deutscher Zeit (Europe/Berlin, z.B. 'YYYY-MM-DD', '16:00' oder 'YYYY-MM-DDTHH:mm:ss'). Niemals in UTC umrechnen und kein 'Z' anhängen." },
+            enddatum: { type: SchemaType.STRING, description: "Enddatum/-uhrzeit in deutscher Zeit (Europe/Berlin, z.B. 'YYYY-MM-DD', '17:00' oder 'YYYY-MM-DDTHH:mm:ss') (optional). Niemals in UTC umrechnen und kein 'Z' anhängen." },
             beschreibung: { type: SchemaType.STRING, description: "Beschreibung (optional)" },
             ganztaegig: { type: SchemaType.BOOLEAN, description: "Ob der Termin ganztägig ist (optional)" },
             wiederkehrend: { type: SchemaType.BOOLEAN, description: "Ob der Termin sich wiederholt (optional)" },
@@ -598,14 +609,17 @@ export const calendarPlugin: Plugin = {
             wiederholungsEnde: { type: SchemaType.STRING, description: "Enddatum der Wiederholung YYYY-MM-DD (optional)" },
             tageszeit: { type: SchemaType.STRING, description: "Uhrzeit-Abschnitt, falls nicht minutengenau: 'morgens', 'vormittag', 'mittags', 'nachmittag' oder 'abends' (optional)" },
             inPlanung: { type: SchemaType.BOOLEAN, description: "Ob der Termin noch in Planung ist (noch nicht fest terminiert, optional)" },
-            standort: { type: SchemaType.STRING, description: "Standort/Adresse des Termins (z.B. 'Alexanderplatz 1, Berlin' oder 'Büro') für Routenplanung und Google Maps (optional)" }
+            standort: { type: SchemaType.STRING, description: "Standort/Adresse des Termins (z.B. 'Alexanderplatz 1, Berlin' oder 'Büro') für Routenplanung und Google Maps (optional)" },
+            verkehrsmittel: { type: SchemaType.STRING, description: "Verkehrsmittel: 'transit' (Bahn), 'driving' (Auto), 'bicycling' (Fahrrad), 'walking' (Zu Fuß). Wenn angegeben, wird der Termin als vollwertige Wegzeit angelegt (optional)." },
+            startort: { type: SchemaType.STRING, description: "Startort/Startadresse der Reise (optional, falls Wegzeit)" },
+            ist_wegzeit: { type: SchemaType.BOOLEAN, description: "Ob dieser Termin eine eigenständige Wegzeit/Fahrtzeit ist (optional)" }
           },
           required: ["titel", "datum"]
         } as any
       },
       handler: async (args, { prisma }) => {
-        let start = new Date(args.datum);
-        let end = args.enddatum ? new Date(args.enddatum) : new Date(start.getTime() + 60 * 60 * 1000);
+        let start = parseFlexibleDate(args.datum) || new Date();
+        let end = args.enddatum ? (parseFlexibleDate(args.enddatum) || new Date(start.getTime() + 60 * 60 * 1000)) : new Date(start.getTime() + 60 * 60 * 1000);
 
         const isRecurring = !!args.wiederkehrend;
         const recurrenceType = args.wiederholungsTyp || "WEEKLY";
@@ -618,6 +632,111 @@ export const calendarPlugin: Plugin = {
           const range = getFuzzyTimeRange(start, fuzzyTime);
           start = range.start;
           end = range.end;
+        }
+
+        let travelMode = args.verkehrsmittel || (args.ist_wegzeit ? "transit" : null);
+        let travelDurationMinutes: number | null = null;
+        let travelDistanceText: string | null = null;
+        let travelOriginLocation = args.startort || null;
+        let travelTransitDetails: any = null;
+
+        // Automatische Erkennung von Wegzeiten / Fahrtzeiten anhand des Titels
+        if (!travelMode && (
+          args.ist_wegzeit ||
+          /^(fahrt|wegzeit|anreise|abreise|hinfahrt|rückfahrt|rueckfahrt|reise|zugfahrt|heimweg)\b/i.test((args.titel || '').trim()) ||
+          /[🚗🚆🚲🚶✈️🗺️]/.test(args.titel || '')
+        )) {
+          const t = (args.titel || '').toLowerCase();
+          if (t.includes('auto') || t.includes('pkw') || t.includes('🚗')) {
+            travelMode = 'driving';
+          } else if (t.includes('rad') || t.includes('fahrrad') || t.includes('bike') || t.includes('🚲')) {
+            travelMode = 'bicycling';
+          } else if (t.includes('fuß') || t.includes('fuss') || t.includes('walk') || t.includes('🚶')) {
+            travelMode = 'walking';
+          } else {
+            travelMode = 'transit'; // Standard: Bahn / ÖPNV
+          }
+        }
+
+        if (travelMode && (location || travelOriginLocation)) {
+          let orig = travelOriginLocation;
+          let dest = location;
+
+          if (!orig) {
+            const prevEv = await prisma.event.findFirst({
+              where: {
+                isDeleted: false,
+                isCancelled: false,
+                end: { lte: start }
+              },
+              orderBy: { end: 'desc' }
+            });
+            if (prevEv && prevEv.location) {
+              orig = prevEv.location;
+              travelOriginLocation = orig;
+            } else {
+              const owner = await prisma.person.findFirst({
+                where: { isOwner: true, isDeleted: false },
+                include: {
+                  locations: {
+                    where: { location: { isDeleted: false } },
+                    include: { location: true },
+                    orderBy: { isPrimary: "desc" }
+                  }
+                }
+              });
+              if (owner && owner.locations.length > 0) {
+                orig = owner.locations[0].location.formattedAddress || "Zuhause";
+                travelOriginLocation = orig;
+              }
+            }
+          }
+
+          if (!dest && orig) {
+            // Falls Zieladresse fehlt, aber Startadresse bekannt ist, prüfe ob es z. B. Heimweg ist
+            const owner = await prisma.person.findFirst({
+              where: { isOwner: true, isDeleted: false },
+              include: {
+                locations: {
+                  where: { location: { isDeleted: false } },
+                  include: { location: true },
+                  orderBy: { isPrimary: "desc" }
+                }
+              }
+            });
+            if (owner && owner.locations.length > 0) {
+              dest = owner.locations[0].location.formattedAddress || "Zuhause";
+            }
+          }
+
+          if (orig && dest) {
+            try {
+              const isArrivalBound = /^(anreise|hinfahrt)\b/i.test((args.titel || '').trim());
+              const initialStart = new Date(start);
+              const route = await RouteService.calculateRoute(orig, dest, travelMode as TravelMode, prisma, {
+                departureTime: isArrivalBound ? undefined : start,
+                arrivalTime: isArrivalBound ? (args.enddatum ? end : start) : (args.enddatum ? end : undefined)
+              });
+              travelDurationMinutes = route.durationMinutes;
+              travelDistanceText = route.distanceText;
+              if (route.transitDetails?.departureDateTime) {
+                start = new Date(route.journeyStartDateTime || route.transitDetails.journeyStartDateTime || route.transitDetails.departureDateTime);
+              }
+              if (route.transitDetails?.arrivalDateTime) {
+                end = new Date(route.journeyEndDateTime || route.transitDetails.journeyEndDateTime || route.transitDetails.arrivalDateTime);
+              } else if (travelDurationMinutes && !args.enddatum) {
+                end = new Date(start.getTime() + travelDurationMinutes * 60000);
+              }
+              travelTransitDetails = {
+                ...(route.transitDetails || {}),
+                earliestDepartureTime: initialStart.toISOString(),
+                requestedDepartureTime: initialStart.toISOString(),
+                bufferBeforeMinutes: Math.round((start.getTime() - initialStart.getTime()) / 60000)
+              };
+            } catch (rErr) {
+              console.warn("Konnte Route für Wegzeit-Termin nicht berechnen:", rErr);
+            }
+          }
         }
 
         try {
@@ -645,16 +764,14 @@ export const calendarPlugin: Plugin = {
                 isAllDay,
                 fuzzyTime,
                 isPlanned: !!args.inPlanung,
-                location
+                location,
+                travelMode,
+                travelDurationMinutes,
+                travelDistanceText,
+                travelOriginLocation,
+                travelTransitDetails
               }
             });
-          }
-
-          // Automatische Prüfung auf Ortswechsel und Routenplanung anstoßen
-          try {
-            await RouteService.checkAndPlanRoutesForDay(start, prisma);
-          } catch (rErr) {
-            console.warn("[Calendar] Routenprüfung nach Terminerstellung:", rErr);
           }
 
           const startOfDay = new Date(start);
@@ -686,24 +803,32 @@ export const calendarPlugin: Plugin = {
           type: SchemaType.OBJECT,
           properties: {
             eventId: { type: SchemaType.STRING, description: "Die ID des Termins (kann numerisch oder synthetisch sein)" },
-            datum: { type: SchemaType.STRING, description: "Das Datum des Termins (YYYY-MM-DD)" },
+            terminId: { type: SchemaType.STRING, description: "Alternative Bezeichnung für eventId (optional)" },
+            datum: { type: SchemaType.STRING, description: "Das Datum des Termins (YYYY-MM-DD) (optional)" },
             nurDiesesVorkommen: { type: SchemaType.BOOLEAN, description: "Wenn true, wird nur dieses eine Vorkommen storniert/gelöscht." }
-          },
-          required: ["eventId", "datum"]
+          }
         } as any
       },
       handler: async (args, { prisma }) => {
         try {
+          const rawId = String(args.eventId || args.terminId || "").trim();
+          if (!rawId) {
+            return { status: "error", message: "Termin-ID fehlt." };
+          }
+          let cleanId = rawId;
+          if (cleanId.startsWith('app://event/')) cleanId = cleanId.replace('app://event/', '');
+          if (cleanId.startsWith('event-')) cleanId = cleanId.replace('event-', '');
+
           let id: number | null = null;
           let recurrenceId: number | null = null;
           let originalOccurrenceDate: Date | null = null;
 
-          if (args.eventId.startsWith('rec-')) {
-            const parts = args.eventId.split('-');
+          if (cleanId.startsWith('rec-')) {
+            const parts = cleanId.split('-');
             recurrenceId = Number(parts[1]);
             originalOccurrenceDate = new Date(Number(parts[2]));
-          } else {
-            id = Number(args.eventId);
+          } else if (/^\d+$/.test(cleanId)) {
+            id = Number(cleanId);
             const ev = await prisma.event.findUnique({ where: { id } });
             if (ev && ev.recurrenceId) {
               recurrenceId = ev.recurrenceId;
@@ -741,7 +866,7 @@ export const calendarPlugin: Plugin = {
               }
             } else if (id) {
               // Soft delete one-off event
-              await prisma.event.update({
+              await prisma.event.updateMany({
                 where: { id },
                 data: { isDeleted: true }
               });
@@ -749,28 +874,29 @@ export const calendarPlugin: Plugin = {
           } else {
             // Delete entire series or the one-off event
             if (recurrenceId) {
-              await prisma.recurrencePattern.update({
+              await prisma.recurrencePattern.updateMany({
                 where: { id: recurrenceId },
                 data: { isDeleted: true }
               });
             } else if (id) {
-              await prisma.event.update({
+              await prisma.event.updateMany({
                 where: { id },
                 data: { isDeleted: true }
               });
             }
           }
 
-          const startOfDay = new Date(args.datum);
+          const dateStr = args.datum || (originalOccurrenceDate ? originalOccurrenceDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
+          const startOfDay = new Date(dateStr);
           startOfDay.setHours(0, 0, 0, 0);
-          const endOfDay = new Date(args.datum);
+          const endOfDay = new Date(dateStr);
           endOfDay.setHours(23, 59, 59, 999);
 
           const events = await getEventsForRange(startOfDay, endOfDay, prisma);
 
           return { 
             type: "calendar_widget",
-            date: args.datum,
+            date: dateStr,
             message: `Termin wurde gelöscht.`,
             events: events.map(e => ({
               ...e,
@@ -853,16 +979,17 @@ export const calendarPlugin: Plugin = {
     {
       definition: {
         name: "bearbeite_termin",
-        description: "Bearbeitet einen Termin. Kann Verschiebungen (auch für einzelne Vorkommen), Ausfälle (ausgefallen=true mit Grund) oder Löschungen steuern.",
+        description: "Bearbeitet einen Termin oder eine Wegzeit. Kann Verschiebungen (auch für einzelne Vorkommen), Ausfälle (ausgefallen=true mit Grund), Verkehrsmittelwechsel oder Löschungen steuern.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
             eventId: { type: SchemaType.STRING, description: "Die ID des Termins" },
-            datum: { type: SchemaType.STRING, description: "Das Datum des Termins (YYYY-MM-DD)" },
+            terminId: { type: SchemaType.STRING, description: "Alternative Bezeichnung für eventId (optional)" },
+            datum: { type: SchemaType.STRING, description: "Das Datum des Termins (YYYY-MM-DD) (optional)" },
             nurDiesesVorkommen: { type: SchemaType.BOOLEAN, description: "Wenn true, wird nur dieses eine Vorkommen geändert." },
             neuer_titel: { type: SchemaType.STRING, description: "Neuer Titel (optional)" },
-            neues_datum: { type: SchemaType.STRING, description: "Neues Startdatum/Uhrzeit im ISO-Format (optional)" },
-            neues_enddatum: { type: SchemaType.STRING, description: "Neues Enddatum/Uhrzeit im ISO-Format (optional)" },
+            neues_datum: { type: SchemaType.STRING, description: "Neues Startdatum/Uhrzeit in deutscher Zeit (Europe/Berlin, z.B. '16:00' oder 'YYYY-MM-DDTHH:mm:ss') (optional). Niemals in UTC umrechnen und kein 'Z' anhängen." },
+            neues_enddatum: { type: SchemaType.STRING, description: "Neues Enddatum/Uhrzeit in deutscher Zeit (Europe/Berlin, z.B. '17:00' oder 'YYYY-MM-DDTHH:mm:ss') (optional). Niemals in UTC umrechnen und kein 'Z' anhängen." },
             neue_beschreibung: { type: SchemaType.STRING, description: "Neue Beschreibung (optional)" },
             ganztaegig: { type: SchemaType.BOOLEAN, description: "Ob der Termin ganztägig ist (optional)" },
             ausgefallen: { type: SchemaType.BOOLEAN, description: "Ob das Event ausfällt (optional)" },
@@ -871,24 +998,28 @@ export const calendarPlugin: Plugin = {
             tageszeit: { type: SchemaType.STRING, description: "Uhrzeit-Abschnitt, falls nicht minutengenau: 'morgens', 'vormittag', 'mittags', 'nachmittag' oder 'abends' (optional)" },
             inPlanung: { type: SchemaType.BOOLEAN, description: "Ob der Termin noch in Planung ist (optional)" },
             standort: { type: SchemaType.STRING, description: "Neuer Standort/Ort des Termins (optional)" },
-            verkehrsmittel: { type: SchemaType.STRING, description: "Neues Verkehrsmittel für die Wegezeit/Anreise zum Termin: 'driving' (Auto), 'transit' (Bahn/ÖPNV), 'bicycling' (Fahrrad) oder 'walking' (Zu Fuß) (optional)" },
-            reisezeit_minuten: { type: SchemaType.NUMBER, description: "Manuell angepasste Wegezeit/Reisedauer in Minuten (optional)" }
+            verkehrsmittel: { type: SchemaType.STRING, description: "Neues Verkehrsmittel: 'driving', 'transit', 'bicycling', 'walking' (optional)" },
+            startort: { type: SchemaType.STRING, description: "Startort/Startadresse der Reise (optional)" }
           },
-          required: ["eventId", "datum"]
+          required: ["eventId"]
         } as any
       },
       handler: async (args, { prisma }) => {
         try {
+          const rawId = String(args.eventId || args.terminId || "");
+          if (!rawId) {
+            return { status: "error", message: "Termin-ID fehlt." };
+          }
           let id: number | null = null;
           let recurrenceId: number | null = null;
           let originalOccurrenceDate: Date | null = null;
 
-          if (args.eventId.startsWith('rec-')) {
-            const parts = args.eventId.split('-');
+          if (rawId.startsWith('rec-')) {
+            const parts = rawId.split('-');
             recurrenceId = Number(parts[1]);
             originalOccurrenceDate = new Date(Number(parts[2]));
           } else {
-            id = Number(args.eventId);
+            id = Number(rawId);
             const ev = await prisma.event.findUnique({ where: { id } });
             if (ev && ev.recurrenceId) {
               recurrenceId = ev.recurrenceId;
@@ -917,18 +1048,13 @@ export const calendarPlugin: Plugin = {
               if (args.inPlanung !== undefined) data.isPlanned = !!args.inPlanung;
               if (args.standort !== undefined) {
                 data.location = args.standort === "" ? null : args.standort;
-                data.travelDurationMinutes = null;
-                data.travelMode = null;
-                data.travelDistanceText = null;
-                data.travelOriginLocation = null;
-                data.travelTransitDetails = null;
               }
 
               if (args.tageszeit !== undefined) {
                 const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
                 data.fuzzyTime = fuzzyVal;
                 if (fuzzyVal) {
-                  const baseDate = args.neues_datum ? new Date(args.neues_datum) : (existingOverride ? existingOverride.start : originalOccurrenceDate);
+                  const baseDate = args.neues_datum ? (parseFlexibleDate(args.neues_datum) || (existingOverride ? existingOverride.start : originalOccurrenceDate)) : (existingOverride ? existingOverride.start : originalOccurrenceDate);
                   const range = getFuzzyTimeRange(baseDate, fuzzyVal);
                   data.start = range.start;
                   data.end = range.end;
@@ -936,14 +1062,18 @@ export const calendarPlugin: Plugin = {
                   data.fuzzyTime = null;
                 }
               } else if (args.neues_datum) {
-                data.start = new Date(args.neues_datum);
-                const duration = args.neues_enddatum ? (new Date(args.neues_enddatum).getTime() - data.start.getTime()) : (60 * 60 * 1000);
-                data.end = new Date(data.start.getTime() + duration);
-                
-                data.originalStart = originalOccurrenceDate;
-                if (pattern) {
-                  const patternDuration = pattern.originalEnd.getTime() - pattern.originalStart.getTime();
-                  data.originalEnd = new Date(originalOccurrenceDate.getTime() + patternDuration);
+                const parsedNewDate = parseFlexibleDate(args.neues_datum);
+                if (parsedNewDate) {
+                  data.start = parsedNewDate;
+                  const parsedNewEnd = parseFlexibleDate(args.neues_enddatum);
+                  const duration = parsedNewEnd ? (parsedNewEnd.getTime() - data.start.getTime()) : (60 * 60 * 1000);
+                  data.end = new Date(data.start.getTime() + duration);
+                  
+                  data.originalStart = originalOccurrenceDate;
+                  if (pattern) {
+                    const patternDuration = pattern.originalEnd.getTime() - pattern.originalStart.getTime();
+                    data.originalEnd = new Date(originalOccurrenceDate.getTime() + patternDuration);
+                  }
                 }
               }
 
@@ -981,55 +1111,13 @@ export const calendarPlugin: Plugin = {
               if (args.inPlanung !== undefined) data.isPlanned = !!args.inPlanung;
               if (args.standort !== undefined) {
                 data.location = args.standort === "" ? null : args.standort;
-                data.travelDurationMinutes = null;
-                data.travelMode = null;
-                data.travelDistanceText = null;
-                data.travelOriginLocation = null;
-                data.travelTransitDetails = null;
-              }
-
-              if (args.verkehrsmittel !== undefined) {
-                const vMode = String(args.verkehrsmittel).toLowerCase();
-                const validModes = ['driving', 'transit', 'bicycling', 'walking'];
-                if (validModes.includes(vMode)) {
-                  data.travelMode = vMode;
-                  const origin = (currentEvent && currentEvent.travelOriginLocation) || undefined;
-                  const dest = args.standort !== undefined ? (args.standort || undefined) : (currentEvent ? currentEvent.location : undefined);
-                  if (origin && dest) {
-                    try {
-                      const targetTime = data.start || (currentEvent ? currentEvent.start : undefined);
-                      const route = await RouteService.calculateRoute(origin, dest, vMode as any, prisma, {
-                        arrivalTime: targetTime,
-                        targetEventStart: targetTime
-                      });
-                      data.travelDurationMinutes = route.durationMinutes;
-                      data.travelDistanceText = route.distanceText;
-                      data.travelTransitDetails = (route.transitDetails as any) || (route.journeyStartDateTime ? {
-                        journeyStartTime: route.journeyStartTime,
-                        journeyEndTime: route.journeyEndTime,
-                        journeyStartDateTime: route.journeyStartDateTime,
-                        journeyEndDateTime: route.journeyEndDateTime,
-                        pauseBeforeMinutes: route.pauseBeforeMinutes,
-                        pauseAfterMinutes: route.pauseAfterMinutes,
-                        durationMinutes: route.durationMinutes
-                      } : null);
-                      data.travelOriginLocation = origin;
-                    } catch (rErr) {
-                      console.warn("[Calendar] Fehler bei Routenneuberechnung in bearbeite_termin:", rErr);
-                    }
-                  }
-                }
-              }
-
-              if (args.reisezeit_minuten !== undefined) {
-                data.travelDurationMinutes = Math.round(Number(args.reisezeit_minuten));
               }
 
               if (args.tageszeit !== undefined) {
                 const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
                 data.fuzzyTime = fuzzyVal;
                 if (fuzzyVal) {
-                  const baseDate = args.neues_datum ? new Date(args.neues_datum) : (currentEvent ? currentEvent.start : new Date());
+                  const baseDate = args.neues_datum ? (parseFlexibleDate(args.neues_datum) || (currentEvent ? currentEvent.start : new Date())) : (currentEvent ? currentEvent.start : new Date());
                   const range = getFuzzyTimeRange(baseDate, fuzzyVal);
                   data.start = range.start;
                   data.end = range.end;
@@ -1037,13 +1125,17 @@ export const calendarPlugin: Plugin = {
                   data.fuzzyTime = null;
                 }
               } else if (args.neues_datum) {
-                if (currentEvent) {
-                  data.originalStart = currentEvent.start;
-                  data.originalEnd = currentEvent.end;
+                const parsedNewDate = parseFlexibleDate(args.neues_datum);
+                if (parsedNewDate) {
+                  if (currentEvent) {
+                    data.originalStart = currentEvent.start;
+                    data.originalEnd = currentEvent.end;
+                  }
+                  data.start = parsedNewDate;
+                  const parsedNewEnd = parseFlexibleDate(args.neues_enddatum);
+                  const duration = parsedNewEnd ? (parsedNewEnd.getTime() - data.start.getTime()) : (60 * 60 * 1000);
+                  data.end = new Date(data.start.getTime() + duration);
                 }
-                data.start = new Date(args.neues_datum);
-                const duration = args.neues_enddatum ? (new Date(args.neues_enddatum).getTime() - data.start.getTime()) : (60 * 60 * 1000);
-                data.end = new Date(data.start.getTime() + duration);
               }
 
               await prisma.event.update({
@@ -1066,7 +1158,7 @@ export const calendarPlugin: Plugin = {
                 const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
                 data.fuzzyTime = fuzzyVal;
                 if (fuzzyVal) {
-                  const baseDate = args.neues_datum ? new Date(args.neues_datum) : (pattern ? pattern.originalStart : new Date());
+                  const baseDate = args.neues_datum ? (parseFlexibleDate(args.neues_datum) || (pattern ? pattern.originalStart : new Date())) : (pattern ? pattern.originalStart : new Date());
                   const range = getFuzzyTimeRange(baseDate, fuzzyVal);
                   data.originalStart = range.start;
                   data.originalEnd = range.end;
@@ -1074,9 +1166,13 @@ export const calendarPlugin: Plugin = {
                   data.fuzzyTime = null;
                 }
               } else if (args.neues_datum) {
-                data.originalStart = new Date(args.neues_datum);
-                const duration = args.neues_enddatum ? (new Date(args.neues_enddatum).getTime() - data.originalStart.getTime()) : (60 * 60 * 1000);
-                data.originalEnd = new Date(data.originalStart.getTime() + duration);
+                const parsedNewDate = parseFlexibleDate(args.neues_datum);
+                if (parsedNewDate) {
+                  data.originalStart = parsedNewDate;
+                  const parsedNewEnd = parseFlexibleDate(args.neues_enddatum);
+                  const duration = parsedNewEnd ? (parsedNewEnd.getTime() - data.originalStart.getTime()) : (60 * 60 * 1000);
+                  data.originalEnd = new Date(data.originalStart.getTime() + duration);
+                }
               }
 
               await prisma.recurrencePattern.update({
@@ -1094,55 +1190,13 @@ export const calendarPlugin: Plugin = {
               if (args.inPlanung !== undefined) data.isPlanned = !!args.inPlanung;
               if (args.standort !== undefined) {
                 data.location = args.standort === "" ? null : args.standort;
-                data.travelDurationMinutes = null;
-                data.travelMode = null;
-                data.travelDistanceText = null;
-                data.travelOriginLocation = null;
-                data.travelTransitDetails = null;
-              }
-
-              if (args.verkehrsmittel !== undefined) {
-                const vMode = String(args.verkehrsmittel).toLowerCase();
-                const validModes = ['driving', 'transit', 'bicycling', 'walking'];
-                if (validModes.includes(vMode)) {
-                  data.travelMode = vMode;
-                  const origin = (currentEvent && currentEvent.travelOriginLocation) || undefined;
-                  const dest = args.standort !== undefined ? (args.standort || undefined) : (currentEvent ? currentEvent.location : undefined);
-                  if (origin && dest) {
-                    try {
-                      const targetTime = data.start || (currentEvent ? currentEvent.start : undefined);
-                      const route = await RouteService.calculateRoute(origin, dest, vMode as any, prisma, {
-                        arrivalTime: targetTime,
-                        targetEventStart: targetTime
-                      });
-                      data.travelDurationMinutes = route.durationMinutes;
-                      data.travelDistanceText = route.distanceText;
-                      data.travelTransitDetails = (route.transitDetails as any) || (route.journeyStartDateTime ? {
-                        journeyStartTime: route.journeyStartTime,
-                        journeyEndTime: route.journeyEndTime,
-                        journeyStartDateTime: route.journeyStartDateTime,
-                        journeyEndDateTime: route.journeyEndDateTime,
-                        pauseBeforeMinutes: route.pauseBeforeMinutes,
-                        pauseAfterMinutes: route.pauseAfterMinutes,
-                        durationMinutes: route.durationMinutes
-                      } : null);
-                      data.travelOriginLocation = origin;
-                    } catch (rErr) {
-                      console.warn("[Calendar] Fehler bei Routenneuberechnung in bearbeite_termin:", rErr);
-                    }
-                  }
-                }
-              }
-
-              if (args.reisezeit_minuten !== undefined) {
-                data.travelDurationMinutes = Math.round(Number(args.reisezeit_minuten));
               }
 
               if (args.tageszeit !== undefined) {
                 const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
                 data.fuzzyTime = fuzzyVal;
                 if (fuzzyVal) {
-                  const baseDate = args.neues_datum ? new Date(args.neues_datum) : (currentEvent ? currentEvent.start : new Date());
+                  const baseDate = args.neues_datum ? (parseFlexibleDate(args.neues_datum) || (currentEvent ? currentEvent.start : new Date())) : (currentEvent ? currentEvent.start : new Date());
                   const range = getFuzzyTimeRange(baseDate, fuzzyVal);
                   data.start = range.start;
                   data.end = range.end;
@@ -1150,13 +1204,63 @@ export const calendarPlugin: Plugin = {
                   data.fuzzyTime = null;
                 }
               } else if (args.neues_datum) {
-                if (currentEvent) {
-                  data.originalStart = currentEvent.start;
-                  data.originalEnd = currentEvent.end;
+                const parsedNewDate = parseFlexibleDate(args.neues_datum);
+                if (parsedNewDate) {
+                  if (currentEvent) {
+                    data.originalStart = currentEvent.start;
+                    data.originalEnd = currentEvent.end;
+                  }
+                  data.start = parsedNewDate;
+                  const parsedNewEnd = parseFlexibleDate(args.neues_enddatum);
+                  const duration = parsedNewEnd ? (parsedNewEnd.getTime() - data.start.getTime()) : (60 * 60 * 1000);
+                  data.end = new Date(data.start.getTime() + duration);
                 }
-                data.start = new Date(args.neues_datum);
-                const duration = args.neues_enddatum ? (new Date(args.neues_enddatum).getTime() - data.start.getTime()) : (60 * 60 * 1000);
-                data.end = new Date(data.start.getTime() + duration);
+              }
+
+              if (args.verkehrsmittel !== undefined) {
+                data.travelMode = args.verkehrsmittel === "" ? null : args.verkehrsmittel;
+              }
+              if (args.startort !== undefined) {
+                data.travelOriginLocation = args.startort === "" ? null : args.startort;
+              }
+
+              const effMode = (data.travelMode !== undefined ? data.travelMode : currentEvent?.travelMode) as TravelMode | null;
+              const effDest = data.location !== undefined ? data.location : currentEvent?.location;
+              const effOrig = data.travelOriginLocation !== undefined ? data.travelOriginLocation : currentEvent?.travelOriginLocation;
+
+              if (effMode && effDest && effOrig && (args.verkehrsmittel !== undefined || args.standort !== undefined || args.startort !== undefined)) {
+                try {
+                  const existingDet = (currentEvent?.travelTransitDetails as any) || {};
+                  const baseEarly = data.start ? data.start : (existingDet.earliestDepartureTime ? new Date(existingDet.earliestDepartureTime) : currentEvent?.start);
+                  const route = await RouteService.calculateRoute(effOrig, effDest, effMode, prisma, {
+                    departureTime: baseEarly || currentEvent?.start,
+                    arrivalTime: data.end || currentEvent?.end
+                  });
+                  data.travelDurationMinutes = route.durationMinutes;
+                  data.travelDistanceText = route.distanceText;
+                  const transitDep = route.journeyStartDateTime || route.transitDetails?.journeyStartDateTime || route.transitDetails?.departureDateTime;
+                  const transitArr = route.journeyEndDateTime || route.transitDetails?.journeyEndDateTime || route.transitDetails?.arrivalDateTime;
+                  if (effMode === "transit" && transitDep) {
+                    data.start = new Date(transitDep);
+                  } else if (baseEarly) {
+                    data.start = baseEarly;
+                  }
+                  if (effMode === "transit" && transitArr) {
+                    data.end = new Date(transitArr);
+                  } else if (route.durationMinutes && data.start && !args.neues_enddatum) {
+                    data.end = new Date(data.start.getTime() + route.durationMinutes * 60000);
+                  }
+                  data.travelTransitDetails = {
+                    ...(route.transitDetails || {}),
+                    earliestDepartureTime: baseEarly ? baseEarly.toISOString() : undefined,
+                    requestedDepartureTime: existingDet.requestedDepartureTime || (baseEarly ? baseEarly.toISOString() : undefined),
+                    bufferBeforeMinutes: (baseEarly && data.start && data.start.getTime() > baseEarly.getTime())
+                      ? Math.round((data.start.getTime() - baseEarly.getTime()) / 60000)
+                      : 0
+                  };
+                } catch (rErr) {
+                  console.warn("Konnte Route bei bearbeite_termin nicht neu berechnen:", rErr);
+                }
               }
 
               await prisma.event.update({
@@ -1166,18 +1270,11 @@ export const calendarPlugin: Plugin = {
             }
           }
 
-          const targetDate = args.neues_datum || args.datum;
+          const targetDate = args.neues_datum || args.datum || (originalOccurrenceDate ? originalOccurrenceDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
           const startOfDay = new Date(targetDate);
           startOfDay.setHours(0, 0, 0, 0);
           const endOfDay = new Date(targetDate);
           endOfDay.setHours(23, 59, 59, 999);
-
-          // Automatische Prüfung auf Ortswechsel und Routenplanung anstoßen
-          try {
-            await RouteService.checkAndPlanRoutesForDay(new Date(targetDate), prisma);
-          } catch (rErr) {
-            console.warn("[Calendar] Routenprüfung nach Terminbearbeitung:", rErr);
-          }
 
           const events = await getEventsForRange(startOfDay, endOfDay, prisma);
 
@@ -1200,13 +1297,6 @@ export const calendarPlugin: Plugin = {
     try {
       const today = new Date();
       today.setHours(12, 0, 0, 0);
-
-      // Vorab Routen & Fragen für heute prüfen
-      try {
-        await RouteService.checkAndPlanRoutesForDay(today, prisma);
-      } catch (rErr) {
-        console.warn("[Calendar] Routenprüfung in getTopWidgets:", rErr);
-      }
 
       const pastDays = new Date(today);
       pastDays.setDate(today.getDate() - 5);
@@ -1243,7 +1333,33 @@ export const calendarPlugin: Plugin = {
     icon: "📅",
     displayName: "Termin"
   },
-  resolveEntity: async (id, { prisma }) => {
-    return prisma.event.findUnique({ where: { id } });
+  resolveEntity: async (id: number | string, { prisma }) => {
+    const rawId = String(id || '');
+    if (rawId.startsWith('rec-')) {
+      const parts = rawId.split('-');
+      const patternId = Number(parts[1]);
+      const occTimestamp = Number(parts[2]);
+      const occDate = new Date(occTimestamp);
+      const pattern = await prisma.recurrencePattern.findUnique({ where: { id: patternId } });
+      if (pattern) {
+        const dur = new Date(pattern.originalEnd).getTime() - new Date(pattern.originalStart).getTime();
+        return {
+          id: rawId,
+          title: pattern.title,
+          description: pattern.description,
+          start: occDate,
+          end: new Date(occTimestamp + dur),
+          isAllDay: pattern.isAllDay,
+          location: pattern.location,
+          isRecurring: true
+        };
+      }
+    }
+    const cleanId = rawId.replace(/^event-/, '').replace(/^app:\/\/event\//, '');
+    const numId = Number(cleanId);
+    if (!isNaN(numId)) {
+      return prisma.event.findUnique({ where: { id: numId } });
+    }
+    return null;
   }
 };

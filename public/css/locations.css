@@ -1,0 +1,296 @@
+/* ==========================================================================
+   Locations & Places Styles
+   ========================================================================== */
+
+.locations-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+}
+
+.locations-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px 2px 6px 2px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.locations-filter-bar::-webkit-scrollbar {
+    height: 4px;
+}
+
+.locations-filter-bar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.locations-filter-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    user-select: none;
+    flex-shrink: 0;
+    outline: none;
+}
+
+.locations-filter-pill:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.22);
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+.locations-filter-pill.active {
+    background: rgba(166, 227, 161, 0.18);
+    border-color: #a6e3a1;
+    color: #a6e3a1;
+    box-shadow: 0 0 12px rgba(166, 227, 161, 0.25);
+}
+
+.locations-filter-count {
+    font-size: 0.65rem;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.12);
+    color: #cdd6f4;
+}
+
+.locations-filter-pill.active .locations-filter-count {
+    background: #a6e3a1;
+    color: #11111b;
+}
+
+/* Location Card Grid */
+.locations-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+}
+
+.location-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: all 0.2s ease;
+    position: relative;
+    backdrop-filter: blur(8px);
+}
+
+.location-card:hover {
+    background: rgba(255, 255, 255, 0.055);
+    border-color: rgba(166, 227, 161, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.location-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.location-title-box {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
+}
+
+.location-name-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.location-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #ffffff;
+    word-break: break-word;
+}
+
+.location-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.location-type-badge.residence {
+    background: rgba(137, 180, 250, 0.15);
+    color: #89b4fa;
+    border: 1px solid rgba(137, 180, 250, 0.3);
+}
+
+.location-type-badge.office {
+    background: rgba(250, 179, 135, 0.15);
+    color: #fab387;
+    border: 1px solid rgba(250, 179, 135, 0.3);
+}
+
+.location-type-badge.city {
+    background: rgba(148, 226, 213, 0.15);
+    color: #94e2d5;
+    border: 1px solid rgba(148, 226, 213, 0.3);
+}
+
+.location-type-badge.state {
+    background: rgba(166, 227, 161, 0.15);
+    color: #a6e3a1;
+    border: 1px solid rgba(166, 227, 161, 0.3);
+}
+
+.location-type-badge.other {
+    background: rgba(203, 166, 247, 0.15);
+    color: #cba6f7;
+    border: 1px solid rgba(203, 166, 247, 0.3);
+}
+
+.location-address {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.7);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.location-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.location-action-icon-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.9rem;
+    padding: 5px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.location-action-icon-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.location-action-icon-btn.fav.active {
+    color: #f9e2af;
+}
+
+/* Person Chips inside Location Card */
+.location-persons-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 8px;
+}
+
+.location-persons-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.location-persons-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.location-person-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    background: rgba(203, 166, 247, 0.1);
+    border: 1px solid rgba(203, 166, 247, 0.25);
+    color: #cba6f7;
+    font-size: 0.74rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.location-person-chip:hover {
+    background: rgba(203, 166, 247, 0.22);
+    border-color: #cba6f7;
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+.location-person-chip.regional {
+    background: rgba(166, 227, 161, 0.1);
+    border-color: rgba(166, 227, 161, 0.25);
+    color: #a6e3a1;
+}
+
+.location-person-chip.regional:hover {
+    background: rgba(166, 227, 161, 0.22);
+    border-color: #a6e3a1;
+    color: #ffffff;
+}
+
+.location-person-chip-badge {
+    font-size: 0.62rem;
+    padding: 1px 5px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.85);
+    font-weight: 700;
+}
+
+/* Empty State */
+.locations-empty-state {
+    text-align: center;
+    padding: 35px 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}

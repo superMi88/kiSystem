@@ -813,7 +813,7 @@
             }
 
             // Direct click handlers for item tap & reply quote tap
-            if (e.target.closest('button, input, select, textarea, a, .pill-close, .task-checkbox, .clickable-tag, .reply-cancel-btn')) {
+            if (e.target.closest('button, input, select, textarea, a, .pill-close, .task-checkbox, .clickable-tag, .reply-cancel-btn, summary, details, .travel-transit-accordion, .travel-item-extra')) {
                 return;
             }
 

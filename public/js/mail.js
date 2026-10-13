@@ -1290,7 +1290,18 @@
 
 
         async function dismissNotification(event, notifId) {
-            if (event) event.stopPropagation();
+            if (event) {
+                event.stopPropagation();
+                const cardEl = event.target?.closest ? event.target.closest('.chat-notification-card') : null;
+                if (cardEl) {
+                    cardEl.classList.add('dismissed');
+                    const statusContainer = cardEl.querySelector('.chat-notification-status-container');
+                    if (statusContainer) {
+                        statusContainer.innerHTML = '<span class="chat-notification-status" style="background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.6);">✕ Geschlossen</span>';
+                    }
+                    cardEl.querySelectorAll('.chat-notification-btn').forEach(b => b.disabled = true);
+                }
+            }
             try {
                 await fetch(getApiUrl(`/api/notifications/${notifId}/dismiss`), {
                     method: 'POST'
@@ -1890,7 +1901,37 @@
 
 
 
-        async function openMailComposeModal(replyToId = null, defaultAccountId = null) {
+        let currentComposeAttachments = [];
+
+        function renderComposeAttachments() {
+            const container = document.getElementById('mail-compose-attachments-container');
+            const countEl = document.getElementById('mail-compose-attachments-count');
+            if (!container) return;
+
+            if (!currentComposeAttachments || currentComposeAttachments.length === 0) {
+                container.innerHTML = '<span id="mail-compose-no-attachments" style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Keine Anhänge</span>';
+                if (countEl) countEl.textContent = '';
+                return;
+            }
+
+            if (countEl) countEl.textContent = `${currentComposeAttachments.length} Datei(en)`;
+            container.innerHTML = currentComposeAttachments.map((att, idx) => {
+                const name = typeof att === 'string' ? att : (att.filename || att.name || 'Anhang');
+                return `
+                    <span style="background: rgba(137, 180, 250, 0.18); color: #89b4fa; border: 1px solid rgba(137, 180, 250, 0.4); border-radius: 6px; padding: 2px 8px; font-size: 0.74rem; display: inline-flex; align-items: center; gap: 6px; font-weight: 600;">
+                        <span>📎 ${escapeHtml(name)}</span>
+                        <button type="button" onclick="removeComposeAttachment(${idx})" style="background: none; border: none; color: #f38ba8; cursor: pointer; padding: 0; font-size: 0.8rem; line-height: 1;" title="Anhang entfernen">✕</button>
+                    </span>
+                `;
+            }).join('');
+        }
+
+        window.removeComposeAttachment = function(idx) {
+            currentComposeAttachments.splice(idx, 1);
+            renderComposeAttachments();
+        };
+
+        async function openMailComposeModal(replyToId = null, defaultAccountId = null, initialData = null) {
             const modal = document.getElementById('mail-compose-modal');
             const titleEl = document.getElementById('mail-compose-title');
             const accSelect = document.getElementById('mail-compose-account-select');
@@ -1899,8 +1940,13 @@
             const bodyInput = document.getElementById('mail-compose-body');
             const inReplyToInput = document.getElementById('mail-compose-in-reply-to');
             const statusEl = document.getElementById('mail-compose-status');
+            const notifIdInput = document.getElementById('mail-compose-notification-id');
 
             if (statusEl) statusEl.style.display = 'none';
+            if (notifIdInput) notifIdInput.value = initialData?.notificationId || '';
+
+            currentComposeAttachments = initialData?.attachments ? [...initialData.attachments] : [];
+            renderComposeAttachments();
 
             // Konten laden und Dropdown befüllen
             try {
@@ -1923,7 +1969,17 @@
                     });
                 }
 
-                if (replyToId) {
+                if (initialData) {
+                    if (titleEl) titleEl.textContent = '✏️ E-Mail-Entwurf bearbeiten';
+                    if (initialData.accountId && accSelect) accSelect.value = initialData.accountId;
+                    if (toInput) toInput.value = initialData.to || '';
+                    if (subjectInput) subjectInput.value = initialData.subject || '';
+                    if (inReplyToInput) inReplyToInput.value = initialData.inReplyTo || '';
+                    if (bodyInput) {
+                        bodyInput.value = initialData.body || '';
+                        setTimeout(() => bodyInput.focus(), 50);
+                    }
+                } else if (replyToId) {
                     // Antwort auf E-Mail
                     const mRes = await fetch(getApiUrl(`/api/mail/messages/${replyToId}`));
                     if (mRes.ok) {
@@ -1989,12 +2045,14 @@
             const inReplyToInput = document.getElementById('mail-compose-in-reply-to');
             const statusEl = document.getElementById('mail-compose-status');
             const sendBtn = document.getElementById('mail-compose-send-btn');
+            const notifIdInput = document.getElementById('mail-compose-notification-id');
 
             const accountId = accSelect ? accSelect.value : null;
             const to = toInput ? toInput.value.trim() : '';
             const subject = subjectInput ? subjectInput.value.trim() : '';
             const body = bodyInput ? bodyInput.value.trim() : '';
             const inReplyTo = inReplyToInput ? inReplyToInput.value.trim() : undefined;
+            const notificationId = notifIdInput ? notifIdInput.value.trim() : undefined;
 
             if (!accountId || !to || !subject || !body) {
                 if (statusEl) {
@@ -2027,7 +2085,9 @@
                         to,
                         subject,
                         body,
-                        inReplyTo
+                        inReplyTo,
+                        attachments: currentComposeAttachments,
+                        notificationId: notificationId ? Number(notificationId) : undefined
                     })
                 });
 
@@ -2035,6 +2095,17 @@
                 if (res.ok && result.success) {
                     alert("✅ E-Mail erfolgreich gesendet!");
                     closeMailComposeModal();
+                    if (notificationId) {
+                        const cardEl = document.querySelector(`[data-notification-id="${notificationId}"]`);
+                        if (cardEl) {
+                            cardEl.classList.add('dismissed');
+                            const statusContainer = cardEl.querySelector('.chat-notification-status-container');
+                            if (statusContainer) {
+                                statusContainer.innerHTML = '<span class="chat-notification-status" style="background: rgba(166, 227, 161, 0.15); color: #a6e3a1;">✅ Gesendet</span>';
+                            }
+                        }
+                    }
+                    if (typeof loadTopWidgets === 'function') loadTopWidgets();
                 } else {
                     if (statusEl) {
                         statusEl.style.display = 'block';
@@ -2044,12 +2115,12 @@
                     }
                 }
             } catch (err) {
-                console.error("[Mail] Sende-Fehler:", err);
+                console.error("Fehler beim Senden der E-Mail:", err);
                 if (statusEl) {
                     statusEl.style.display = 'block';
                     statusEl.style.background = 'rgba(243, 139, 168, 0.15)';
                     statusEl.style.color = 'var(--off)';
-                    statusEl.textContent = `Netzwerkfehler: ${err.message}`;
+                    statusEl.textContent = `Fehler: ${err.message || 'Verbindung fehlgeschlagen'}`;
                 }
             } finally {
                 if (sendBtn) {

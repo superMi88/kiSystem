@@ -84,6 +84,8 @@ model Person {
   facts     Fact[]           // Gespeicherte Fakten über diese Person
   memories  SemanticMemory[] // Semantische Erinnerungen/Verweise auf diese Person
   cachedEmails CachedEmail[] // Verknüpfte E-Mails dieser Person
+  locations PersonLocation[] // Verknüpfte Orte & Adressen dieser Person (N:M)
+  media     MediaPerson[]    // Verknüpfte Bilder, Dokumente & Dateien dieser Person (N:M)
   isDeleted Boolean          @default(false) // Soft-Delete-Flag (gelöscht ja/nein)
   isOwner   Boolean          @default(false) // Flag, ob dieses Profil das eigene Profil des Benutzers ist ("Ich / Über mich")
 }
@@ -221,8 +223,9 @@ model Project {
   createdAt DateTime @default(now()) // Erstellungszeitpunkt
   updatedAt DateTime @updatedAt // Zeitpunkt der letzten Aktualisierung
   isDeleted Boolean  @default(false) // Soft-Delete-Flag
-  tasks     Task[]   // Alle dem Projekt zugeordneten Aufgaben
-  notes     Note[]   // Alle dem Projekt zugeordneten Notizen
+  tasks     Task[]         // Alle dem Projekt zugeordneten Aufgaben
+  notes     Note[]         // Alle dem Projekt zugeordneten Notizen
+  media     MediaProject[] // Alle dem Projekt zugeordneten Dateien & Dokumente (N:M)
 }
 
 /// [Journal Plugin] Repräsentiert Notizen/Tagebucheinträge für spezifische Tage im Tagebuch mit Vektoreinbettung.
@@ -350,4 +353,86 @@ model RouteCache {
   updatedAt       DateTime @updatedAt
 
   @@unique([origin, destination, travelMode])
+}
+
+/// [Locations Plugin] Verwaltet Orte, Adressen, Firmen, Städte und Bundesländer inklusive Geodaten.
+model Location {
+  id               Int              @id @default(autoincrement())
+  name             String           // Name des Ortes (z.B. "Toms Wohnung", "Büro Mitte", "Baden-Württemberg", "Stuttgart")
+  type             String           @default("address") // "residence", "office", "city", "state", "poi", "other"
+  address          String?          // Straße und Hausnummer (z.B. "Hauptstraße 42")
+  postalCode       String?          // Postleitzahl (z.B. "70173")
+  city             String?          // Stadt (z.B. "Stuttgart")
+  state            String?          // Bundesland / Region (z.B. "Baden-Württemberg")
+  country          String?          @default("Deutschland")
+  formattedAddress String?          // Vollständige formatierte Adresse für Google Maps / Routenplaner
+  notes            String?          // Zusätzliche Hinweise (z.B. "Klingel bei Müller, 2. Stock")
+  lat              Float?           // Breitengrad
+  lng              Float?           // Längengrad
+  isFavorite       Boolean          @default(false)
+  isDeleted        Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  persons          PersonLocation[]
+}
+
+/// [Locations Plugin] N:M (n:n) Verknüpfungstabelle zwischen Personen und Orten.
+model PersonLocation {
+  id           Int       @id @default(autoincrement())
+  personId     Int
+  person       Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  locationId   Int
+  location     Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  relationType String    @default("residence") // "residence" (Wohnsitz), "work" (Arbeitsplatz), "secondary" (Zweitwohnsitz), "origin" (Heimatort), "region" (Bundesland/Region), "other"
+  label        String?   // z.B. "Hauptwohnsitz", "Ferienhaus", "Zweigstelle"
+  isPrimary    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([personId, locationId, relationType])
+}
+
+/// [Media Plugin] Verwaltet hochgeladene Dateien, Dokumente, Bilder und Anhänge.
+model MediaItem {
+  id            Int            @id @default(autoincrement())
+  title         String         // Anzeigename / Titel der Datei
+  fileName      String         // Dateiname auf der Festplatte
+  filePath      String         // Relativer URL-Pfad (z. B. "/uploads/xyz.png")
+  fileType      String         // MIME-Type (z. B. "image/png", "application/pdf")
+  category      String         @default("document") // "image", "document", "other"
+  fileSize      Int            @default(0) // Dateigröße in Bytes
+  description   String?        // Beschreibung / Notiz, was auf dem Bild abgebildet ist oder was im Dokument steht
+  extractedText String?        // Extrahierter Volltext (Textdatei, OCR, PDF) für die KI
+  isFavorite    Boolean        @default(false)
+  isDeleted     Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  persons       MediaPerson[]  // Verknüpfte Personen (N:M)
+  projects      MediaProject[] // Verknüpfte Projekte (N:M)
+}
+
+/// [Media Plugin] N:M (n:n) Verknüpfungstabelle zwischen Dateien/Bildern und Personen.
+model MediaPerson {
+  id        Int       @id @default(autoincrement())
+  mediaId   Int
+  media     MediaItem @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  personId  Int
+  person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  role      String?   // z. B. "Abgebildet", "Betrifft", "Autor"
+  createdAt DateTime  @default(now())
+
+  @@unique([mediaId, personId])
+}
+
+/// [Media Plugin] N:M (n:n) Verknüpfungstabelle zwischen Dateien/Dokumenten und Projekten.
+model MediaProject {
+  id        Int       @id @default(autoincrement())
+  mediaId   Int
+  media     MediaItem @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  projectId Int
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tag       String?   // z. B. "Lebenslauf", "Anschreiben", "Zeugnis", "Recherche", "Design"
+  createdAt DateTime  @default(now())
+
+  @@unique([mediaId, projectId])
 }

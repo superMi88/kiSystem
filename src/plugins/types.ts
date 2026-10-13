@@ -45,5 +45,5 @@ export interface Plugin {
   
   // Extension hooks for Entity system
   entityConfig?: EntityConfig;
-  resolveEntity?: (id: number, context: { prisma: PrismaClient }) => Promise<any>;
+  resolveEntity?: (id: any, context: { prisma: PrismaClient }) => Promise<any>;
 }

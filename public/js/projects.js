@@ -354,6 +354,19 @@
                     `;
                 }
 
+                // Media & Dateien des Projekts
+                if (!p.isUnassigned) {
+                    html += `
+                        <div id="project-media-container-${p.id}"></div>
+                    `;
+                    setTimeout(() => {
+                        const mCont = document.getElementById(`project-media-container-${p.id}`);
+                        if (mCont && typeof loadProjectMediaSection === 'function') {
+                            loadProjectMediaSection(p.id, mCont);
+                        }
+                    }, 50);
+                }
+
                 html += `</div>`;
                 container.innerHTML = html;
                 return;

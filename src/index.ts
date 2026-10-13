@@ -22,9 +22,34 @@ import { MailService } from "./plugins/Mail/service.js";
 import { runTrainTripMonitor } from "./plugins/Mail/dbBahnService.js";
 import { createDynamicToolsRouter } from "./routes/dynamicToolsRouter.js";
 import { AgentRunService } from "./services/agentRunService.js";
-import { RouteService, TravelMode } from "./services/routeService.js";
+import { RouteService, TravelMode, getGermanTimeContext, formatGermanDate, formatGermanTime } from "./services/routeService.js";
+import { buildFormattedAddress, getPersonsForLocation } from "./plugins/Locations/index.js";
+import { formatMediaItem, formatFileSize } from "./plugins/Media/index.js";
+import multer from "multer";
+import fs from "fs";
+import path from "path";
 
 dotenv.config();
+
+const mediaStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(process.cwd(), "public", "uploads");
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e6);
+    const ext = path.extname(file.originalname);
+    const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_\-\.]/g, "_");
+    cb(null, `${base}_${uniqueSuffix}${ext}`);
+  }
+});
+const upload = multer({
+  storage: mediaStorage,
+  limits: { fileSize: 50 * 1024 * 1024 }
+});
 
 const prisma = new PrismaClient();
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
@@ -231,6 +256,26 @@ app.get("/api/notifications", async (req, res) => {
   }
 });
 
+app.get("/api/notifications/:id", async (req, res) => {
+  try {
+    const notifId = Number(req.params.id);
+    const notif = await prisma.agentNotification.findUnique({
+      where: { id: notifId },
+      include: {
+        conversation: {
+          select: { id: true, title: true, status: true }
+        }
+      }
+    });
+    if (!notif) {
+      return res.status(404).json({ error: `Benachrichtigung mit ID ${notifId} nicht gefunden.` });
+    }
+    res.json(notif);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/api/notifications/:id/respond", async (req, res) => {
   try {
     const notifId = Number(req.params.id);
@@ -346,12 +391,14 @@ app.post("/api/notifications/:id/respond", async (req, res) => {
             }
           });
         }
-      } else if (actionData.actionType === "send_mail_reply" && actionData.replyData) {
-        const rd = actionData.replyData;
+      } else if ((actionData.actionType === "send_mail_reply" || actionData.actionType === "send_mail") && (actionData.replyData || actionData.mailData)) {
+        const mailData = actionData.mailData || actionData.replyData;
         let account = null;
-        if (rd.emailId) {
+        if (mailData.accountId) {
+          account = await prisma.mailAccount.findUnique({ where: { id: Number(mailData.accountId) } });
+        } else if (mailData.emailId || mailData.mailId) {
           const originalMail = await prisma.cachedEmail.findUnique({
-            where: { id: Number(rd.emailId) }
+            where: { id: Number(mailData.emailId || mailData.mailId) }
           });
           if (originalMail?.accountId) {
             account = await prisma.mailAccount.findUnique({ where: { id: originalMail.accountId } });
@@ -367,16 +414,17 @@ app.post("/api/notifications/:id/respond", async (req, res) => {
           const sendRes = await MailService.sendEmail(
             account.id,
             {
-              to: rd.to,
-              subject: rd.subject,
-              body: rd.body
+              to: mailData.to,
+              subject: mailData.subject,
+              body: mailData.body,
+              attachments: mailData.attachments || undefined
             },
             prisma
           );
           executedAction = {
             type: "mail_sent",
             sendResult: sendRes,
-            message: sendRes.success ? `Antwort-E-Mail an ${rd.to} wurde erfolgreich versendet.` : `Fehler beim Senden: ${sendRes.error}`
+            message: sendRes.success ? `E-Mail an ${mailData.to} wurde erfolgreich versendet.` : `Fehler beim Senden: ${sendRes.error}`
           };
           if (notif.conversationId) {
             await prisma.chatMessage.create({
@@ -384,7 +432,7 @@ app.post("/api/notifications/:id/respond", async (req, res) => {
                 conversationId: notif.conversationId,
                 role: "system",
                 text: sendRes.success
-                  ? `✅ **Gesichert bestätigt & versendet:** E-Mail an "${rd.to}" mit Betreff "${rd.subject}" wurde versendet.`
+                  ? `✅ **Gesichert bestätigt & versendet:** E-Mail an "${mailData.to}" mit Betreff "${mailData.subject}" wurde versendet.`
                   : `❌ **Fehler beim Versenden:** ${sendRes.error}`
               }
             });
@@ -474,6 +522,20 @@ app.post("/api/notifications/:id/respond", async (req, res) => {
       } catch (rErr: any) {
         console.error("[API] Fehler beim Setzen des TravelMode via Notification:", rErr);
       }
+    } else if ((action === "set_event_location" || actionData?.actionType === "set_event_location") && actionData?.eventId && actionData?.location) {
+      try {
+        await prisma.event.update({
+          where: { id: Number(actionData.eventId) },
+          data: { location: actionData.location }
+        });
+        executedAction = {
+          type: "event_location_set",
+          location: actionData.location,
+          message: `Standort für den Termin wurde auf "${actionData.location}" gesetzt.`
+        };
+      } catch (lErr: any) {
+        console.error("[API] Fehler beim Setzen des Event-Standorts via Notification:", lErr);
+      }
     }
 
     // 3. Wenn Aktion 'reply' ist oder ein replyText vorliegt und eine Conversation verknüpft ist, Agenten ausführen
@@ -516,6 +578,147 @@ app.post("/api/routes/select-mode", async (req, res) => {
     res.json({ success: true, ...result });
   } catch (err: any) {
     console.error("[API] Fehler in /api/routes/select-mode:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/routes/switch-travel-event-mode", async (req, res) => {
+  try {
+    const { eventId, travelMode } = req.body;
+    if (!eventId || !travelMode) {
+      return res.status(400).json({ error: "eventId und travelMode sind erforderlich." });
+    }
+    const id = Number(eventId);
+    const event = await prisma.event.findUnique({ where: { id } });
+    if (!event) {
+      return res.status(404).json({ error: "Termin nicht gefunden." });
+    }
+
+    const destination = event.location || event.title;
+    let origin = event.travelOriginLocation;
+
+    const prevEvent = await prisma.event.findFirst({
+      where: {
+        id: { not: id },
+        isDeleted: false,
+        isCancelled: false,
+        end: { lte: event.start }
+      },
+      orderBy: { end: "desc" }
+    });
+
+    if (!origin && prevEvent && prevEvent.location) {
+      origin = prevEvent.location;
+    }
+
+    if (!origin) {
+      const owner = await prisma.person.findFirst({
+        where: { isOwner: true, isDeleted: false },
+        include: {
+          locations: {
+            where: { location: { isDeleted: false } },
+            include: { location: true },
+            orderBy: { isPrimary: "desc" }
+          }
+        }
+      });
+      if (owner && owner.locations.length > 0) {
+        const prim = owner.locations[0].location;
+        origin = prim.formattedAddress || `${prim.address || ''}, ${prim.city || ''}`.trim();
+      }
+    }
+
+    if (!origin) {
+      origin = "Zuhause";
+    }
+
+    const existingDetails = (event.travelTransitDetails as any) || {};
+
+    let earliestDepartureDate: Date | null = null;
+    if (existingDetails.earliestDepartureTime) {
+      earliestDepartureDate = new Date(existingDetails.earliestDepartureTime);
+    } else if (existingDetails.requestedDepartureTime) {
+      earliestDepartureDate = new Date(existingDetails.requestedDepartureTime);
+    } else if (prevEvent && prevEvent.end && (event.start.getTime() - new Date(prevEvent.end).getTime()) <= 90 * 60 * 1000) {
+      earliestDepartureDate = new Date(prevEvent.end);
+    } else {
+      earliestDepartureDate = event.start;
+    }
+
+    let targetArrivalDate: Date | null = null;
+    if (existingDetails.targetArrivalTime) {
+      targetArrivalDate = new Date(existingDetails.targetArrivalTime);
+    } else if (existingDetails.requestedArrivalTime) {
+      targetArrivalDate = new Date(existingDetails.requestedArrivalTime);
+    }
+    const isArrivalBound = /^(anreise|hinfahrt)\b/i.test((event.title || '').trim()) || !!targetArrivalDate;
+
+    const mode: TravelMode = travelMode as TravelMode;
+    const route = await RouteService.calculateRoute(origin, destination, mode, prisma, {
+      departureTime: earliestDepartureDate,
+      arrivalTime: targetArrivalDate || (isArrivalBound ? event.end : undefined),
+      prevEventEnd: prevEvent?.end
+    });
+
+    let newStart = earliestDepartureDate;
+    let newEnd = event.end;
+
+    if (mode === "transit") {
+      newStart = new Date(route.journeyStartDateTime || route.transitDetails?.journeyStartDateTime || route.transitDetails?.departureDateTime || earliestDepartureDate);
+      newEnd = new Date(route.journeyEndDateTime || route.transitDetails?.journeyEndDateTime || route.transitDetails?.arrivalDateTime || (newStart.getTime() + (route.durationMinutes || 15) * 60000));
+    } else {
+      // driving, bicycling, walking: ab frühestmöglichem Startzeitpunkt (z. B. 16:00 Uhr)
+      const durationMs = (route.durationMinutes || 15) * 60000;
+      if (isArrivalBound && targetArrivalDate) {
+        newEnd = targetArrivalDate;
+        newStart = new Date(newEnd.getTime() - durationMs);
+      } else {
+        newStart = earliestDepartureDate;
+        newEnd = new Date(newStart.getTime() + durationMs);
+      }
+    }
+
+    const modeIcons: Record<string, string> = {
+      driving: '🚗',
+      transit: '🚆',
+      bicycling: '🚲',
+      walking: '🚶'
+    };
+    let updatedTitle = event.title;
+    if (updatedTitle) {
+      const newIcon = modeIcons[mode] || '🗺️';
+      if (/^[🚗🚆🚲🚶✈️🗺️]\s*/.test(updatedTitle)) {
+        updatedTitle = updatedTitle.replace(/^[🚗🚆🚲🚶✈️🗺️]\s*/, `${newIcon} `);
+      }
+    }
+
+    const updatedTransitDetails = {
+      ...(route.transitDetails || {}),
+      earliestDepartureTime: earliestDepartureDate.toISOString(),
+      requestedDepartureTime: existingDetails.requestedDepartureTime || earliestDepartureDate.toISOString(),
+      targetArrivalTime: targetArrivalDate ? targetArrivalDate.toISOString() : existingDetails.targetArrivalTime,
+      bufferBeforeMinutes: (newStart.getTime() > earliestDepartureDate.getTime())
+        ? Math.round((newStart.getTime() - earliestDepartureDate.getTime()) / 60000)
+        : 0
+    };
+
+    const updated = await prisma.event.update({
+      where: { id },
+      data: {
+        title: updatedTitle,
+        travelMode: mode,
+        travelOriginLocation: origin,
+        travelDurationMinutes: route.durationMinutes,
+        travelDistanceText: route.distanceText,
+        travelTransitDetails: updatedTransitDetails as any,
+        start: newStart,
+        end: newEnd
+      }
+    });
+
+    res.json({ success: true, event: updated, route });
+  } catch (err: any) {
+    console.error("[API] Fehler in /api/routes/switch-travel-event-mode:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1505,9 +1708,890 @@ app.put("/api/entities/person/:id/email", async (req, res) => {
   }
 });
 
+/**
+ * Locations & Person-Locations API
+ */
+app.get("/api/locations", async (req, res) => {
+  try {
+    const search = req.query.search as string | undefined;
+    const type = req.query.type as string | undefined;
+    const city = req.query.city as string | undefined;
+    const state = req.query.state as string | undefined;
+    const personId = req.query.personId ? Number(req.query.personId) : undefined;
+
+    const where: any = { isDeleted: false };
+    if (type && type !== "all") where.type = type;
+    if (city) where.city = { contains: city.trim(), mode: "insensitive" };
+    if (state) where.state = { contains: state.trim(), mode: "insensitive" };
+    if (personId) where.persons = { some: { personId } };
+
+    if (search && search.trim()) {
+      const term = search.trim();
+      where.OR = [
+        { name: { contains: term, mode: "insensitive" } },
+        { address: { contains: term, mode: "insensitive" } },
+        { city: { contains: term, mode: "insensitive" } },
+        { state: { contains: term, mode: "insensitive" } },
+        { postalCode: { contains: term, mode: "insensitive" } },
+        { formattedAddress: { contains: term, mode: "insensitive" } },
+        { notes: { contains: term, mode: "insensitive" } },
+        {
+          persons: {
+            some: {
+              person: {
+                aliases: {
+                  some: { name: { contains: term, mode: "insensitive" } }
+                }
+              }
+            }
+          }
+        }
+      ];
+    }
+
+    const locations = await (prisma as any).location.findMany({
+      where,
+      orderBy: [{ isFavorite: "desc" }, { name: "asc" }]
+    });
+
+    const results = await Promise.all(
+      locations.map(async (loc: any) => {
+        const persons = await getPersonsForLocation(prisma, loc);
+        return {
+          ...loc,
+          formattedAddress: loc.formattedAddress || buildFormattedAddress(loc),
+          persons
+        };
+      })
+    );
+
+    res.json(results);
+  } catch (e: any) {
+    console.error("Fehler beim Abrufen der Orte:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/locations/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const loc = await (prisma as any).location.findUnique({
+      where: { id }
+    });
+    if (!loc || loc.isDeleted) {
+      return res.status(404).json({ error: "Ort nicht gefunden." });
+    }
+    const persons = await getPersonsForLocation(prisma, loc);
+    res.json({
+      ...loc,
+      formattedAddress: loc.formattedAddress || buildFormattedAddress(loc),
+      persons
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/locations", async (req, res) => {
+  try {
+    const {
+      name,
+      type,
+      address,
+      postalCode,
+      city,
+      state,
+      country,
+      notes,
+      personId,
+      relationType,
+      label,
+      isPrimary
+    } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Name des Ortes ist erforderlich." });
+    }
+
+    const formattedAddress = buildFormattedAddress({
+      address,
+      postalCode,
+      city,
+      state,
+      country: country || "Deutschland"
+    }) || name.trim();
+
+    const loc = await (prisma as any).location.create({
+      data: {
+        name: name.trim(),
+        type: type || (state && !address ? "state" : city && !address ? "city" : "residence"),
+        address: address ? address.trim() : null,
+        postalCode: postalCode ? postalCode.trim() : null,
+        city: city ? city.trim() : null,
+        state: state ? state.trim() : null,
+        country: country ? country.trim() : "Deutschland",
+        formattedAddress,
+        notes: notes ? notes.trim() : null
+      }
+    });
+
+    if (personId) {
+      const pId = Number(personId);
+      const relType = relationType || "residence";
+      if (isPrimary) {
+        await (prisma as any).personLocation.updateMany({
+          where: { personId: pId, relationType: relType },
+          data: { isPrimary: false }
+        });
+      }
+      await (prisma as any).personLocation.create({
+        data: {
+          personId: pId,
+          locationId: loc.id,
+          relationType: relType,
+          label: label ? label.trim() : null,
+          isPrimary: !!isPrimary
+        }
+      });
+    }
+
+    const persons = await getPersonsForLocation(prisma, loc);
+    res.json({
+      ...loc,
+      persons
+    });
+  } catch (e: any) {
+    console.error("Fehler beim Erstellen des Ortes:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/api/locations/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const {
+      name,
+      type,
+      address,
+      postalCode,
+      city,
+      state,
+      country,
+      notes
+    } = req.body;
+
+    const existing = await (prisma as any).location.findUnique({ where: { id } });
+    if (!existing || existing.isDeleted) {
+      return res.status(404).json({ error: "Ort nicht gefunden." });
+    }
+
+    const newAddress = address !== undefined ? (address ? address.trim() : null) : existing.address;
+    const newPostal = postalCode !== undefined ? (postalCode ? postalCode.trim() : null) : existing.postalCode;
+    const newCity = city !== undefined ? (city ? city.trim() : null) : existing.city;
+    const newState = state !== undefined ? (state ? state.trim() : null) : existing.state;
+    const newCountry = country !== undefined ? (country ? country.trim() : "Deutschland") : existing.country;
+
+    const formattedAddress = buildFormattedAddress({
+      address: newAddress,
+      postalCode: newPostal,
+      city: newCity,
+      state: newState,
+      country: newCountry
+    }) || (name ? name.trim() : existing.name);
+
+    const updated = await (prisma as any).location.update({
+      where: { id },
+      data: {
+        name: name !== undefined ? name.trim() : undefined,
+        type: type !== undefined ? type : undefined,
+        address: newAddress,
+        postalCode: newPostal,
+        city: newCity,
+        state: newState,
+        country: newCountry,
+        formattedAddress,
+        notes: notes !== undefined ? (notes ? notes.trim() : null) : undefined
+      }
+    });
+
+    const persons = await getPersonsForLocation(prisma, updated);
+    res.json({
+      ...updated,
+      persons
+    });
+  } catch (e: any) {
+    console.error("Fehler beim Aktualisieren des Ortes:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/locations/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    await (prisma as any).location.update({
+      where: { id },
+      data: { isDeleted: true }
+    });
+    res.json({ success: true, message: "Ort gelöscht." });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/api/locations/:id/favorite", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { isFavorite } = req.body;
+    const updated = await (prisma as any).location.update({
+      where: { id },
+      data: { isFavorite: !!isFavorite }
+    });
+    res.json({ success: true, isFavorite: updated.isFavorite });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/locations/:id/persons", async (req, res) => {
+  try {
+    const locationId = Number(req.params.id);
+    const { personId, relationType, label, isPrimary } = req.body;
+    if (!personId) {
+      return res.status(400).json({ error: "personId ist erforderlich." });
+    }
+    const pId = Number(personId);
+    const relType = relationType || "residence";
+
+    if (isPrimary) {
+      await (prisma as any).personLocation.updateMany({
+        where: { personId: pId, relationType: relType },
+        data: { isPrimary: false }
+      });
+    }
+
+    const pl = await (prisma as any).personLocation.upsert({
+      where: {
+        personId_locationId_relationType: {
+          personId: pId,
+          locationId,
+          relationType: relType
+        }
+      },
+      update: {
+        label: label ? label.trim() : null,
+        isPrimary: !!isPrimary
+      },
+      create: {
+        personId: pId,
+        locationId,
+        relationType: relType,
+        label: label ? label.trim() : null,
+        isPrimary: !!isPrimary
+      }
+    });
+
+    const loc = await (prisma as any).location.findUnique({ where: { id: locationId } });
+    const persons = await getPersonsForLocation(prisma, loc);
+    res.json({ success: true, link: pl, persons });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/locations/:id/persons/:personId", async (req, res) => {
+  try {
+    const locationId = Number(req.params.id);
+    const personId = Number(req.params.personId);
+    await (prisma as any).personLocation.deleteMany({
+      where: { locationId, personId }
+    });
+    const loc = await (prisma as any).location.findUnique({ where: { id: locationId } });
+    const persons = await getPersonsForLocation(prisma, loc);
+    res.json({ success: true, persons });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/persons/:id/locations", async (req, res) => {
+  try {
+    const personId = Number(req.params.id);
+    const links = await (prisma as any).personLocation.findMany({
+      where: {
+        personId,
+        location: { isDeleted: false }
+      },
+      include: { location: true },
+      orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }]
+    });
+
+    const formatted = links.map((pl: any) => ({
+      linkId: pl.id,
+      relationType: pl.relationType,
+      label: pl.label || (pl.relationType === "residence" ? "Wohnsitz" : pl.relationType),
+      isPrimary: pl.isPrimary,
+      location: {
+        ...pl.location,
+        formattedAddress: pl.location.formattedAddress || buildFormattedAddress(pl.location)
+      }
+    }));
+
+    res.json(formatted);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/persons/:id/locations", async (req, res) => {
+  try {
+    const personId = Number(req.params.id);
+    const {
+      existingLocationId,
+      name,
+      type,
+      address,
+      postalCode,
+      city,
+      state,
+      country,
+      notes,
+      relationType,
+      label,
+      isPrimary
+    } = req.body;
+
+    let targetLocationId: number;
+
+    if (existingLocationId) {
+      targetLocationId = Number(existingLocationId);
+    } else {
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: "Ortsname ist erforderlich." });
+      }
+      const formattedAddress = buildFormattedAddress({
+        address,
+        postalCode,
+        city,
+        state,
+        country: country || "Deutschland"
+      }) || name.trim();
+
+      const newLoc = await (prisma as any).location.create({
+        data: {
+          name: name.trim(),
+          type: type || (state && !address ? "state" : city && !address ? "city" : "residence"),
+          address: address ? address.trim() : null,
+          postalCode: postalCode ? postalCode.trim() : null,
+          city: city ? city.trim() : null,
+          state: state ? state.trim() : null,
+          country: country ? country.trim() : "Deutschland",
+          formattedAddress,
+          notes: notes ? notes.trim() : null
+        }
+      });
+      targetLocationId = newLoc.id;
+    }
+
+    const relType = relationType || "residence";
+
+    if (isPrimary) {
+      await (prisma as any).personLocation.updateMany({
+        where: { personId, relationType: relType },
+        data: { isPrimary: false }
+      });
+    }
+
+    const link = await (prisma as any).personLocation.upsert({
+      where: {
+        personId_locationId_relationType: {
+          personId,
+          locationId: targetLocationId,
+          relationType: relType
+        }
+      },
+      update: {
+        label: label ? label.trim() : null,
+        isPrimary: !!isPrimary
+      },
+      create: {
+        personId,
+        locationId: targetLocationId,
+        relationType: relType,
+        label: label ? label.trim() : null,
+        isPrimary: !!isPrimary
+      },
+      include: { location: true }
+    });
+
+    res.json({
+      success: true,
+      link: {
+        ...link,
+        location: {
+          ...link.location,
+          formattedAddress: link.location.formattedAddress || buildFormattedAddress(link.location)
+        }
+      }
+    });
+  } catch (e: any) {
+    console.error("Fehler beim Zuordnen des Ortes zur Person:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/routes/calculate", async (req, res) => {
+  try {
+    const { origin, destination, mode } = req.query as { origin?: string; destination?: string; mode?: TravelMode };
+    if (!origin || !destination) {
+      return res.status(400).json({ error: "origin und destination sind erforderlich." });
+    }
+    const result = await RouteService.calculateRoute(origin, destination, mode || "transit", prisma);
+    res.json(result);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ==========================================
+// Media & File Management API Endpoints
+// ==========================================
+
+app.post("/api/media/upload", upload.array("files"), async (req, res) => {
+  try {
+    const description = req.body.description ? String(req.body.description).trim() : null;
+    const personIdsRaw = req.body.personIds;
+    const projectIdsRaw = req.body.projectIds;
+    const projectTag = req.body.tag ? String(req.body.tag).trim() : null;
+    const personRole = req.body.role ? String(req.body.role).trim() : null;
+
+    let personIds: number[] = [];
+    if (personIdsRaw) {
+      if (Array.isArray(personIdsRaw)) personIds = personIdsRaw.map(Number).filter(Boolean);
+      else {
+        try { personIds = JSON.parse(personIdsRaw).map(Number).filter(Boolean); }
+        catch { personIds = String(personIdsRaw).split(",").map(s => Number(s.trim())).filter(Boolean); }
+      }
+    }
+
+    let projectIds: number[] = [];
+    if (projectIdsRaw) {
+      if (Array.isArray(projectIdsRaw)) projectIds = projectIdsRaw.map(Number).filter(Boolean);
+      else {
+        try { projectIds = JSON.parse(projectIdsRaw).map(Number).filter(Boolean); }
+        catch { projectIds = String(projectIdsRaw).split(",").map(s => Number(s.trim())).filter(Boolean); }
+      }
+    }
+
+    const files = (req.files as Express.Multer.File[]) || [];
+
+    // Support Base64 Upload
+    if (files.length === 0 && req.body.dataBase64) {
+      const { title, fileName, fileType, dataBase64 } = req.body;
+      const buffer = Buffer.from(dataBase64.replace(/^data:.*?;base64,/, ""), "base64");
+      const ext = path.extname(fileName || "file.bin") || (fileType?.includes("png") ? ".png" : fileType?.includes("jpeg") ? ".jpg" : ".bin");
+      const safeName = `${Date.now()}_${(fileName || "file").replace(/[^a-zA-Z0-9_\-\.]/g, "_")}${ext}`;
+      const uploadDir = path.join(process.cwd(), "public", "uploads");
+      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+      fs.writeFileSync(path.join(uploadDir, safeName), buffer);
+
+      const mimeType = fileType || (ext === ".pdf" ? "application/pdf" : "application/octet-stream");
+      const isImg = mimeType.startsWith("image/") || [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"].includes(ext.toLowerCase());
+      const category = isImg ? "image" : "document";
+
+      let extractedText: string | null = null;
+      if (mimeType.includes("text") || [".txt", ".md", ".json", ".csv"].includes(ext.toLowerCase())) {
+        extractedText = buffer.toString("utf-8");
+      }
+
+      const item = await (prisma as any).mediaItem.create({
+        data: {
+          title: title || fileName || "Hochgeladene Datei",
+          fileName: safeName,
+          filePath: `/uploads/${safeName}`,
+          fileType: mimeType,
+          category,
+          fileSize: buffer.length,
+          description,
+          extractedText,
+          persons: {
+            create: personIds.map(pid => ({ personId: pid, role: personRole || "Zugehörig" }))
+          },
+          projects: {
+            create: projectIds.map(pid => ({ projectId: pid, tag: projectTag || "Zugehörig" }))
+          }
+        },
+        include: {
+          persons: { include: { person: { include: { aliases: true } } } },
+          projects: { include: { project: true } }
+        }
+      });
+      return res.json({ success: true, count: 1, items: [formatMediaItem(item)] });
+    }
+
+    if (files.length === 0) {
+      return res.status(400).json({ error: "Keine Dateien zum Hochladen übergeben." });
+    }
+
+    const savedItems = [];
+    for (const file of files) {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const isImg = file.mimetype.startsWith("image/") || [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"].includes(ext);
+      const category = isImg ? "image" : "document";
+
+      let extractedText: string | null = null;
+      if (file.mimetype.includes("text") || [".txt", ".md", ".json", ".csv"].includes(ext)) {
+        try {
+          extractedText = fs.readFileSync(file.path, "utf-8");
+        } catch {}
+      }
+
+      const item = await (prisma as any).mediaItem.create({
+        data: {
+          title: file.originalname,
+          fileName: file.filename,
+          filePath: `/uploads/${file.filename}`,
+          fileType: file.mimetype,
+          category,
+          fileSize: file.size,
+          description,
+          extractedText,
+          persons: {
+            create: personIds.map(pid => ({ personId: pid, role: personRole || "Zugehörig" }))
+          },
+          projects: {
+            create: projectIds.map(pid => ({ projectId: pid, tag: projectTag || "Zugehörig" }))
+          }
+        },
+        include: {
+          persons: { include: { person: { include: { aliases: true } } } },
+          projects: { include: { project: true } }
+        }
+      });
+      savedItems.push(formatMediaItem(item));
+    }
+
+    res.json({ success: true, count: savedItems.length, items: savedItems });
+  } catch (err: any) {
+    console.error("Fehler beim Medien-Upload:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/media", async (req, res) => {
+  try {
+    const { category, projectId, personId, isFavorite, search } = req.query as any;
+
+    const where: any = { isDeleted: false };
+    if (category && category !== "all") {
+      where.category = category;
+    }
+    if (isFavorite === "true" || isFavorite === true) {
+      where.isFavorite = true;
+    }
+    if (projectId) {
+      where.projects = { some: { projectId: Number(projectId) } };
+    }
+    if (personId) {
+      where.persons = { some: { personId: Number(personId) } };
+    }
+    if (search && String(search).trim()) {
+      const q = String(search).trim();
+      where.OR = [
+        { title: { contains: q, mode: "insensitive" } },
+        { fileName: { contains: q, mode: "insensitive" } },
+        { description: { contains: q, mode: "insensitive" } },
+        { extractedText: { contains: q, mode: "insensitive" } }
+      ];
+    }
+
+    const items = await (prisma as any).mediaItem.findMany({
+      where,
+      include: {
+        persons: { include: { person: { include: { aliases: true } } } },
+        projects: { include: { project: true } }
+      },
+      orderBy: [{ isFavorite: "desc" }, { createdAt: "desc" }]
+    });
+
+    res.json(items.map(formatMediaItem));
+  } catch (e: any) {
+    console.error("Fehler beim Abrufen der Medien:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/media/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const item = await (prisma as any).mediaItem.findUnique({
+      where: { id },
+      include: {
+        persons: { include: { person: { include: { aliases: true } } } },
+        projects: { include: { project: true } }
+      }
+    });
+    if (!item || item.isDeleted) {
+      return res.status(404).json({ error: "Datei nicht gefunden." });
+    }
+    res.json(formatMediaItem(item));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/api/media/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { title, description, isFavorite } = req.body;
+    const data: any = {};
+    if (title !== undefined) data.title = String(title).trim();
+    if (description !== undefined) data.description = description ? String(description).trim() : null;
+    if (isFavorite !== undefined) data.isFavorite = !!isFavorite;
+
+    const item = await (prisma as any).mediaItem.update({
+      where: { id },
+      data,
+      include: {
+        persons: { include: { person: { include: { aliases: true } } } },
+        projects: { include: { project: true } }
+      }
+    });
+    res.json(formatMediaItem(item));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/media/:id/content", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const item = await (prisma as any).mediaItem.findUnique({
+      where: { id },
+      include: {
+        persons: { include: { person: { include: { aliases: true } } } },
+        projects: { include: { project: true } }
+      }
+    });
+    if (!item || item.isDeleted) {
+      return res.status(404).json({ error: "Datei nicht gefunden." });
+    }
+
+    const diskPath = path.join(process.cwd(), "public", item.filePath.replace(/^\//, ""));
+    let content = "";
+    if (fs.existsSync(diskPath)) {
+      try {
+        content = fs.readFileSync(diskPath, "utf-8");
+      } catch (err: any) {
+        content = item.extractedText || "";
+      }
+    } else if (item.extractedText) {
+      content = item.extractedText;
+    }
+
+    res.json({
+      id: item.id,
+      title: item.title,
+      fileName: item.fileName,
+      filePath: item.filePath,
+      fileType: item.fileType,
+      fileSize: item.fileSize,
+      content,
+      media: formatMediaItem(item)
+    });
+  } catch (e: any) {
+    console.error("Fehler beim Laden des Dateiinhalts:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/api/media/:id/content", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { content, title } = req.body;
+    if (content === undefined || typeof content !== "string") {
+      return res.status(400).json({ error: "Parameter 'content' als String erforderlich." });
+    }
+
+    const item = await (prisma as any).mediaItem.findUnique({ where: { id } });
+    if (!item || item.isDeleted) {
+      return res.status(404).json({ error: "Datei nicht gefunden." });
+    }
+
+    const diskPath = path.join(process.cwd(), "public", item.filePath.replace(/^\//, ""));
+    const uploadDir = path.dirname(diskPath);
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    fs.writeFileSync(diskPath, content, "utf-8");
+    const newSize = Buffer.byteLength(content, "utf-8");
+
+    const data: any = {
+      extractedText: content,
+      fileSize: newSize
+    };
+    if (title && String(title).trim()) {
+      data.title = String(title).trim();
+    }
+
+    const updated = await (prisma as any).mediaItem.update({
+      where: { id },
+      data,
+      include: {
+        persons: { include: { person: { include: { aliases: true } } } },
+        projects: { include: { project: true } }
+      }
+    });
+
+    res.json({
+      success: true,
+      item: formatMediaItem(updated),
+      message: "Dateiinhalt erfolgreich gespeichert."
+    });
+  } catch (e: any) {
+    console.error("Fehler beim Speichern des Dateiinhalts:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/media/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    await (prisma as any).mediaItem.update({
+      where: { id },
+      data: { isDeleted: true }
+    });
+    res.json({ success: true, message: "Datei gelöscht." });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/api/media/:id/favorite", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { isFavorite } = req.body;
+    const item = await (prisma as any).mediaItem.update({
+      where: { id },
+      data: { isFavorite: !!isFavorite }
+    });
+    res.json({ success: true, isFavorite: item.isFavorite });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/media/:id/persons", async (req, res) => {
+  try {
+    const mediaId = Number(req.params.id);
+    const { personId, role } = req.body;
+    if (!personId) return res.status(400).json({ error: "personId erforderlich" });
+
+    const link = await (prisma as any).mediaPerson.upsert({
+      where: { mediaId_personId: { mediaId, personId: Number(personId) } },
+      create: { mediaId, personId: Number(personId), role: role || "Zugehörig" },
+      update: { role: role || "Zugehörig" }
+    });
+    res.json({ success: true, link });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/media/:id/persons/:personId", async (req, res) => {
+  try {
+    const mediaId = Number(req.params.id);
+    const personId = Number(req.params.personId);
+    await (prisma as any).mediaPerson.deleteMany({
+      where: { mediaId, personId }
+    });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/media/:id/projects", async (req, res) => {
+  try {
+    const mediaId = Number(req.params.id);
+    const { projectId, tag } = req.body;
+    if (!projectId) return res.status(400).json({ error: "projectId erforderlich" });
+
+    const link = await (prisma as any).mediaProject.upsert({
+      where: { mediaId_projectId: { mediaId, projectId: Number(projectId) } },
+      create: { mediaId, projectId: Number(projectId), tag: tag || "Zugehörig" },
+      update: { tag: tag || "Zugehörig" }
+    });
+    res.json({ success: true, link });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete("/api/media/:id/projects/:projectId", async (req, res) => {
+  try {
+    const mediaId = Number(req.params.id);
+    const projectId = Number(req.params.projectId);
+    await (prisma as any).mediaProject.deleteMany({
+      where: { mediaId, projectId }
+    });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/projects/:id/media", async (req, res) => {
+  try {
+    const projectId = Number(req.params.id);
+    const links = await (prisma as any).mediaProject.findMany({
+      where: { projectId, media: { isDeleted: false } },
+      include: {
+        media: {
+          include: {
+            persons: { include: { person: { include: { aliases: true } } } },
+            projects: { include: { project: true } }
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json(links.map((l: any) => ({
+      ...formatMediaItem(l.media),
+      tag: l.tag
+    })));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/persons/:id/media", async (req, res) => {
+  try {
+    const personId = Number(req.params.id);
+    const links = await (prisma as any).mediaPerson.findMany({
+      where: { personId, media: { isDeleted: false } },
+      include: {
+        media: {
+          include: {
+            persons: { include: { person: { include: { aliases: true } } } },
+            projects: { include: { project: true } }
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json(links.map((l: any) => ({
+      ...formatMediaItem(l.media),
+      role: l.role
+    })));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
 app.post("/api/mail/send", async (req, res) => {
   try {
-    const { accountId, to, subject, body, inReplyTo, references } = req.body;
+    const { accountId, to, subject, body, inReplyTo, references, attachments, notificationId } = req.body;
     if (!accountId || !to || !subject || !body) {
       return res.status(400).json({ error: "accountId, to, subject und body sind erforderlich." });
     }
@@ -1519,10 +2603,24 @@ app.post("/api/mail/send", async (req, res) => {
         subject,
         body,
         inReplyTo,
-        references
+        references,
+        attachments: attachments || undefined
       },
       prisma
     );
+
+    if (sendRes.success && notificationId) {
+      try {
+        await prisma.agentNotification.update({
+          where: { id: Number(notificationId) },
+          data: {
+            isRead: true,
+            isDismissed: true,
+            selectedButton: "Im Editor gesendet"
+          }
+        });
+      } catch (_) {}
+    }
 
     res.json(sendRes);
   } catch (e: any) {
@@ -1881,6 +2979,27 @@ app.get("/chat/active-tools", (req, res) => {
 });
 
 
+function sanitizeEntityDatesForGermanContext(obj: any): any {
+  if (!obj || typeof obj !== "object") return obj;
+  if (obj instanceof Date) {
+    return `${formatGermanDate(obj)} ${formatGermanTime(obj)} Uhr (deutsche Lokalzeit)`;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(sanitizeEntityDatesForGermanContext);
+  }
+  const copy: any = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v instanceof Date) {
+      copy[k] = `${formatGermanDate(v)} ${formatGermanTime(v)} Uhr (deutsche Lokalzeit)`;
+    } else if (typeof v === "object" && v !== null) {
+      copy[k] = sanitizeEntityDatesForGermanContext(v);
+    } else {
+      copy[k] = v;
+    }
+  }
+  return copy;
+}
+
 /**
  * Gemini AI Integration
  */
@@ -1917,13 +3036,15 @@ app.post("/chat", async (req, res) => {
       });
     }
 
-    const now = new Date();
-    const dateString = now.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    const timeString = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-    const todayIso = now.toISOString().split('T')[0];
+    const timeCtx = getGermanTimeContext();
+    const dateString = timeCtx.dateString;
+    const timeString = timeCtx.timeString;
+    const todayIso = timeCtx.todayIso;
+    const offsetStr = timeCtx.offsetStr;
+    const tzName = timeCtx.tzName;
 
     const userModel = getSettings().aiModel;
-    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-3.5-flash";
+    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
     const model = genAI.getGenerativeModel({
       model: modelName,
       tools: [{ functionDeclarations: pluginManager.getGeminiTools() } as any],
@@ -1941,13 +3062,25 @@ app.post("/chat", async (req, res) => {
         role: "system",
         parts: [{
           text: `Du bist ein hilfsbereiter, proaktiver persönlicher KI-Assistent. 
-Heute ist ${dateString}, ${todayIso}, es ist ${timeString} Uhr (deutsche Lokalzeit, Mitteleuropäische Sommerzeit, UTC+2). 
+Heute ist ${dateString}, ${todayIso}, es ist ${timeString} Uhr (deutsche Lokalzeit, ${tzName}, ${offsetStr}). 
 Nutze '${todayIso}' als heutiges Datum als Basis für alle Datumsberechnungen (z.B. morgen = nächster Tag im Format YYYY-MM-DD).
+
+ZEITZONEN- & UHRZEIT-REGEL (STRENGSTE PFLICHT):
+- Alle Uhrzeiten und Zeitangaben des Benutzers beziehen sich IMMER auf die DEUTSCHE LOKALZEIT (Europe/Berlin, ${tzName}, ${offsetStr})!
+- Wenn der Benutzer sagt "16 Uhr", "16:00", "um 17:30", "Termin endet 16 Uhr" oder "fahrt um 16:08", meint er ausnahmslos deutsche Zeit.
+- Wandle deutsche Zeiten NIEMALS in UTC um und ziehe NIEMALS Zeitzonenstunden ab!
+- HÄNGE NIEMALS ein 'Z' an Datums- oder Zeit-Strings an ('Z' bedeutet UTC und verschiebt Fahrten bei Google Maps um 1-2 Stunden)!
+- Bei Werkzeugaufrufen ('berechne_route', 'erstelle_wegzeit_termin', 'fuege_termin_hinzu', 'bearbeite_termin', 'erstelle_timer'):
+  * Übergib Zeitparameter (wie 'abfahrtszeit', 'ankunftszeit', 'datum', 'neues_datum') IMMER im lokalen deutschen Format:
+    - Entweder als reine Uhrzeit: z. B. '16:00' bzw. '16:08'
+    - Oder als lokales ISO-Datum OHNE 'Z': z. B. '${todayIso}T16:00:00' (oder mit deutschem Offset '${todayIso}T16:00:00${offsetStr}').
+- Beziehe dich in deinen Antworten immer auf diese genauen deutschen Uhrzeiten.
+
 WERKZEUGAUFRUFE (TOOLS) - OBERSTE REGEL:
 - Wenn der Benutzer eine Aktion wünscht (z.B. Aufgabe erstellen, Mails anzeigen/holen, Timer/Wecker stellen, Projekt erstellen, Termin eintragen, Notiz speichern usw.), rufe das passende Werkzeug SOFORT als Function Call auf. Antworte NICHT nur mit Text oder leeren Floskeln, sondern führe die Aktion direkt aus!
 - Verwende in Werkzeug-Parametern IMMER reine JSON-Werte (Strings oder Zahlen). Führe NIEMALS Python-Code oder Formeln wie 'from datetime import date' in den Argumenten aus, sondern berechne Datums-Strings im Voraus als z.B. "${todayIso}".
 - Wenn du relative Timer erstellst (z.B. "in 15 Minuten" oder "für 10 Sekunden"), benutze im Tool 'erstelle_timer' bevorzugt den Parameter 'sekunden'.
-- Für feste Uhrzeiten (z. B. "morgen um 17 Uhr") berechne die Ablaufzeit im lokalen Format unter Berücksichtigung des Offsets '+02:00' (z. B. YYYY-MM-DDTHH:mm:ss+02:00) und gib diesen String an 'erstelle_timer' oder 'fuege_termin_hinzu'.
+- Für feste Uhrzeiten (z. B. "morgen um 17 Uhr") berechne die Ablaufzeit im lokalen Format (z. B. YYYY-MM-DDTHH:mm:ss${offsetStr}) und gib diesen String an 'erstelle_timer' oder 'fuege_termin_hinzu'.
 
 Du hast Zugriff auf ein persönliches Profil des Benutzers ("Ich / Über mich"):
 - Wenn der Benutzer persönliche Informationen über sich selbst erzählt ("Ich mag...", "Mein Ziel ist...", "Ich habe mir vorgenommen...", "Merke dir über mich..."), verwende 'merke_ueber_mich'.
@@ -1962,6 +3095,49 @@ Du hast Zugriff auf ein Tagebuch (Journal) mit täglichen Einträgen, Kalenderte
 - Einen Tagebucheintrag verfassen oder ergänzen per 'eintrag_ins_tagebuch'.
 - Den Tagesablauf, Erlebnisse und erledigte Aufgaben eines Tages lesen per 'lies_tagebuch'.
 - Vergangene Tagebucheinträge semantisch per Vektorsuche durchsuchen per 'suche_im_tagebuch'.
+
+Du hast Zugriff auf ein Orts- und Standortsystem (Locations) und Kalendersystem (Calendar):
+- Orte, Wohnsitze, Büros, Städte und Bundesländer werden mit 'erstelle_ort', 'suche_orte' oder 'verknuepfe_person_ort' verwaltet.
+- WICHTIG: Wenn der Benutzer sagt "Ich treffe mich bei [Person]" (z.B. "Ich treffe mich bei Tom" oder "Trag ein: Treffen bei Tom"):
+  1. Rufe 'hole_person_orte' auf, um die bekannten Adressen der Person zu finden.
+  2. Hat die Person genau 1 Adresse / Wohnsitz: Verwende diese Adresse automatisch als Standort für den Termin ('standort').
+  3. Hat die Person mehrere Adressen (z.B. Wohnung und Ferienhaus/Büro): Frage kurz nach, an welcher der Adressen das Treffen stattfindet.
+  4. Hat die Person noch keine Adresse hinterlegt: Frage freundlich nach, wo die Person wohnt oder wo das Treffen stattfindet, und biete an, die Adresse für sie zu speichern ('erstelle_ort').
+- WICHTIG ZU WEGEZEITEN & TERMINEN:
+  * Termine haben KEINE fest verknüpfte Anreise oder Route als Eigenschaft im Termin.
+  * Wegezeiten und Fahrtzeiten sind EIGENSTÄNDIGE Kalendertermine mit vollwertigen Google-Maps-Details (Abfahrtszeit, Ankunftszeit, Haltestellen, ÖPNV-Linien)!
+  * Man bearbeitet oder verschiebt entweder den Termin ODER die Wegezeit unabhängig voneinander ('bearbeite_termin'). Sie haben keine direkte technische Kopplung in der Datenbank; dass man für einen Termin erst anreisen muss, verstehst du als KI logisch aus den Zeiten und Orten.
+  * Wenn der Nutzer eine Anreise, Fahrt, Hin- oder Rückfahrt zu einem Termin oder Ort wünscht (z. B. "Plane mir die Anreise zum Termin", "Trag mir die Fahrt ein", "plane hin und rückfahrt bei dem Termin mit der bahn"):
+    1. Rufe für jede Fahrt/Wegzeit IMMER das Tool 'erstelle_wegzeit_termin' auf (verwende dafür NICHT das generische 'fuege_termin_hinzu')!
+    2. Übergib 'abfahrtszeit' oder 'ankunftszeit' als deutsche Zeit (z. B. '16:00' oder '${todayIso}T16:00:00'), NIEMALS in UTC und OHNE 'Z'!
+    3. 'erstelle_wegzeit_termin' ermittelt automatisch die Verbindung über Google Maps und trägt die Wegezeit als vollwertige Wegezeit mit den exakten Google-Maps-Zeiten, Verkehrsmitteln, Linien (z. B. S4), Haltestellen und Verkehrsmittel-Umschaltknöpfen in den Kalender ein!
+    4. Du musst Wegbeschreibungen nicht manuell in das Textfeld 'beschreibung' packen, das System bindet die Google-Maps-Fahrtdetails automatisch ein.
+    5. Start & Ziel: Für Fahrten von/nach Hause kannst du als Parameter einfach 'Zuhause' angeben und für Personen ihren Namen (z.B. 'Tom'). Das System löst diese automatisch auf die echten Adressen auf.
+- Reiserouten und Wegezeiten zwischen beliebigen Orten oder Personen berechnest du direkt per 'berechne_route':
+  * Das Tool liefert bis zu 2 Routenoptionen und prüft automatisch auf Überschneidungen/Kollisionen mit bestehenden Kalenderterminen.
+  * Schlage dem Nutzer stets die Optionen mit ihren Vor- und Nachteilen vor (z. B. Abfahrtszeiten, Wartezeit beim Umsteigen, ob man ewig warten muss oder eine Direktverbindung hat) und weise aktiv darauf hin, falls eine Route mit einem Termin im Kalender kollidiert!
+
+Du hast Zugriff auf ein Medien- und Dateisystem (Media):
+- Hochgeladene Fotos, Dokumente, PDFs und Dateien verwaltest und durchsuchst du mit 'suche_dateien' und 'lese_datei_inhalt'.
+- Dateien können Projekten und Personen zugeordnet sein (n:n Verbindung).
+- WICHTIG: Wenn der Benutzer eine Stellenanzeige gibt und eine Bewerbung verfassen möchte (z.B. "Hier ist eine Stelle, schreib mir eine Bewerbung mithilfe meines Projekts Bewerbung" oder "Bereite eine Bewerbung als Mail vor"):
+  1. Analysiere vorhandene Dokumente (Lebenslauf, Anschreiben) im Projekt oder Profil mit 'suche_dateien' / 'lese_datei_inhalt' oder deinen hinterlegten Informationen.
+  2. Formuliere ein professionelles, passgenaues Anschreiben und schlage es direkt per 'schlage_mail_vor' als E-Mail-Entwurf (mit Betreff, Empfänger und Anhängen) vor!
+- Wenn der Benutzer nach Bildern von bestimmten Personen oder Projekten fragt, filtere sie mit 'suche_dateien' gezielt nach Person oder Projekt.
+- Beschreibungen zu Bildern und Dokumenten ("was ist darauf abgebildet") können mit 'aktualisiere_datei_beschreibung' ergänzt werden.
+
+E-MAIL-ENTWÜRFE, ANTWORTEN & ANHÄNGE (STRENGSTE PFLICHT):
+- Wenn der Benutzer eine E-Mail verfassen, vorbereiten, vorschlagen oder mit Anhang versenden möchte:
+  * Rufe IMMER das Werkzeug 'schlage_mail_vor' auf (oder 'schlage_mail_antwort_vor' beim Antworten auf eingegangene Mails)!
+  * Nutze dafür NIEMALS das generische 'erstelle_benachrichtigung', sondern IMMER 'schlage_mail_vor'!
+  * Gib 'empfaenger', 'betreff' und im Parameter 'inhalt' den VOLLSTÄNDIGEN Text der E-Mail (inkl. freundlicher Anrede, Fließtext, Grußformel) an.
+  * E-MAIL-ANHÄNGE WERDEN VOLLSTÄNDIG UNTERSTÜTZT! Wenn der Benutzer einen Anhang wünscht (z. B. Dokument, PDF, Textdatei, Bild):
+    1. Suche die Datei per 'suche_dateien' (oder nimm die vom Benutzer genannte oder im Chat verlinkte Datei).
+    2. Übergib den/die Dateinamen (z. B. ['TermindetailsAgenda.pdf'] oder ['Anschreiben_Vorlage.txt']) im Parameter 'anhaenge' als Array an 'schlage_mail_vor'!
+    3. Behaupte NIEMALS, dass Anhänge im Testmodus oder technisch nicht möglich seien oder nur "textlich beschrieben" werden! Das System hängt die Dateien physisch an die E-Mail an und bietet dem Benutzer interaktive Knöpfe ('Ja, abschicken' und 'Bearbeiten').
+  * CHAT-NACHRICHT DER KI BEI E-MAIL-ENTWÜRFEN (STRENGSTE REGEL):
+    - Erkläre in deiner Chat-Nachricht kurz und freundlich den Kontext und worum es in dem Entwurf geht (Empfänger, Betreff, Zweck des Schreibens, welche Anhänge verknüpft sind).
+    - DU DARFST DEN E-MAIL-TEXT NIEMALS NOCHMAL IN DEINER CHAT-NACHRICHT WIEDERHOLEN! (Kein 'E-Mail-Inhalt: > Sehr geehrte Damen und Herren...'). Der E-Mail-Text wird bereits direkt in der interaktiven Entwurfskarte unter deiner Nachricht angezeigt. Eine doppelte Wiedergabe des E-Mail-Texts in der Chat-Nachricht ist strengstens untersagt!
 
 WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
 - Du darfst NIEMALS dem Benutzer behaupten, dass eine Aufgabe, ein Termin, ein Timer/Wecker, ein Projekt oder eine Notiz erstellt, geändert oder gelöscht wurde, wenn du das entsprechende Werkzeug NICHT aufgerufen hast ODER wenn der Aufruf fehlgeschlagen ist (status: 'error')!
@@ -1998,26 +3174,140 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
         if (!resolvedEntities.has(entityKey)) {
           resolvedEntities.add(entityKey);
           try {
-            if (type === "pause") {
-              resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: Pause / Freies Zeitfenster im Tagesablauf\nBezeichnung: ${linkText}\nID / Zeitfenster: ${rawId}\nHinweis für KI: Der Nutzer verlinkt diese freie Pause im Kalender (z.B. um in dieser freien Zeit einen neuen Termin einzutragen oder eine Aufgabe einzuplanen). Wenn der Nutzer einen Termin in dieser Pause erstellen möchte, nutze das Tool 'fuege_termin_hinzu' und wähle die Uhrzeit passend innerhalb des Zeitfensters dieser Pause.\n`;
+            if (type === "event") {
+              let eventRecord: any = null;
+              if (rawId.startsWith("rec-")) {
+                const parts = rawId.split("-");
+                const patId = parseInt(parts[1], 10);
+                const occMs = parseInt(parts[2], 10);
+                const pattern = await prisma.recurrencePattern.findUnique({ where: { id: patId } });
+                if (pattern) {
+                  const durMs = new Date(pattern.originalEnd).getTime() - new Date(pattern.originalStart).getTime();
+                  const occStart = new Date(occMs);
+                  const occEnd = new Date(occMs + durMs);
+                  const override = await prisma.event.findFirst({
+                    where: { recurrenceId: patId, originalOccurrenceDate: occStart }
+                  });
+                  if (override && !override.isDeleted) {
+                    eventRecord = override;
+                  } else if (!override?.isDeleted) {
+                    eventRecord = {
+                      id: rawId,
+                      title: pattern.title,
+                      description: pattern.description,
+                      start: occStart,
+                      end: occEnd,
+                      location: pattern.location,
+                      isAllDay: pattern.isAllDay
+                    };
+                  }
+                }
+              } else {
+                const cleanId = rawId.replace(/^event-/, "").replace(/^app:\/\/event\//, "");
+                const numId = parseInt(cleanId, 10);
+                if (!isNaN(numId)) {
+                  eventRecord = await prisma.event.findUnique({ where: { id: numId } });
+                }
+              }
+
+              if (eventRecord) {
+                const sDate = new Date(eventRecord.start);
+                const eDate = new Date(eventRecord.end);
+                const dateStr = formatGermanDate(sDate);
+                const startTimeStr = formatGermanTime(sDate);
+                const endTimeStr = formatGermanTime(eDate);
+                const dateIso = sDate.toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
+                const loc = eventRecord.location || "Nicht angegeben";
+
+                resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: Kalendertermin\nTitel: "${eventRecord.title}" (ID: ${eventRecord.id})\nDatum: ${dateStr} (${dateIso})\nStartzeit: ${eventRecord.isAllDay ? "Ganztägig" : `${startTimeStr} Uhr (deutsche Lokalzeit)`}\nEndzeit: ${eventRecord.isAllDay ? "Ganztägig" : `${endTimeStr} Uhr (deutsche Lokalzeit)`}\n${!eventRecord.isAllDay ? `Zeitspanne: ${startTimeStr} - ${endTimeStr} Uhr (deutsche Lokalzeit)\n` : ""}Standort / Adresse: ${loc}\nBeschreibung: ${eventRecord.description || "Keine"}\n\nSTRIKTE ANWEISUNG FÜR DIE KI FÜR WEGZEITEN / ROUTENPLANUNG ZU DIESEM TERMIN:\n- Dieser Termin findet nach deutscher Lokalzeit von ${startTimeStr} Uhr bis ${endTimeStr} Uhr statt!\n- Wenn der Nutzer eine HINFAHRT oder Anreise wünscht:\n  * Zielort: "${loc}"\n  * Gewünschte Ankunftszeit am Zielort ist ${startTimeStr} Uhr (Parameter ankunftszeit="${startTimeStr}" oder ankunftszeit="${dateIso}T${startTimeStr}:00")!\n- Wenn der Nutzer eine RÜCKFAHRT oder Heimweg wünscht:\n  * Startort: "${loc}"\n  * Gewünschte Abfahrtszeit am Startort ist ${endTimeStr} Uhr (Parameter abfahrtszeit="${endTimeStr}" oder abfahrtszeit="${dateIso}T${endTimeStr}:00")!\n- Wandle diese Zeiten (${startTimeStr} und ${endTimeStr}) NIEMALS in UTC um und ziehe keine Stunden ab!\n`;
+              } else {
+                resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: Kalendertermin\nID: ${rawId}\n`;
+              }
             } else if (type === "travel") {
-              const numId = parseInt(rawId.replace(/^rec-/, ''), 10);
+              const cleanId = rawId.replace(/^rec-/, "").replace(/^event-/, "");
+              const numId = parseInt(cleanId, 10);
               let eventRecord: any = null;
               if (!isNaN(numId)) {
                 eventRecord = await prisma.event.findUnique({ where: { id: numId } });
               }
               if (eventRecord) {
-                resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: Wegezeit / Anreise zum Termin\nZugehöriger Termin: "${eventRecord.title}" (ID: ${eventRecord.id})\nZielort: ${eventRecord.location || "Nicht angegeben"}\nStartort / Startadresse: ${eventRecord.travelOriginLocation || "Nicht hinterlegt"}\nAktuelles Verkehrsmittel: ${eventRecord.travelMode || "Nicht gewählt"}\nReisedauer: ${eventRecord.travelDurationMinutes ? eventRecord.travelDurationMinutes + " Minuten" : "Unbekannt"}\nDistanz: ${eventRecord.travelDistanceText || "Unbekannt"}\nTermin-Beginn: ${new Date(eventRecord.start).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr (${new Date(eventRecord.start).toISOString()})\nÖPNV-Details: ${eventRecord.travelTransitDetails ? JSON.stringify(eventRecord.travelTransitDetails) : "Keine"}\nHinweis für KI: Der Nutzer hat diese Wegezeit verlinkt.\n- Wenn der Nutzer ein anderes Verkehrsmittel wählen möchte (z.B. Bahn, Auto, Fahrrad oder zu Fuß): Nutze das Tool 'bearbeite_termin' mit eventId="${eventRecord.id}" und dem Parameter 'verkehrsmittel' ('driving' | 'transit' | 'bicycling' | 'walking').\n- Wenn der Nutzer die Wegezeit oder Abfahrtszeit anpassen/verschieben möchte: Nutze 'bearbeite_termin' mit eventId="${eventRecord.id}" und passe 'neues_datum' oder 'reisezeit_minuten' an.\n`;
+                const sDate = new Date(eventRecord.start);
+                const eDate = new Date(eventRecord.end);
+                const dStr = formatGermanDate(sDate);
+                const sTime = formatGermanTime(sDate);
+                const eTime = formatGermanTime(eDate);
+                resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: Wegezeit / Fahrt (Eigenständiger Termin)\nTitel: "${eventRecord.title}" (ID: ${eventRecord.id})\nDatum: ${dStr}\nReisezeit: ${sTime} Uhr bis ${eTime} Uhr (deutsche Lokalzeit)\nStart: ${sTime} Uhr\nAnkunft: ${eTime} Uhr\nStartort: ${eventRecord.travelOriginLocation || "Nicht angegeben"}\nZielort: ${eventRecord.location || "Nicht angegeben"}\nVerkehrsmittel: ${eventRecord.travelMode || "transit"}\nHinweis für KI: Dies ist eine Wegezeit. Du kannst sie unabhängig mit 'bearbeite_termin' (eventId="${eventRecord.id}") anpassen oder verschieben.\n`;
               } else {
-                resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: Wegezeit / Route\nBezeichnung: ${linkText}\nTermin-ID: ${rawId}\nHinweis für KI: Der Nutzer bezieht sich auf diese Wegezeit und möchte möglicherweise das Verkehrsmittel oder die Zeit anpassen. Nutze 'bearbeite_termin' mit eventId="${rawId}".\n`;
+                resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: Wegezeit / Fahrt\nBezeichnung: ${linkText}\nID: ${rawId}\nHinweis für KI: Dies ist eine Wegezeit. Sie kann als eigenständiger Termin per 'bearbeite_termin' angepasst werden.\n`;
+              }
+            } else if (type === "pause") {
+              resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: Pause / Freies Zeitfenster im Tagesablauf\nBezeichnung: ${linkText}\nID / Zeitfenster: ${rawId}\nHinweis für KI: Der Nutzer verlinkt diese freie Pause im Kalender (z.B. um in dieser freien Zeit einen neuen Termin einzutragen oder eine Aufgabe einzuplanen). Wenn der Nutzer einen Termin in dieser Pause erstellen möchte, nutze das Tool 'fuege_termin_hinzu' und wähle die Uhrzeit passend innerhalb des Zeitfensters dieser Pause.\n`;
+            } else if (type === "task") {
+              const numId = parseInt(rawId, 10);
+              let taskRecord: any = null;
+              if (!isNaN(numId)) {
+                taskRecord = await prisma.task.findUnique({ where: { id: numId }, include: { project: true } });
+              }
+              if (taskRecord) {
+                const dueStr = taskRecord.due
+                  ? `${formatGermanDate(new Date(taskRecord.due))} um ${formatGermanTime(new Date(taskRecord.due))} Uhr (deutsche Lokalzeit)`
+                  : "Keine Fälligkeit";
+                resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: Aufgabe\nTitel: "${taskRecord.title}" (ID: ${taskRecord.id})\nFälligkeit: ${dueStr}\nStatus: ${taskRecord.completed ? "Erledigt" : "Offen"}\nProjekt: ${taskRecord.project?.name || "Kein Projekt"}\nNotizen: ${taskRecord.notes || "Keine"}\n`;
+              }
+            } else if (type === "timer") {
+              const numId = parseInt(rawId, 10);
+              let timerRecord: any = null;
+              if (!isNaN(numId)) {
+                timerRecord = await prisma.timer.findUnique({ where: { id: numId } });
+              }
+              if (timerRecord) {
+                const targetStr = timerRecord.targetTime
+                  ? `${formatGermanDate(new Date(timerRecord.targetTime))} um ${formatGermanTime(new Date(timerRecord.targetTime))} Uhr (deutsche Lokalzeit)`
+                  : "Keine Ablaufzeit";
+                resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: Timer / Wecker\nBezeichnung: "${timerRecord.label || "Timer"}" (ID: ${timerRecord.id})\nAblaufzeit: ${targetStr}\nStatus: ${timerRecord.status}\n`;
+              }
+            } else if (type === "journal") {
+              const numId = parseInt(rawId, 10);
+              let entryRecord: any = null;
+              if (!isNaN(numId)) {
+                entryRecord = await prisma.diaryEntry.findUnique({ where: { id: numId } });
+              }
+              if (entryRecord) {
+                const dateStr = formatGermanDate(new Date(entryRecord.date));
+                resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: Tagebucheintrag\nTitel: "${entryRecord.title || "Tagebucheintrag"}" (ID: ${entryRecord.id})\nDatum: ${dateStr}\nInhalt: ${entryRecord.content}\n`;
+              }
+            } else if (type === "mail") {
+              const numId = parseInt(rawId, 10);
+              let mailRecord: any = null;
+              if (!isNaN(numId)) {
+                mailRecord = await prisma.cachedEmail.findUnique({ where: { id: numId } });
+              }
+              if (mailRecord) {
+                const dateStr = mailRecord.date
+                  ? `${formatGermanDate(new Date(mailRecord.date))} um ${formatGermanTime(new Date(mailRecord.date))} Uhr (deutsche Lokalzeit)`
+                  : "Unbekannt";
+                resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: E-Mail\nBetreff: "${mailRecord.subject}" (ID: ${mailRecord.id})\nVon: ${mailRecord.from}\nAn: ${mailRecord.to}\nDatum: ${dateStr}\nInhalt:\n${(mailRecord.bodyText || mailRecord.snippet || "").slice(0, 1000)}\n`;
+              }
+            } else if (type === "media" || type === "file") {
+              const numId = parseInt(rawId, 10);
+              const mediaItem = await prisma.mediaItem.findUnique({
+                where: { id: numId },
+                include: {
+                  persons: { include: { person: { include: { aliases: true } } } },
+                  projects: { include: { project: true } }
+                }
+              });
+              if (mediaItem) {
+                resolvedContext += `\n--- Verlinkte Datei / Foto: [${linkText}] (${fullUrl}) ---\nTyp: Datei / Foto (${mediaItem.category})\nDateiname: "${mediaItem.fileName}"\nTitel: "${mediaItem.title}"\nFormat: ${mediaItem.fileType} (${formatFileSize(mediaItem.fileSize || 0)})\n${mediaItem.description ? `Beschreibung: ${mediaItem.description}\n` : ""}${mediaItem.extractedText ? `Dokumentinhalt:\n${mediaItem.extractedText.slice(0, 2500)}\n` : ""}\nHINWEIS FÜR DIE KI: Diese Datei stammt aus dem System ("Dateien & Fotos"). Wenn eine E-Mail mit dieser Datei verfasst oder vorgeschlagen werden soll, übergib den Dateinamen "${mediaItem.fileName}" zwingend im Parameter 'anhaenge' an 'schlage_mail_vor' oder 'sende_mail'.\n`;
+              } else {
+                resolvedContext += `\n--- Verlinkte Datei: [${linkText}] (${fullUrl}) ---\nID: ${rawId}\n`;
               }
             } else {
               const numId = parseInt(rawId, 10);
-              if (!isNaN(numId)) {
-                const entity = await pluginManager.resolveEntity(type, numId);
-                if (entity) {
-                  resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\n${JSON.stringify(entity, null, 2)}\n`;
-                }
+              const entity = await pluginManager.resolveEntity(type, isNaN(numId) ? rawId : numId);
+              if (entity) {
+                const sanitized = sanitizeEntityDatesForGermanContext(entity);
+                resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\n${JSON.stringify(sanitized, null, 2)}\n`;
               }
             }
           } catch (err) {
@@ -2052,12 +3342,28 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
       console.log(`Verarbeite ${attachments.length} Anhänge für Gemini...`);
       attachments.forEach((att: any, index: number) => {
         if (att.base64 && att.mimeType) {
-          promptParts.push({
-            inlineData: {
-              data: att.base64,
-              mimeType: att.mimeType
+          const isText = att.mimeType.startsWith("text/") || 
+                         (att.name && (att.name.endsWith(".txt") || att.name.endsWith(".md") || att.name.endsWith(".csv")));
+          if (isText) {
+            try {
+              const textContent = Buffer.from(att.base64, "base64").toString("utf-8");
+              promptParts.push(`\n[Inhalt der angehängten Textdatei "${att.name || 'Dokument.txt'}"]:\n${textContent}\n`);
+            } catch (_) {
+              promptParts.push({
+                inlineData: {
+                  data: att.base64,
+                  mimeType: "text/plain"
+                }
+              });
             }
-          });
+          } else {
+            promptParts.push({
+              inlineData: {
+                data: att.base64,
+                mimeType: att.mimeType
+              }
+            });
+          }
         } else {
           console.warn(`Anhang ${index} ist unvollständig:`, { hasBase64: !!att.base64, mimeType: att.mimeType });
         }
@@ -2074,6 +3380,7 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
     let currentResponse = response;
     let widgetData: any = null;
     const executedTools: { name: string; args: any; status: "success" | "error" | "limit_reached"; message?: string }[] = [];
+    const createdNotificationIds: number[] = [];
 
     // Schleife für Tool-Chaining
     let step = 0;
@@ -2121,10 +3428,28 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
             message: "Such-Limit für diese Runde erreicht. Bitte fasse alle bisher gesammelten Informationen kurz zusammen und antworte dem Benutzer direkt."
           };
         } else {
+          if (conversationId) {
+            if (!call.args) (call as any).args = {};
+            if (!(call.args as any).conversationId) {
+              (call.args as any).conversationId = conversationId;
+            }
+          }
           console.log(`  - Rufe Tool auf: ${call.name}`, call.args);
           try {
             toolResult = await pluginManager.executeTool(call.name, call.args);
             console.log("    Tool Ergebnis empfangen:", { name: call.name, hasWidget: !!toolResult?.type });
+
+            if (toolResult && toolResult.notificationId) {
+              createdNotificationIds.push(toolResult.notificationId);
+              if (conversationId) {
+                try {
+                  await prisma.agentNotification.update({
+                    where: { id: toolResult.notificationId },
+                    data: { conversationId }
+                  });
+                } catch (_) {}
+              }
+            }
 
             if (toolResult && toolResult.status === "error") {
               toolLog.status = "error";
@@ -2159,11 +3484,11 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
         nextStep = await chat.sendMessage(functionResponses);
       } catch (chatSendErr: any) {
         console.warn(`Fehler beim Senden der Function-Responses mit Modell '${modelName}':`, chatSendErr.message);
-        if (modelName !== "gemini-3.5-flash") {
-          console.log("Führe automatischen Fallback auf 'gemini-3.5-flash' aus...");
+        if (modelName !== "gemini-2.5-flash") {
+          console.log("Führe automatischen Fallback auf 'gemini-2.5-flash' aus...");
           try {
             const fallbackModel = genAI.getGenerativeModel({
-              model: "gemini-3.5-flash",
+              model: "gemini-2.5-flash",
               tools: [{ functionDeclarations: pluginManager.getGeminiTools() } as any],
               toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.AUTO } },
               generationConfig: { thinkingConfig: { thinkingBudget: 0 } } as any
@@ -2193,6 +3518,30 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
     }
 
     // Kompakte, zugeklappte Zusammenfassung der Aktionen anhängen
+    let createdNotifications: any[] = [];
+    if (conversationId || createdNotificationIds.length > 0) {
+      createdNotifications = await prisma.agentNotification.findMany({
+        where: {
+          OR: [
+            ...(conversationId ? [{ conversationId }] : []),
+            ...(createdNotificationIds.length > 0 ? [{ id: { in: createdNotificationIds } }] : [])
+          ]
+        },
+        orderBy: { createdAt: "desc" },
+        take: 5
+      });
+    }
+    const latestNotif = createdNotifications.length > 0 ? createdNotifications[0] : null;
+
+    // Wenn ein E-Mail-Entwurf erstellt wurde, entferne eine evtl. noch enthaltene doppelte Wiedergabe des E-Mail-Inhalts aus dem KI-Freitext
+    const hasMailDraft = createdNotifications.some((n: any) => 
+      (n.actionData && ((n.actionData as any).actionType === "send_mail" || (n.actionData as any).actionType === "send_mail_reply")) ||
+      (n.title && n.title.toLowerCase().includes("mail"))
+    );
+    if (hasMailDraft && aiText) {
+      aiText = aiText.replace(/\*{0,2}E-Mail-Inhalt:?\*{0,2}\s*(?:\r?\n\s*>[^\n]*)+/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+    }
+
     if (executedTools.length > 0) {
       aiText = `${aiText.trim()}${AgentRunService.formatExecutedToolsSummary(executedTools)}`;
     }
@@ -2203,16 +3552,6 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
         data: { role: "ai", text: aiText, conversationId }
       });
     }
-
-    let createdNotifications: any[] = [];
-    if (conversationId) {
-      createdNotifications = await prisma.agentNotification.findMany({
-        where: { conversationId },
-        orderBy: { createdAt: "desc" },
-        take: 5
-      });
-    }
-    const latestNotif = createdNotifications.length > 0 ? createdNotifications[0] : null;
 
     res.json({ 
       text: aiText, 

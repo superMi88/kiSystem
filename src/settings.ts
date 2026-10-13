@@ -183,36 +183,6 @@ export const DEFAULT_AGENT_SETTINGS: Record<string, AgentPermissionConfig> = {
     isEnabled: true,
     isSystem: true
   },
-  routenplaner: {
-    id: "routenplaner",
-    name: "Routenplaner Agent",
-    description: "Überwacht Termine und Standorte, berechnet Fahr- und Gehzeiten mit Google Maps und sorgt dafür, dass Termine pünktlich erreicht werden.",
-    avatar: "🗺️",
-    color: "#a6e3a1",
-    trigger: "calendar",
-    triggerDescription: "Prüft Termine an unterschiedlichen Standorten und plant optimale Wegezeiten.",
-    allowedPlugins: ["Calendar", "Notifications", "Instructions"],
-    pluginPermissions: {
-      Calendar: "allowed",
-      Notifications: "allowed",
-      Instructions: "allowed"
-    },
-    detailedPermissions: {
-      Calendar: { read: "yes", write: "yes" },
-      Mail: { read: "no", write: "no" },
-      Tasks: { read: "yes", write: "no" },
-      Memory: { read: "no", write: "no" },
-      Journal: { read: "no", write: "no" },
-      Projects: { read: "no", write: "no" },
-      AppLauncher: { read: "no", write: "no" },
-      Timer: { read: "yes", write: "yes" },
-      Notifications: { read: "yes", write: "yes" },
-      Instructions: { read: "yes", write: "yes" }
-    },
-    allowAllDynamicTools: true,
-    isEnabled: true,
-    isSystem: true
-  },
   default: {
     id: "default",
     name: "Haupt-Assistent (Web / App)",
@@ -373,7 +343,7 @@ export function getSettings(): Settings {
     disabledPlugins: [],
     disabledTools: [],
     autostart: false,
-    aiModel: "gemini-3.5-flash",
+    aiModel: "gemini-2.5-flash",
     agentSettings: { ...DEFAULT_AGENT_SETTINGS }
   };
   

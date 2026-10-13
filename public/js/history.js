@@ -21,33 +21,66 @@
 
 
 
+        const isMediaDropActive = (e) => {
+            if (document.body.classList.contains('view-photos') || document.body.classList.contains('view-docs') || document.body.classList.contains('view-media')) {
+                return true;
+            }
+            if (e && e.target && e.target.closest && (e.target.closest('#widget-photos') || e.target.closest('#widget-docs') || e.target.closest('.media-dashboard') || e.target.closest('#top-widgets-container'))) {
+                return true;
+            }
+            return false;
+        };
+
         document.addEventListener('dragenter', (e) => {
+            if (isMediaDropActive(e)) return;
             handleDrag(e);
-            dropZone.classList.add('active');
-        });
-
-
-
-        document.addEventListener('dragover', (e) => {
-            handleDrag(e);
-            dropZone.classList.add('active');
-        });
-
-
-
-        document.addEventListener('dragleave', (e) => {
-            handleDrag(e);
-            if (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
-                dropZone.classList.remove('active');
+            if (typeof dropZone !== 'undefined' && dropZone) {
+                dropZone.classList.add('active');
             }
         });
 
+        document.addEventListener('dragover', (e) => {
+            if (isMediaDropActive(e)) return;
+            handleDrag(e);
+            if (typeof dropZone !== 'undefined' && dropZone) {
+                dropZone.classList.add('active');
+            }
+        });
 
+        document.addEventListener('dragleave', (e) => {
+            if (isMediaDropActive(e)) return;
+            handleDrag(e);
+            if (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
+                if (typeof dropZone !== 'undefined' && dropZone) {
+                    dropZone.classList.remove('active');
+                }
+            }
+        });
 
         document.addEventListener('drop', async (e) => {
+            if (typeof dropZone !== 'undefined' && dropZone) {
+                dropZone.classList.remove('active');
+            }
+
+            // Wenn wir in Fotos oder Dokumenten sind, Drop direkt an die Medien-Verarbeitung weiterleiten
+            if (isMediaDropActive(e)) {
+                handleDrag(e);
+                const files = e.dataTransfer ? e.dataTransfer.files : null;
+                if (files && files.length > 0) {
+                    if (document.body.classList.contains('view-docs') || Boolean(document.querySelector('.docs-dashboard'))) {
+                        if (typeof handleDocsFilesSelected === 'function') {
+                            handleDocsFilesSelected(files);
+                        }
+                    } else {
+                        if (typeof handlePhotosFilesSelected === 'function') {
+                            handlePhotosFilesSelected(files);
+                        }
+                    }
+                }
+                return;
+            }
+
             handleDrag(e);
-            dropZone.classList.remove('active');
-            
             try {
                 const files = e.dataTransfer.files;
                 if (files.length > 0) {
@@ -64,7 +97,7 @@
                         modalFilePath.textContent = filePath;
                         namingModal.classList.add('active');
                         appNameInput.focus();
-                    } else {
+                    } else if (typeof dropZone !== 'undefined' && dropZone && dropZone.classList.contains('active')) {
                         alert("Bitte ziehe eine echte .EXE Datei direkt aus dem Explorer hierher.");
                     }
                 }
@@ -635,6 +668,17 @@
             }
 
             messages.forEach(msg => addMessage(msg.text, msg.role === 'user'));
+            if (currentConversationNotifications && currentConversationNotifications.length > 0) {
+                currentConversationNotifications.forEach(n => {
+                    if (!n._rendered && !n.isDismissed) {
+                        const card = createNotificationCardElement(n, id);
+                        if (card) {
+                            chatBox.appendChild(card);
+                            n._rendered = true;
+                        }
+                    }
+                });
+            }
             showSection('chat');
         }
 

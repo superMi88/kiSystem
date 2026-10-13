@@ -123,21 +123,37 @@
 
             // Otherwise fetch day data from API
             try {
-                widgetCalendar.innerHTML = `
-                    <div style="padding: 20px; text-align: center; color: var(--accent); font-size: 0.85rem;">
-                        <span style="display: inline-block; animation: spin 1s infinite linear;">⏳</span> Lade Kalender für ${dateStr}...
-                    </div>
-                `;
+                const hasExistingRender = !!widgetCalendar.querySelector('.calendar-timeline-root');
+                if (!hasExistingRender) {
+                    widgetCalendar.innerHTML = `
+                        <div style="padding: 20px; text-align: center; color: var(--accent); font-size: 0.85rem;">
+                            <span style="display: inline-block; animation: spin 1s infinite linear;">⏳</span> Lade Kalender für ${dateStr}...
+                        </div>
+                    `;
+                }
                 const res = await fetch(getApiUrl(`/api/calendar/timeline?start=${dateStr}&end=${dateStr}`));
                 if (res.ok) {
                     const data = await res.json();
-                    const dayItem = (data.days && data.days.length > 0) ? data.days[0] : {
-                        date: dateStr,
-                        events: [],
-                        diaryEntries: [],
-                        completedTasks: []
-                    };
                     window.calendarTimelineCache = window.calendarTimelineCache || {};
+                    if (data.days && Array.isArray(data.days)) {
+                        data.days.forEach(d => {
+                            if (d && d.date) {
+                                window.calendarTimelineCache[d.date] = d;
+                            }
+                        });
+                    }
+                    if (data.overdueTasks) {
+                        window.timelineOverdueTasks = data.overdueTasks;
+                    }
+
+                    const dayItem = (data.days && data.days.length > 0)
+                        ? (data.days.find(d => d.date === dateStr) || data.days[0])
+                        : {
+                            date: dateStr,
+                            events: [],
+                            diaryEntries: [],
+                            completedTasks: []
+                        };
                     window.calendarTimelineCache[dateStr] = dayItem;
                     renderVerticalDayTimeline(dateStr, dayItem, widgetCalendar);
                 }
@@ -217,6 +233,7 @@
             }
 
             const rawEvents = dayData.events || [];
+            window.eventsData = rawEvents;
             const diaryEntries = dayData.diaryEntries || [];
             const completedTasks = dayData.completedTasks || [];
             const overdueTasks = isToday ? (window.timelineOverdueTasks || dayData.overdueTasks || []) : [];
@@ -398,113 +415,18 @@
                         }
                     }
 
-                    // Pauses and travel times between events
-                    if (prevEventEndMs !== null && currStartMs !== null && currStartMs > prevEventEndMs) {
+                    // Pausen & Zeitüberschneidungen zwischen Terminen
+                    if (prevEventEndMs !== null && currStartMs !== null) {
                         const gapMinutes = Math.round((currStartMs - prevEventEndMs) / 60000);
-                        const locA = (prevEventLocation || '').trim();
-                        const locB = (!ev.isTask && ev.location ? ev.location : '').trim();
-                        const isLocChange = locA && locB && locA.toLowerCase() !== locB.toLowerCase();
 
-                        if (isLocChange && ev.travelMode) {
-                            const transitInfo = ev.travelTransitDetails;
-                            const travelMins = ev.travelDurationMinutes || 15;
-                            let travelStartMs = currStartMs - (travelMins * 60000);
-                            let travelEndMs = currStartMs;
+                        if (gapMinutes >= 3) {
+                            // Prüfe ob der anstehende Termin eine Wegezeit ist
+                            const isUpcomingTravel = !ev.isTask && (
+                                ev.isTravelTime || !!ev.travelMode ||
+                                /\b(fahrt|wegzeit|wegezeit|anreise|abreise|hinfahrt|rückfahrt|rueckfahrt|reise|zugfahrt|flug|heimweg)\b/i.test((ev.title || '').trim()) ||
+                                (ev.title && (ev.title.includes('🚗') || ev.title.includes('🚆') || ev.title.includes('🚲') || ev.title.includes('🚶') || ev.title.includes('✈️') || ev.title.includes('🗺️')))
+                            );
 
-                            if (transitInfo) {
-                                if (transitInfo.journeyStartDateTime) travelStartMs = new Date(transitInfo.journeyStartDateTime).getTime();
-                                if (transitInfo.journeyEndDateTime) travelEndMs = new Date(transitInfo.journeyEndDateTime).getTime();
-                            }
-
-                            const pauseBeforeTravel = Math.round((travelStartMs - prevEventEndMs) / 60000);
-                            if (pauseBeforeTravel >= 3) {
-                                const pStart = new Date(prevEventEndMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                                const pEnd = new Date(travelStartMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                                const isPPast = isPast || (isToday && nowMs >= travelStartMs);
-                                const isPCurr = isToday && nowMs >= prevEventEndMs && nowMs < travelStartMs;
-                                const pRemaining = isPCurr ? Math.max(0, Math.round((travelStartMs - nowMs) / 60000)) : 0;
-                                const pElapsed = isPCurr ? Math.max(0, Math.round((nowMs - prevEventEndMs) / 60000)) : 0;
-                                const pTotal = Math.max(1, pauseBeforeTravel);
-                                const pProgress = isPCurr ? Math.min(100, Math.max(5, Math.round((pElapsed / pTotal) * 100))) : 0;
-                                const pauseLabel = `Pause: ${pStart} – ${pEnd} Uhr (${pauseBeforeTravel} Min.)`;
-                                const pauseId = `pause_${pStart.replace(':', '')}_${pEnd.replace(':', '')}`;
-
-                                const pauseItemHtml = `
-                                    <div class="timeline-pause-row ${isPCurr ? 'is-current' : ''}">
-                                        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 6px;">
-                                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                                <span class="timeline-time-badge pause-time-badge">${pStart} – ${pEnd} Uhr</span>
-                                                <strong style="color: rgba(255,255,255,0.9); font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">${googleIcon('coffee', '13px', 'fill: #f9e2af;')} Pause vor Abreise (${pauseBeforeTravel} Min.)</strong>
-                                            </div>
-                                            ${isPCurr ? `<span class="timeline-active-badge pause-active-badge"><span class="active-pulse-dot"></span> Läuft gerade (${pProgress}% • noch ${pRemaining} Min.)</span>` : ''}
-                                        </div>
-                                    </div>
-                                `;
-
-                                html += `
-                                    <div class="timeline-step is-pause ${isPPast ? 'is-past' : (isPCurr ? 'is-current' : 'is-future')}">
-                                        <div class="timeline-step-indicator">
-                                            ${isPCurr ? `
-                                                <div class="timeline-step-line timeline-current-line" title="Pause läuft: ${pElapsed} von ${pTotal} Min">
-                                                    <div class="timeline-line-progress-fill pause-progress-fill" style="height: ${pProgress}%;"></div>
-                                                </div>
-                                            ` : `
-                                                <div class="timeline-step-line"></div>
-                                            `}
-                                        </div>
-                                        <div class="timeline-step-body">
-                                            ${renderSwipeLinkWrapper(pauseItemHtml, pauseLabel, 'pause', pauseId, 'pause-swipe-item', 'background: transparent; border: none; padding: 0;', 'margin-bottom: 0;')}
-                                        </div>
-                                    </div>
-                                `;
-                            }
-
-                            // Travel block
-                            const travelStartStr = new Date(travelStartMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                            const travelEndStr = new Date(travelEndMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                            const isTPast = isPast || (isToday && nowMs >= travelEndMs);
-                            const isTCurr = isToday && nowMs >= travelStartMs && nowMs < travelEndMs;
-                            const tElapsed = isTCurr ? Math.max(0, Math.round((nowMs - travelStartMs) / 60000)) : 0;
-                            const tTotal = Math.max(1, travelMins);
-                            const tProgress = isTCurr ? Math.min(100, Math.max(5, Math.round((tElapsed / tTotal) * 100))) : 0;
-                            const tRemaining = isTCurr ? Math.max(0, Math.round((travelEndMs - nowMs) / 60000)) : 0;
-
-                            const gMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(locA)}&destination=${encodeURIComponent(locB)}&travelmode=${ev.travelMode}`;
-                            const travelItemHtml = `
-                                <div class="arbeitstisch-item ${isTPast ? 'is-past' : ''} ${isTCurr ? 'is-current' : ''}">
-                                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                            <span class="timeline-time-badge travel-time-badge">${travelStartStr} – ${travelEndStr} Uhr</span>
-                                            <strong style="font-size: 0.8rem; color: #a6e3a1; display: inline-flex; align-items: center; gap: 4px;">${googleIcon('directions_bike', '14px', 'fill: #a6e3a1;')} Wegezeit nach ${escapeHtml(locB)}</strong>
-                                        </div>
-                                        <div style="display: flex; align-items: center; gap: 6px;">
-                                            <a href="${gMapsUrl}" target="_blank" rel="noopener" class="timeline-maps-btn" onclick="event.stopPropagation();" title="In Google Maps öffnen">
-                                                ${googleIcon('map', '12px', 'fill: currentColor;')} Maps ↗
-                                            </a>
-                                            ${isTCurr ? `<span class="timeline-active-badge travel-active-badge"><span class="active-pulse-dot"></span> Unterwegs (${tProgress}% • noch ${tRemaining} Min.)</span>` : ''}
-                                        </div>
-                                    </div>
-                                </div>
-                            `;
-
-                            html += `
-                                <div class="timeline-step is-travel ${isTPast ? 'is-past' : (isTCurr ? 'is-current' : 'is-future')}">
-                                    <div class="timeline-step-indicator">
-                                        ${isTCurr ? `
-                                            <div class="timeline-step-line timeline-current-line" title="Wegezeit läuft">
-                                                <div class="timeline-line-progress-fill travel-progress-fill" style="height: ${tProgress}%;"></div>
-                                            </div>
-                                        ` : `
-                                            <div class="timeline-step-line"></div>
-                                        `}
-                                    </div>
-                                    <div class="timeline-step-body">
-                                        ${renderSwipeLinkWrapper(travelItemHtml, 'Wegezeit', 'travel', String(ev.id), '', '', '')}
-                                    </div>
-                                </div>
-                            `;
-                        } else if (gapMinutes >= 15) {
-                            // Standard Pause
                             const pStart = new Date(prevEventEndMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
                             const pEnd = new Date(currStartMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
                             const isPPast = isPast || (isToday && nowMs >= currStartMs);
@@ -514,14 +436,28 @@
                             const pTotal = Math.max(1, gapMinutes);
                             const pProgress = isPCurr ? Math.min(100, Math.max(5, Math.round((pElapsed / pTotal) * 100))) : 0;
 
+                            const gapIcon = isUpcomingTravel ? googleIcon('schedule', '13px', 'fill: #f9e2af;') : googleIcon('coffee', '13px', 'fill: #f9e2af;');
+                            const gapTypeLabel = isUpcomingTravel ? 'Wartezeit / Puffer bis zur Abfahrt' : 'Pause';
+                            const pauseLabel = `${gapIcon} ${gapTypeLabel}: ${pStart} – ${pEnd} Uhr (${gapMinutes} Min.)`;
+                            const pauseId = `pause_${pStart.replace(':', '')}_${pEnd.replace(':', '')}_${gapMinutes}m`;
+
+                            const activeStatusText = isUpcomingTravel
+                                ? `Warten auf Abfahrt (${pProgress}% • noch ${pRemaining} Min.)`
+                                : `Läuft gerade (${pProgress}% • noch ${pRemaining} Min.)`;
+
                             const pauseItemHtml = `
                                 <div class="timeline-pause-row ${isPCurr ? 'is-current' : ''}">
                                     <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 6px;">
                                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                            <span class="timeline-time-badge pause-time-badge">${pStart} – ${pEnd} Uhr</span>
-                                            <strong style="color: rgba(255,255,255,0.85); font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">${googleIcon('coffee', '13px', 'fill: #f9e2af;')} Pause (${gapMinutes} Min.)</strong>
+                                            <span class="timeline-time-badge pause-time-badge start-time-badge">${pStart} Uhr</span>
+                                            <strong style="color: rgba(255,255,255,0.85); font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+                                                ${gapIcon} ${gapTypeLabel} (${gapMinutes} Min.)
+                                            </strong>
                                         </div>
-                                        ${isPCurr ? `<span class="timeline-active-badge pause-active-badge"><span class="active-pulse-dot"></span> Läuft gerade (${pProgress}% • noch ${pRemaining} Min.)</span>` : ''}
+                                        ${isPCurr ? `<span class="timeline-active-badge pause-active-badge"><span class="active-pulse-dot"></span> ${activeStatusText}</span>` : ''}
+                                    </div>
+                                    <div class="timeline-event-end-row" style="margin-top: 3px;">
+                                        <span class="timeline-time-badge pause-time-badge end-time-badge">${pEnd} Uhr</span>
                                     </div>
                                 </div>
                             `;
@@ -530,7 +466,7 @@
                                 <div class="timeline-step is-pause ${isPPast ? 'is-past' : (isPCurr ? 'is-current' : 'is-future')}">
                                     <div class="timeline-step-indicator">
                                         ${isPCurr ? `
-                                            <div class="timeline-step-line timeline-current-line" title="Pause läuft">
+                                            <div class="timeline-step-line timeline-current-line" title="${gapTypeLabel} läuft">
                                                 <div class="timeline-line-progress-fill pause-progress-fill" style="height: ${pProgress}%;"></div>
                                             </div>
                                         ` : `
@@ -538,7 +474,37 @@
                                         `}
                                     </div>
                                     <div class="timeline-step-body">
-                                        ${renderSwipeLinkWrapper(pauseItemHtml, 'Pause', 'pause', `pause_${pStart}`, 'pause-swipe-item', 'background: transparent; border: none; padding: 0;', 'margin-bottom: 0;')}
+                                        ${renderSwipeLinkWrapper(pauseItemHtml, pauseLabel, 'pause', pauseId, 'pause-swipe-item', 'background: transparent; border: none; padding: 0;', 'margin-bottom: 0;')}
+                                    </div>
+                                </div>
+                            `;
+                        } else if (gapMinutes < 0) {
+                            // Zeitüberschneidung zwischen Terminen
+                            const conflictMins = Math.abs(gapMinutes);
+                            const pStart = new Date(prevEventEndMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                            const pEnd = new Date(currStartMs).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                            const conflictTimeBadge = `<span class="timeline-time-badge conflict-time-badge">${pEnd} Uhr</span>`;
+                            const conflictHtml = `
+                                <div class="arbeitstisch-item" style="border: 1px solid rgba(243, 139, 168, 0.4); background: rgba(243, 139, 168, 0.12); padding: 7px 10px; border-radius: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                        ${conflictTimeBadge}
+                                        <div style="color: #f38ba8; font-weight: bold; font-size: 0.78rem; display: inline-flex; align-items: center; gap: 5px;">
+                                            ⚠️ Zeitüberschneidung (${conflictMins} Min.)
+                                        </div>
+                                    </div>
+                                    <div style="font-size: 0.72rem; color: #cdd6f4; margin-top: 3px;">
+                                        Beginn um <strong>${pEnd} Uhr</strong> überschneidet sich mit vorherigem Termin (Ende: <strong>${pStart} Uhr</strong>).
+                                    </div>
+                                </div>
+                            `;
+                            html += `
+                                <div class="timeline-step is-warning">
+                                    <div class="timeline-step-indicator">
+                                        <div class="timeline-step-line"></div>
+                                        <div class="timeline-step-dot" style="background: #f38ba8; color: #11111b; font-size: 10px; font-weight: bold;">!</div>
+                                    </div>
+                                    <div class="timeline-step-body">
+                                        ${conflictHtml}
                                     </div>
                                 </div>
                             `;
@@ -548,6 +514,12 @@
                     // Render Step Item (Event or Task)
                     let stepClass = 'timeline-step';
                     let statusBadgeHtml = '';
+
+                    const isTravelEvent = !ev.isTask && (
+                        ev.isTravelTime || !!ev.travelMode ||
+                        /\b(fahrt|wegzeit|wegezeit|anreise|abreise|hinfahrt|rückfahrt|rueckfahrt|reise|zugfahrt|flug|heimweg)\b/i.test((ev.title || '').trim()) ||
+                        (ev.title && (ev.title.includes('🚗') || ev.title.includes('🚆') || ev.title.includes('🚲') || ev.title.includes('🚶') || ev.title.includes('✈️') || ev.title.includes('🗺️')))
+                    );
 
                     if (isExpiredTask) {
                         stepClass += ' is-expired-task';
@@ -569,6 +541,7 @@
                     if (!ev.isTask) {
                         if (ev.isBirthday) stepClass += ' is-birthday';
                         if (ev.originalStart) stepClass += ' is-rescheduled';
+                        if (isTravelEvent) stepClass += ' is-travel';
                         if (ev.isCancelled) {
                             stepClass += ' is-cancelled';
                             statusBadgeHtml = '<span class="timeline-cancelled-badge">🚫 Fällt aus</span>';
@@ -612,17 +585,26 @@
                             });
                         }
 
+                        const taskDescText = ev.description ? `
+                            <div style="font-size: 0.72rem; opacity: 0.75; margin-top: 3px; line-height: 1.35; white-space: pre-wrap; word-break: break-word; color: #cdd6f4;">
+                                ${escapeHtml(ev.description)}
+                            </div>
+                        ` : '';
+
                         const taskContent = `
                             <div class="arbeitstisch-item is-task-item ${isDone ? 'is-past' : ''} ${isExpiredTask ? 'is-expired' : ''}">
-                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                        ${timeBadge}
-                                        <strong style="color: ${isDone ? '#a6e3a1' : (isExpiredTask ? 'var(--off)' : 'inherit')}; font-size: 0.8rem;">[Aufgabe]</strong>
-                                        <span style="font-weight: 600; font-size: 0.82rem; ${isDone ? 'text-decoration: line-through; opacity: 0.6;' : ''}">${escTitle}</span>
-                                        ${repeatBadge}
-                                        ${personsHtml}
+                                <div style="display: flex; flex-direction: column; gap: 2px; width: 100%;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                            ${timeBadge}
+                                            <strong style="color: ${isDone ? '#a6e3a1' : (isExpiredTask ? 'var(--off)' : 'inherit')}; font-size: 0.8rem;">[Aufgabe]</strong>
+                                            <span style="font-weight: 600; font-size: 0.82rem; ${isDone ? 'text-decoration: line-through; opacity: 0.6;' : ''}">${escTitle}</span>
+                                            ${repeatBadge}
+                                            ${personsHtml}
+                                        </div>
+                                        ${statusBadgeHtml}
                                     </div>
-                                    ${statusBadgeHtml}
+                                    ${taskDescText}
                                 </div>
                             </div>
                         `;
@@ -646,44 +628,140 @@
                         `;
                     } else {
                         // Calendar event
-                        let timeRangeStr = 'Ganztägig';
-                        if (!ev.isAllDay && (ev.time || ev.start)) {
-                            const sStr = new Date(ev.time || ev.start).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                            const eStr = (ev.endTime || ev.end) ? new Date(ev.endTime || ev.end).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
-                            timeRangeStr = eStr ? `${sStr} – ${eStr} Uhr` : `${sStr} Uhr`;
-                        }
+                        const escTitle = escapeHtml(ev.title || 'Termin');
+                        const isRec = ev.recurring || ev.isRecurring;
+                        const repeatBadge = isRec ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
+                        const rescheduleBadge = ev.originalStart ? ` <span style="background: rgba(249, 226, 175, 0.15); color: #f9e2af; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase;" title="Dieser Termin wurde verschoben">verschoben</span>` : '';
+                        const originalTimeText = ev.originalStart ? ` <span style="font-size: 0.68rem; opacity: 0.65; color: #f9e2af;">(ursprünglich: ${new Date(ev.originalStart).toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit'})} ${new Date(ev.originalStart).toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'})})</span>` : '';
+                        const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.7rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
+                        const inPlanningBadge = ev.isPlanned ? `<span style="font-size: 0.65rem; color: #f9e2af; font-weight: bold; background: rgba(249, 226, 175, 0.15); border: 1px solid rgba(249, 226, 175, 0.3); padding: 1px 5px; border-radius: 4px;">🟡 In Planung</span>` : '';
+                        const titleCancelStyle = ev.isCancelled ? 'color: var(--off); text-decoration: line-through;' : '';
+                        const rescheduleBorder = ev.originalStart ? 'border-left: 3px solid #f9e2af;' : '';
+                        const birthdayStyle = ev.isBirthday ? 'background: rgba(245, 194, 231, 0.08); border-color: rgba(245, 194, 231, 0.25); border-left: 3px solid #f5c2e7;' : '';
+                        const travelBadge = isTravelEvent ? `<span class="timeline-badge" style="background: rgba(166, 227, 161, 0.15); color: #a6e3a1; font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">🗺️ Wegezeit</span>` : '';
+                        const travelStyle = isTravelEvent ? 'background: rgba(166, 227, 161, 0.05); border-left: 3px solid #a6e3a1;' : '';
+
+                        const timeBadges = (typeof window.getEventTimeBadges === 'function')
+                            ? window.getEventTimeBadges(ev, dateStr)
+                            : { startBadge: `<span class="timeline-time-badge event-time-badge">Termin</span>`, endBadge: '' };
+                        const startBadge = timeBadges.startBadge;
+                        const endBadge = timeBadges.endBadge;
 
                         let personsHtml = '';
                         if (ev.persons && ev.persons.length > 0) {
                             ev.persons.forEach(p => {
-                                personsHtml += `<span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer;">👤 ${escapeHtml(p.name)}</span>`;
+                                personsHtml += `<span onclick="event.stopPropagation(); openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer;">👤 ${escapeHtml(p.name)}</span>`;
                             });
                         }
 
                         const occDateStr = ev.occurrenceDate || dateStr;
-                        const eventContent = `
-                            <div class="arbeitstisch-item ${evIsPast ? 'is-past' : ''} ${evIsCurrent ? 'is-current' : ''}">
-                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                        <span class="timeline-time-badge event-time-badge">${timeRangeStr}</span>
-                                        <strong class="arbeitstisch-item-title" style="font-size: 0.82rem; ${ev.isCancelled ? 'text-decoration: line-through; opacity: 0.6;' : ''}">${escapeHtml(ev.title || 'Termin')}</strong>
-                                        ${ev.recurring ? '🔄' : ''}
-                                        ${personsHtml}
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        ${statusBadgeHtml}
-                                        <button type="button" class="timeline-edit-btn" onclick="event.stopPropagation(); openEventDetailModal('${ev.id}', '${escapeHtml(ev.title)}', '${ev.time || ev.start || ''}', '${ev.endTime || ev.end || ''}', ${ev.isAllDay ? 'true' : 'false'}, '${escapeHtml(ev.description || '')}', ${ev.recurring ? 'true' : 'false'}, '${occDateStr}', false, '${escapeHtml(ev.location || '')}')" title="Termin-Details">
-                                            ✏️
-                                        </button>
+                        const descText = ev.description ? `
+                            <div class="timeline-event-description" style="font-size: 0.73rem; opacity: 0.85; margin-top: 5px; line-height: 1.4; color: #cdd6f4; white-space: pre-wrap; word-break: break-word;">
+                                ${escapeHtml(ev.description)}
+                            </div>
+                        ` : '';
+
+                        let eventContent = '';
+                        if (isTravelEvent) {
+                            const currentMode = ev.travelMode || (
+                                (ev.title && ev.title.includes('🚗')) ? 'driving' :
+                                (ev.title && (ev.title.includes('🚆') || /bahn|zug|s-bahn|s\d+/i.test(ev.title))) ? 'transit' :
+                                (ev.title && (ev.title.includes('🚲') || /rad|fahrrad/i.test(ev.title))) ? 'bicycling' :
+                                (ev.title && (ev.title.includes('🚶') || /fuß|fuss/i.test(ev.title))) ? 'walking' : 'transit'
+                            );
+
+                            let originLoc = (ev.travelOriginLocation || '').trim();
+                            let destLoc = (ev.location || '').trim();
+                            if (!destLoc && ev.title) {
+                                const clean = ev.title.replace(/^[🚗🚆🚲🚶✈️🗺️]\s*/, '').replace(/^(fahrt|anreise|hinfahrt|rückfahrt|rueckfahrt|reise|wegzeit|wegezeit)\s+(zu|nach|zum|zur)?\s*/i, '').trim();
+                                if (clean) destLoc = clean;
+                            }
+                            if (!originLoc) originLoc = 'Start';
+                            if (!destLoc) destLoc = 'Ziel';
+
+                            const gMapsUrl = (originLoc !== 'Start' || destLoc !== 'Ziel')
+                                ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originLoc === 'Start' ? '' : originLoc)}&destination=${encodeURIComponent(destLoc === 'Ziel' ? '' : destLoc)}&travelmode=${currentMode}`
+                                : '#';
+
+                            const switcherHtml = `
+                                <div class="travel-mode-switch-inline" onclick="event.stopPropagation()" style="display: inline-flex; align-items: center; gap: 3px; background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); margin-left: auto;">
+                                    <button type="button" class="mode-switch-btn ${currentMode === 'driving' ? 'active' : ''}" onclick="switchTravelEventMode('${ev.id}', 'driving')" title="Auto (Google Maps)">${googleIcon('directions_car', '13px', 'fill: #ffffff;')}</button>
+                                    <button type="button" class="mode-switch-btn ${currentMode === 'transit' ? 'active' : ''}" onclick="switchTravelEventMode('${ev.id}', 'transit')" title="Bahn / ÖPNV (Google Maps)">${googleIcon('train', '13px', 'fill: #ffffff;')}</button>
+                                    <button type="button" class="mode-switch-btn ${currentMode === 'bicycling' ? 'active' : ''}" onclick="switchTravelEventMode('${ev.id}', 'bicycling')" title="Fahrrad (Google Maps)">${googleIcon('directions_bike', '13px', 'fill: #ffffff;')}</button>
+                                    <button type="button" class="mode-switch-btn ${currentMode === 'walking' ? 'active' : ''}" onclick="switchTravelEventMode('${ev.id}', 'walking')" title="Zu Fuß (Google Maps)">${googleIcon('directions_walk', '13px', 'fill: #ffffff;')}</button>
+                                </div>
+                            `;
+
+                            let itineraryAccordion = '';
+                            if (typeof window.renderTransitItineraryHtml === 'function') {
+                                itineraryAccordion = window.renderTransitItineraryHtml(ev, originLoc, destLoc, ev.travelDurationMinutes || 0, gMapsUrl);
+                            }
+
+                            const timeBadge = (typeof window.getEventTimeBadge === 'function') ? window.getEventTimeBadge(ev) : startBadge;
+                            const durationInfo = ev.travelDurationMinutes ? `<span style="font-size: 0.72rem; color: #a6e3a1; font-weight: 500; white-space: nowrap;">(${ev.travelDurationMinutes} Min.${ev.travelDistanceText ? ' • ' + escapeHtml(ev.travelDistanceText) : ''})</span>` : '';
+
+                            eventContent = `
+                                <div class="arbeitstisch-item ${evIsPast ? 'is-past' : ''} ${evIsCurrent ? 'is-current' : ''}" 
+                                     onclick="openEventDetailModal('${ev.id}', '${escapeHtml(ev.title || 'Termin')}', '${ev.time || ev.start || ''}', '${ev.endTime || ev.end || ''}', ${!!ev.isAllDay}, '${ev.fuzzyTime || ''}', '${escapeHtml(ev.description || '')}', ${!!isRec}, '${occDateStr}', [], ${!!ev.isCancelled}, '${escapeHtml(ev.cancellationReason || '')}', '${escapeHtml(ev.location || '')}')" 
+                                     style="cursor: pointer; ${birthdayStyle} ${rescheduleBorder} ${travelStyle}">
+                                    <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0; width: 100%;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0;">
+                                                ${timeBadge}
+                                                <span class="travel-route-title" style="font-size: 0.82rem; font-weight: 600; color: #cdd6f4; display: inline-flex; align-items: center; gap: 5px; overflow: hidden; text-overflow: ellipsis;">
+                                                    <span>${escapeHtml(originLoc)}</span>
+                                                    <span style="color: #89b4fa; font-weight: bold;">→</span>
+                                                    <strong style="color: #ffffff;">${escapeHtml(destLoc)}</strong>
+                                                </span>
+                                                ${durationInfo}
+                                                ${repeatBadge}
+                                                ${rescheduleBadge}
+                                                ${originalTimeText}
+                                                ${reasonHtml}
+                                                ${inPlanningBadge}
+                                            </div>
+                                            ${switcherHtml}
+                                        </div>
+                                        ${itineraryAccordion}
                                     </div>
                                 </div>
-                                ${ev.location ? `
-                                    <div style="font-size: 0.72rem; color: #89b4fa; margin-top: 4px; display: flex; align-items: center; gap: 4px;">
-                                        ${googleIcon('location_on', '12px', 'fill: currentColor;')} ${escapeHtml(ev.location)}
+                            `;
+                        } else {
+                            eventContent = `
+                                <div class="arbeitstisch-item ${evIsPast ? 'is-past' : ''} ${evIsCurrent ? 'is-current' : ''}" 
+                                     onclick="openEventDetailModal('${ev.id}', '${escapeHtml(ev.title || 'Termin')}', '${ev.time || ev.start || ''}', '${ev.endTime || ev.end || ''}', ${!!ev.isAllDay}, '${ev.fuzzyTime || ''}', '${escapeHtml(ev.description || '')}', ${!!isRec}, '${occDateStr}', [], ${!!ev.isCancelled}, '${escapeHtml(ev.cancellationReason || '')}', '${escapeHtml(ev.location || '')}')" 
+                                     style="cursor: pointer; ${birthdayStyle} ${rescheduleBorder}">
+                                    <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; width: 100%;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                                ${startBadge}
+                                                <strong class="arbeitstisch-item-title" style="font-size: 0.82rem; ${titleCancelStyle}">${escTitle}</strong>
+                                                ${repeatBadge}
+                                                ${rescheduleBadge}
+                                                ${originalTimeText}
+                                                ${reasonHtml}
+                                                ${inPlanningBadge}
+                                            </div>
+                                        </div>
+                                        ${ev.location ? `
+                                            <div style="font-size: 0.72rem; color: #89b4fa; margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+                                                ${googleIcon('location_on', '12px', 'fill: currentColor;')}
+                                                <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ev.location)}" target="_blank" onclick="event.stopPropagation()" style="color: #89b4fa; text-decoration: underline;" title="Standort auf Google Maps anzeigen">
+                                                    ${escapeHtml(ev.location)}
+                                                </a>
+                                            </div>
+                                        ` : ''}
+                                        ${personsHtml ? `<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 3px;">${personsHtml}</div>` : ''}
+                                        ${descText}
+                                        ${endBadge ? `
+                                            <div class="timeline-event-end-row">
+                                                ${endBadge}
+                                            </div>
+                                        ` : ''}
                                     </div>
-                                ` : ''}
-                            </div>
-                        `;
+                                </div>
+                            `;
+                        }
 
                         const extraData = `data-event-id="${ev.id}" data-event-title="${escapeHtml(ev.title)}" data-event-start="${ev.time || ev.start || ''}" data-event-end="${ev.endTime || ev.end || ''}" data-event-allday="${ev.isAllDay ? 'true' : 'false'}" data-event-desc="${escapeHtml(ev.description || '')}" data-event-recurring="${ev.recurring ? 'true' : 'false'}" data-event-occ="${occDateStr}" data-event-location="${escapeHtml(ev.location || '')}"`;
 
@@ -898,31 +976,42 @@
         window.renderVerticalDayTimeline = renderVerticalDayTimeline;
 
         async function deleteCalendarEvent(eventId, occurrenceDate, isRecurring) {
-            const isRec = isRecurring === true || isRecurring === 'true';
-            let deleteType = 'single';
-            
-            if (isRec) {
-                const choice = confirm("Dies ist ein Serientermin.\n\nKlicke 'OK' um NUR DIESEN EINEN Termin am " + occurrenceDate + " zu löschen.\nKlicke 'Abbrechen', wenn du den Löschvorgang abbrechen möchtest.");
-                if (!choice) return;
-                deleteType = 'occurrence';
-            } else {
-                if (!confirm("Möchtest du diesen Termin wirklich löschen?")) return;
-            }
-
             try {
-                const args = { terminId: eventId };
-                if (deleteType === 'occurrence' && occurrenceDate) {
-                    args.datum = occurrenceDate;
+                const isRec = isRecurring === true || isRecurring === 'true';
+                const targetDate = occurrenceDate || window.currentCalendarDate || (typeof getLocalDateString === 'function' ? getLocalDateString() : new Date().toISOString().split('T')[0]);
+                let deleteType = 'single';
+                
+                if (isRec) {
+                    const choice = confirm("Dies ist ein Serientermin.\n\nKlicke 'OK' um NUR DIESEN EINEN Termin zu löschen.\nKlicke 'Abbrechen', um die GESAMTE SERIE zu löschen (oder ESC zum Abbrechen).");
+                    deleteType = choice ? 'occurrence' : 'series';
+                } else {
+                    if (!confirm("Möchtest du diesen Termin wirklich löschen?")) return;
                 }
-                await callTool('loesche_termin', args);
+
+                const args = {
+                    eventId: String(eventId),
+                    datum: targetDate,
+                    nurDiesesVorkommen: deleteType === 'occurrence'
+                };
+                const res = await callTool('loesche_termin', args);
+                if (res && res.status === 'error') {
+                    alert("Fehler beim Löschen des Termins: " + (res.message || 'Unbekannter Fehler'));
+                    return;
+                }
+
+                if (window.calendarTimelineCache) {
+                    delete window.calendarTimelineCache[targetDate];
+                    if (window.currentCalendarDate) delete window.calendarTimelineCache[window.currentCalendarDate];
+                }
                 if (typeof jumpToTimelineDate === 'function') {
-                    await jumpToTimelineDate(window.currentCalendarDate);
+                    await jumpToTimelineDate(window.currentCalendarDate || targetDate);
                 }
                 if (typeof loadTopWidgets === 'function') {
                     loadTopWidgets();
                 }
             } catch (e) {
                 console.error("Fehler beim Löschen des Termins:", e);
+                alert("Fehler beim Löschen des Termins: " + (e.message || e));
             }
         }
         window.deleteCalendarEvent = deleteCalendarEvent;

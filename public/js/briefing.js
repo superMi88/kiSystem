@@ -11,53 +11,51 @@
             const allActiveNotifs = allNotifications.filter(n => !n.isDismissed);
             const allHistoryNotifs = allNotifications.filter(n => n.isDismissed);
 
-            // 2. Build Agent Registry with Counts
+            // 2. Build Agent Registry with Counts (strictly the 3 canonical configured agents)
             const agentsMap = {};
+            const canonicalList = (typeof CANONICAL_AGENTS === 'object' && CANONICAL_AGENTS) ? CANONICAL_AGENTS : {
+                mail: { id: 'mail', name: 'E-Mail Agent', avatar: '✉️', color: '#fab387' },
+                discord: { id: 'discord', name: 'Discord Bot Agent', avatar: '🌐', color: '#89b4fa' },
+                default: { id: 'default', name: 'Haupt-Assistent (Web / App)', avatar: '🤖', color: '#cba6f7' }
+            };
 
-            // 2a. Add enabled agents from currentAgentSettings
-            if (typeof currentAgentSettings === 'object' && currentAgentSettings) {
-                for (const [key, conf] of Object.entries(currentAgentSettings)) {
-                    if (!conf || conf.isEnabled === false) continue;
-                    agentsMap[key] = {
-                        id: key,
-                        name: conf.name || key,
-                        avatar: (conf.avatar || '🤖').replace(/^\?\?$/, '🤖'),
-                        color: conf.color || '#89b4fa',
-                        activeCount: 0,
-                        historyCount: 0,
-                        totalCount: 0
-                    };
-                }
-            }
+            const sourceSettings = (typeof currentAgentSettings === 'object' && currentAgentSettings && Object.keys(currentAgentSettings).length > 0)
+                ? currentAgentSettings
+                : canonicalList;
 
-            // 2b. Map all notifications to agents & accumulate counts
+            // Strictly register the 3 configured agents:
+            ['mail', 'discord', 'default'].forEach(key => {
+                const conf = sourceSettings[key] || canonicalList[key];
+                if (!conf || conf.isEnabled === false) return;
+                agentsMap[key] = {
+                    id: key,
+                    name: conf.name || canonicalList[key].name,
+                    avatar: (conf.avatar || canonicalList[key].avatar || '🤖').replace(/^\?\?$/, '🤖'),
+                    color: conf.color || canonicalList[key].color || '#89b4fa',
+                    activeCount: 0,
+                    historyCount: 0,
+                    totalCount: 0
+                };
+            });
+
+            // 2b. Map all notifications strictly to the 3 canonical agents & accumulate counts
             allNotifications.forEach(n => {
                 const info = getNotifAgentInfo(n);
-                if (!agentsMap[info.id]) {
-                    agentsMap[info.id] = {
-                        id: info.id,
-                        name: info.name,
-                        avatar: info.avatar,
-                        color: info.color,
-                        activeCount: 0,
-                        historyCount: 0,
-                        totalCount: 0
-                    };
-                }
+                const targetId = agentsMap[info.id] ? info.id : 'default';
+                if (!agentsMap[targetId]) return;
+
                 if (n.isDismissed) {
-                    agentsMap[info.id].historyCount++;
+                    agentsMap[targetId].historyCount++;
                 } else {
-                    agentsMap[info.id].activeCount++;
+                    agentsMap[targetId].activeCount++;
                 }
-                agentsMap[info.id].totalCount++;
+                agentsMap[targetId].totalCount++;
             });
 
-            // 2c. Sort agents: Agents with active notifications first, then history, then name
-            const sortedAgents = Object.values(agentsMap).sort((a, b) => {
-                if (b.activeCount !== a.activeCount) return b.activeCount - a.activeCount;
-                if (b.totalCount !== a.totalCount) return b.totalCount - a.totalCount;
-                return a.name.localeCompare(b.name, 'de', { sensitivity: 'base' });
-            });
+            // 2c. Stable canonical order for filter pills: Mail, Discord, Haupt-Assistent
+            const sortedAgents = ['mail', 'discord', 'default']
+                .filter(k => Boolean(agentsMap[k]))
+                .map(k => agentsMap[k]);
 
             // 3. Current active filter & tab
             let currentFilter = window.currentBriefingAgentFilter || 'all';
@@ -142,12 +140,12 @@
                     </div>
 
                     <!-- Aktive Rückfragen Tab -->
-                    <div id="briefing-section-active" style="display: ${currentTab === 'active' ? 'flex' : 'none'}; flex-direction: column; gap: 12px;">
+                    <div id="briefing-section-active" style="display: ${currentTab === 'active' ? 'flex' : 'none'}; flex-direction: column; gap: 0;">
             `;
 
             if (filteredActiveNotifs.length > 0) {
                 filteredActiveNotifs.forEach(n => {
-                    html += getNotificationCardHtml(n);
+                    html += getNotificationCardHtml(n, null, true);
                 });
             } else if (currentFilter !== 'all') {
                 html += `
@@ -189,12 +187,12 @@
                     </div>
 
                     <!-- Historie / Erledigt Tab -->
-                    <div id="briefing-section-history" style="display: ${currentTab === 'history' ? 'flex' : 'none'}; flex-direction: column; gap: 12px;">
+                    <div id="briefing-section-history" style="display: ${currentTab === 'history' ? 'flex' : 'none'}; flex-direction: column; gap: 0;">
             `;
 
             if (filteredHistoryNotifs.length > 0) {
                 filteredHistoryNotifs.forEach(n => {
-                    html += getNotificationCardHtml(n);
+                    html += getNotificationCardHtml(n, null, true);
                 });
             } else if (currentFilter !== 'all') {
                 html += `

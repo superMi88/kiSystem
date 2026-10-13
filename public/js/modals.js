@@ -46,59 +46,6 @@
                 }
             }
 
-            // Travel / Transit Section
-            const travelSection = document.getElementById('event-detail-travel-section');
-            const travelContent = document.getElementById('event-detail-travel-content');
-            if (travelSection && travelContent) {
-                const foundEv = (window.eventsData || []).find(e => String(e.id) === String(eventId));
-                if (foundEv && foundEv.travelMode) {
-                    travelSection.style.display = 'block';
-                    const modeLabels = { driving: '🚗 Auto', transit: '🚆 Bahn / ÖPNV', bicycling: '🚲 Fahrrad', walking: '🚶 Zu Fuß' };
-                    const mLabel = modeLabels[foundEv.travelMode] || foundEv.travelMode;
-                    const travelMins = foundEv.travelDurationMinutes || 15;
-                    const originLoc = foundEv.travelOriginLocation || '';
-                    const destLoc = foundEv.location || location || '';
-                    const gMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originLoc)}&destination=${encodeURIComponent(destLoc)}&travelmode=${foundEv.travelMode}`;
-                    
-                    let timingDetailHtml = '';
-                    const detailTransit = foundEv.travelTransitDetails;
-                    if (detailTransit) {
-                        if (detailTransit.departureTime && detailTransit.arrivalTime) {
-                            timingDetailHtml += `
-                                <div style="margin-top: 4px; font-size: 0.74rem; color: #a6e3a1; display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap;">
-                                    <span>🚆 <strong>Abfahrt:</strong> ${escapeHtml(detailTransit.departureTime)} Uhr ${detailTransit.departureStop ? `(${escapeHtml(detailTransit.departureStop)})` : ''}</span>
-                                    <span>➔</span>
-                                    <span>🏁 <strong>Ankunft:</strong> ${escapeHtml(detailTransit.arrivalTime)} Uhr ${detailTransit.arrivalStop ? `(${escapeHtml(detailTransit.arrivalStop)})` : ''}</span>
-                                </div>
-                            `;
-                        }
-                        if (detailTransit.pauseBeforeMinutes !== undefined && detailTransit.pauseBeforeMinutes !== null) {
-                            timingDetailHtml += `
-                                <div style="margin-top: 4px; font-size: 0.72rem; color: #f9e2af; display: flex; gap: 8px; flex-wrap: wrap;">
-                                    <span>☕ <strong>Pause vorher:</strong> ${detailTransit.pauseBeforeMinutes} Min.</span>
-                                    ${detailTransit.pauseAfterMinutes !== undefined && detailTransit.pauseAfterMinutes !== null ? `<span>☕ <strong>Puffer nachher:</strong> ${detailTransit.pauseAfterMinutes} Min.</span>` : ''}
-                                </div>
-                            `;
-                        }
-                    }
-
-                    let inner = `
-                        <div style="font-size: 0.78rem; color: #cdd6f4; margin-bottom: 4px;">
-                            <strong>${mLabel}</strong> • ca. <strong>${travelMins} Min.</strong> ${foundEv.travelDistanceText ? `(${escapeHtml(foundEv.travelDistanceText)})` : ''}
-                            ${originLoc ? `<br><span style="color: #a6adc8; font-size: 0.72rem;">Startort: ${escapeHtml(originLoc)}</span>` : ''}
-                            ${timingDetailHtml}
-                        </div>
-                    `;
-                    if (foundEv.travelMode === 'transit' && window.renderTransitItineraryHtml) {
-                        inner += window.renderTransitItineraryHtml(foundEv, originLoc, destLoc, travelMins, gMapsUrl);
-                    }
-                    travelContent.innerHTML = inner;
-                } else {
-                    travelSection.style.display = 'none';
-                    travelContent.innerHTML = '';
-                }
-            }
-
             // Status box
             const statusBox = document.getElementById('event-detail-status-box');
             if (isCancelled) {
@@ -151,7 +98,11 @@
 
             document.getElementById('event-detail-delete-btn').onclick = () => {
                 closeEventDetailModal();
-                deleteCalendarEvent(eventId, occurrenceDate, isRecurring);
+                if (typeof window.deleteCalendarEvent === 'function') {
+                    window.deleteCalendarEvent(eventId, occurrenceDate, isRecurring);
+                } else if (typeof deleteCalendarEvent === 'function') {
+                    deleteCalendarEvent(eventId, occurrenceDate, isRecurring);
+                }
             };
 
             document.getElementById('event-detail-edit-btn').onclick = () => {
@@ -254,11 +205,25 @@
                 endTimeInput.value = '11:00';
             }
 
+            const delBtn = document.getElementById('event-edit-delete-btn');
+            if (delBtn) delBtn.style.display = eventId ? 'block' : 'none';
+
             modal.style.display = 'block';
             document.body.classList.add('modal-active');
         };
 
-
+        window.deleteEventFromEditModal = function() {
+            const eventId = document.getElementById('event-edit-id').value;
+            const occDate = document.getElementById('event-edit-occurrence-date').value;
+            const isRec = document.getElementById('event-edit-is-rec').value === 'true';
+            if (!eventId) return;
+            closeEventEditModal();
+            if (typeof window.deleteCalendarEvent === 'function') {
+                window.deleteCalendarEvent(eventId, occDate, isRec);
+            } else if (typeof deleteCalendarEvent === 'function') {
+                deleteCalendarEvent(eventId, occDate, isRec);
+            }
+        };
 
         window.closeEventEditModal = function() {
             const modal = document.getElementById('event-edit-modal');
@@ -336,7 +301,7 @@
 
 
 
-        window.selectEventTravelMode = async function(eventId, fromLocation, travelMode) {
+        window.switchTravelEventMode = async function(eventId, travelMode) {
             try {
                 const cleanId = String(eventId).replace('rec-', '');
                 const numericId = Number(cleanId);
@@ -344,37 +309,139 @@
                     alert("Ungültige Termin-ID.");
                     return;
                 }
-                const foundEv = (window.eventsData || []).find(e => String(e.id) === String(eventId));
-                const res = await fetch(getApiUrl('/api/routes/select-mode'), {
+
+                // Visual button feedback immediately
+                const clickedBtns = document.querySelectorAll(`[onclick*="switchTravelEventMode('${eventId}'"][onclick*="'${travelMode}'"], [onclick*="selectEventTravelMode('${eventId}'"][onclick*="'${travelMode}'"]`);
+                clickedBtns.forEach(btn => {
+                    if (btn.parentElement) {
+                        btn.parentElement.querySelectorAll('.mode-switch-btn, .route-choice-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                    }
+                });
+
+                const res = await fetch(getApiUrl('/api/routes/switch-travel-event-mode'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         eventId: numericId,
-                        fromLocation,
-                        travelMode,
-                        targetEventStart: foundEv ? (foundEv.start || foundEv.time) : undefined
+                        travelMode
                     })
                 });
                 const data = await res.json();
                 if (data.success) {
-                    loadTopWidgets();
+                    const targetDate = window.currentCalendarDate || (typeof getLocalDateString === 'function' ? getLocalDateString() : new Date().toISOString().split('T')[0]);
+                    if (window.calendarTimelineCache) {
+                        delete window.calendarTimelineCache[targetDate];
+                    }
+                    if (typeof jumpToTimelineDate === 'function') {
+                        await jumpToTimelineDate(targetDate);
+                    }
+                    if (typeof loadTopWidgets === 'function') {
+                        loadTopWidgets();
+                    }
                 } else {
-                    alert("Fehler beim Speichern der Route: " + (data.error || 'Unbekannter Fehler'));
+                    alert("Fehler beim Wechseln des Reisemittels: " + (data.error || 'Unbekannter Fehler'));
                 }
             } catch (err) {
-                console.error("Fehler bei selectEventTravelMode:", err);
+                console.error("Fehler bei switchTravelEventMode:", err);
                 alert("Verbindungsfehler beim Berechnen der Route.");
             }
         };
+        window.selectEventTravelMode = window.switchTravelEventMode;
 
 
 
         window.renderTransitItineraryHtml = function(ev, locA, locB, travelMins, gMapsUrl) {
-            const transitInfo = ev.travelTransitDetails;
+            let transitInfo = ev.travelTransitDetails;
+            try {
+                if (typeof transitInfo === 'string') transitInfo = JSON.parse(transitInfo);
+            } catch (_) {}
+
+            const currentMode = ev.travelMode || (
+                (ev.title && ev.title.includes('🚗')) ? 'driving' :
+                (ev.title && (ev.title.includes('🚆') || /bahn|zug|s-bahn|s\d+/i.test(ev.title))) ? 'transit' :
+                (ev.title && (ev.title.includes('🚲') || /rad|fahrrad/i.test(ev.title))) ? 'bicycling' :
+                (ev.title && (ev.title.includes('🚶') || /fuß|fuss/i.test(ev.title))) ? 'walking' : 'transit'
+            );
+
+            const originName = locA || ev.travelOriginLocation || 'Start';
+            const destName = locB || ev.location || 'Ziel';
+            const distText = ev.travelDistanceText ? ` • Distanz: <strong>${escapeHtml(ev.travelDistanceText)}</strong>` : '';
+
+            if (currentMode === 'driving') {
+                return `
+                    <details class="travel-transit-accordion" onclick="event.stopPropagation()">
+                        <summary class="travel-transit-summary" onclick="event.stopPropagation()">
+                            <div class="travel-transit-summary-title">
+                                <span style="font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">${googleIcon('directions_car', '13px', 'fill: #ffffff;')} Route & Details anzeigen</span>
+                            </div>
+                            <span class="transit-toggle-arrow">▾</span>
+                        </summary>
+                        <div class="travel-transit-body">
+                            <div style="font-size: 0.73rem; color: #a6adc8; padding: 4px 0 6px 0; line-height: 1.4;">
+                                Fahrt mit dem Auto von <strong>${escapeHtml(originName)}</strong> nach <strong>${escapeHtml(destName)}</strong>.<br>
+                                Fahrzeit: ca. <strong>${travelMins} Min.</strong>${distText}
+                            </div>
+                            <div style="margin-top: 6px;">
+                                <a href="${gMapsUrl}" target="_blank" class="travel-maps-btn" style="display: inline-flex;">
+                                    🗺️ In Google Maps öffnen ↗
+                                </a>
+                            </div>
+                        </div>
+                    </details>
+                `;
+            }
+
+            if (currentMode === 'bicycling') {
+                return `
+                    <details class="travel-transit-accordion" onclick="event.stopPropagation()">
+                        <summary class="travel-transit-summary" onclick="event.stopPropagation()">
+                            <div class="travel-transit-summary-title">
+                                <span style="font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">${googleIcon('directions_bike', '13px', 'fill: #ffffff;')} Route & Details anzeigen</span>
+                            </div>
+                            <span class="transit-toggle-arrow">▾</span>
+                        </summary>
+                        <div class="travel-transit-body">
+                            <div style="font-size: 0.73rem; color: #a6adc8; padding: 4px 0 6px 0; line-height: 1.4;">
+                                Fahrradroute von <strong>${escapeHtml(originName)}</strong> nach <strong>${escapeHtml(destName)}</strong>.<br>
+                                Fahrzeit: ca. <strong>${travelMins} Min.</strong>${distText}
+                            </div>
+                            <div style="margin-top: 6px;">
+                                <a href="${gMapsUrl}" target="_blank" class="travel-maps-btn" style="display: inline-flex;">
+                                    🗺️ In Google Maps öffnen ↗
+                                </a>
+                            </div>
+                        </div>
+                    </details>
+                `;
+            }
+
+            if (currentMode === 'walking') {
+                return `
+                    <details class="travel-transit-accordion" onclick="event.stopPropagation()">
+                        <summary class="travel-transit-summary" onclick="event.stopPropagation()">
+                            <div class="travel-transit-summary-title">
+                                <span style="font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">${googleIcon('directions_walk', '13px', 'fill: #ffffff;')} Route & Details anzeigen</span>
+                            </div>
+                            <span class="transit-toggle-arrow">▾</span>
+                        </summary>
+                        <div class="travel-transit-body">
+                            <div style="font-size: 0.73rem; color: #a6adc8; padding: 4px 0 6px 0; line-height: 1.4;">
+                                Fußweg von <strong>${escapeHtml(originName)}</strong> nach <strong>${escapeHtml(destName)}</strong>.<br>
+                                Gehzeit: ca. <strong>${travelMins} Min.</strong>${distText}
+                            </div>
+                            <div style="margin-top: 6px;">
+                                <a href="${gMapsUrl}" target="_blank" class="travel-maps-btn" style="display: inline-flex;">
+                                    🗺️ In Google Maps öffnen ↗
+                                </a>
+                            </div>
+                        </div>
+                    </details>
+                `;
+            }
+
+            // Transit / Bahn
             if (transitInfo && Array.isArray(transitInfo.steps) && transitInfo.steps.length > 0) {
-                const linesStr = (transitInfo.lines || []).join(' • ');
-                const transferCount = transitInfo.transfersCount || 0;
-                const transferText = transferCount === 0 ? 'Direktverbindung' : (transferCount === 1 ? '1 Umstieg' : `${transferCount} Umstiege`);
                 const depStr = transitInfo.departureTime ? `Abfahrt: ${escapeHtml(transitInfo.departureTime)} Uhr` : '';
                 const arrStr = transitInfo.arrivalTime ? `Ankunft: ${escapeHtml(transitInfo.arrivalTime)} Uhr` : '';
 
@@ -443,11 +510,9 @@
 
                 return `
                     <details class="travel-transit-accordion" onclick="event.stopPropagation()">
-                        <summary class="travel-transit-summary">
+                        <summary class="travel-transit-summary" onclick="event.stopPropagation()">
                             <div class="travel-transit-summary-title">
-                                <span style="font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">${googleIcon('train', '14px', 'fill: #89b4fa;')} Bahnverlauf & Umstiege anzeigen</span>
-                                <span class="transit-summary-badge">${transferText}</span>
-                                ${linesStr ? `<span class="transit-summary-lines">${escapeHtml(linesStr)}</span>` : ''}
+                                <span style="font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">${googleIcon('train', '13px', 'fill: #ffffff;')} Bahnverlauf anzeigen</span>
                             </div>
                             <span class="transit-toggle-arrow">▾</span>
                         </summary>
@@ -456,11 +521,16 @@
                                 ${depStr ? `<span style="display: inline-flex; align-items: center; gap: 3px;">${googleIcon('location_on', '11px', 'fill: #a6e3a1;')} ${depStr} ${transitInfo.departureStop ? '(' + escapeHtml(transitInfo.departureStop) + ')' : ''}</span>` : ''}
                                 ${arrStr ? `<span style="display: inline-flex; align-items: center; gap: 3px;">${googleIcon('home_pin', '11px', 'fill: #f38ba8;')} ${arrStr} ${transitInfo.arrivalStop ? '(' + escapeHtml(transitInfo.arrivalStop) + ')' : ''}</span>` : ''}
                                 <span style="display: inline-flex; align-items: center; gap: 3px;">${googleIcon('verified', '11px', 'fill: #89b4fa;')} Ca. ${travelMins} Min. Fahrzeit</span>
-                                ${transitInfo.pauseBeforeMinutes !== undefined && transitInfo.pauseBeforeMinutes !== null ? `<span style="display: inline-flex; align-items: center; gap: 3px; color: #f9e2af;">${googleIcon('coffee', '11px', 'fill: #f9e2af;')} ${transitInfo.pauseBeforeMinutes} Min. Pause vorher</span>` : ''}
+                                ${transitInfo.pauseBeforeMinutes !== undefined && transitInfo.pauseBeforeMinutes !== null && transitInfo.pauseBeforeMinutes > 0 && transitInfo.pauseBeforeMinutes <= 240 ? `<span style="display: inline-flex; align-items: center; gap: 3px; color: #f9e2af;">${googleIcon('coffee', '11px', 'fill: #f9e2af;')} ${transitInfo.pauseBeforeMinutes} Min. Pause vorher</span>` : ''}
                                 ${transitInfo.pauseAfterMinutes !== undefined && transitInfo.pauseAfterMinutes !== null ? `<span style="display: inline-flex; align-items: center; gap: 3px; color: #a6e3a1;">${googleIcon('coffee', '11px', 'fill: #a6e3a1;')} ${transitInfo.pauseAfterMinutes} Min. Puffer nachher</span>` : ''}
                             </div>
                             <div class="transit-steps-list">
                                 ${stepsHtml}
+                            </div>
+                            <div style="margin-top: 8px;">
+                                <a href="${gMapsUrl}" target="_blank" class="travel-maps-btn" style="display: inline-flex;">
+                                    🗺️ In Google Maps öffnen ↗
+                                </a>
                             </div>
                         </div>
                     </details>
@@ -468,21 +538,22 @@
             } else {
                 return `
                     <details class="travel-transit-accordion" onclick="event.stopPropagation()">
-                        <summary class="travel-transit-summary">
+                        <summary class="travel-transit-summary" onclick="event.stopPropagation()">
                             <div class="travel-transit-summary-title">
-                                <span style="font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">${googleIcon('train', '14px', 'fill: #89b4fa;')} Bahnverlauf & Abfahrten anzeigen</span>
-                                <span class="transit-summary-badge">Bahn / ÖPNV</span>
+                                <span style="font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">${googleIcon('train', '13px', 'fill: #ffffff;')} Bahnverlauf anzeigen</span>
                             </div>
                             <span class="transit-toggle-arrow">▾</span>
                         </summary>
                         <div class="travel-transit-body">
-                            <div style="font-size: 0.73rem; color: #a6adc8; padding: 4px 0 8px 0; line-height: 1.4;">
-                                Verbindung von <strong>${escapeHtml(locA)}</strong> nach <strong>${escapeHtml(locB)}</strong>.<br>
-                                Gesamtreisezeit: ca. <strong>${travelMins} Min.</strong>
+                            <div style="font-size: 0.73rem; color: #a6adc8; padding: 4px 0 6px 0; line-height: 1.4;">
+                                Verbindung von <strong>${escapeHtml(originName)}</strong> nach <strong>${escapeHtml(destName)}</strong>.<br>
+                                Gesamtreisezeit: ca. <strong>${travelMins} Min.</strong>${distText}
                             </div>
-                            <a href="${gMapsUrl}" target="_blank" class="travel-maps-btn" style="display: inline-flex;">
-                                🗺️ Live-Verbindung auf Google Maps ansehen ↗
-                            </a>
+                            <div style="margin-top: 6px;">
+                                <a href="${gMapsUrl}" target="_blank" class="travel-maps-btn" style="display: inline-flex;">
+                                    🗺️ In Google Maps öffnen ↗
+                                </a>
+                            </div>
                         </div>
                     </details>
                 `;
@@ -944,6 +1015,22 @@
                     jumpToTimelineDate(id);
                 } else if (type === 'pause' || type === 'travel') {
                     focusWidget('dashboard');
+                } else if (type === 'media' || type === 'file') {
+                    const res = await fetch(getApiUrl(`/api/media/${id}`));
+                    if (res.ok) {
+                        const item = await res.json();
+                        const isImg = item.fileType?.startsWith('image/') || /\.(jpe?g|png|gif|webp|svg)$/i.test(item.fileName || '');
+                        if (isImg && typeof openMediaLightbox === 'function') {
+                            window.currentLightboxImages = [item];
+                            openMediaLightbox(0);
+                        } else if (typeof openMediaEditModal === 'function') {
+                            openMediaEditModal(item.id);
+                        } else {
+                            window.open(item.url || `/uploads/${item.fileName}`, '_blank');
+                        }
+                    } else {
+                        alert("Datei konnte nicht geladen werden.");
+                    }
                 }
             } catch (err) {
                 console.error("Fehler beim Verarbeiten des Entity-Klicks:", err);
@@ -974,7 +1061,9 @@
             const fallbackEntityConfigs = {
                 day: { icon: '📅', color: 'rgba(137, 180, 250, 0.15)', borderColor: '#89b4fa' },
                 pause: { icon: '☕', color: 'rgba(249, 226, 175, 0.15)', borderColor: '#f9e2af' },
-                travel: { icon: '🗺️', color: 'rgba(166, 227, 161, 0.15)', borderColor: '#a6e3a1' }
+                travel: { icon: '🗺️', color: 'rgba(166, 227, 161, 0.15)', borderColor: '#a6e3a1' },
+                media: { icon: '📁', color: 'rgba(249, 226, 175, 0.15)', borderColor: '#f9e2af' },
+                file: { icon: '📁', color: 'rgba(249, 226, 175, 0.15)', borderColor: '#f9e2af' }
             };
             const config = entityConfigs[type] || fallbackEntityConfigs[type] || { icon: '🔗', color: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' };
             pill.style.background = config.color;
@@ -1058,6 +1147,9 @@
             personNewFactCat = document.getElementById('person-new-fact-cat');
             personMergeTargetSelect = document.getElementById('person-merge-target-select');
             personProfileMemories = document.getElementById('person-profile-memories');
+            if (typeof loadAgentSettings === 'function') {
+                loadAgentSettings();
+            }
             if (typeof loadSettings === 'function') {
                 loadSettings();
             } else {
@@ -1217,6 +1309,16 @@
                         `;
                         personProfileMemories.appendChild(item);
                     });
+                }
+
+                // Orte & Adressen der Person laden
+                if (typeof loadPersonLocationsIntoModal === 'function') {
+                    loadPersonLocationsIntoModal(person.id);
+                }
+
+                // Fotos & Dokumente der Person laden
+                if (typeof loadPersonMediaIntoModal === 'function') {
+                    loadPersonMediaIntoModal(person.id);
                 }
 
                 personProfileModal.style.display = 'block';
@@ -1692,31 +1794,39 @@
 
 
 
-        async function loadAgentSettingsUI() {
-            const container = document.getElementById('agent-settings-container');
-            if (!container) return;
-            container.innerHTML = '<div style="text-align: center; padding: 12px; color: #a6adc8; font-size: 0.8rem;">Lade Agenten-Einstellungen...</div>';
-
+        async function loadAgentSettings() {
             try {
                 const res = await fetch(getApiUrl('/settings/agents'));
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 currentAgentSettings = data.agentSettings || {};
-                availablePluginsForAgents = data.plugins || [];
-                availableTriggersForAgents = data.availableTriggers || [
-                    { id: "mail", name: "E-Mail empfangen", badge: "E-MAIL", color: "#fab387", bg: "rgba(250, 179, 135, 0.15)", icon: "✉️", description: "Startet automatisch bei jeder neu synchronisierten E-Mail." },
-                    { id: "discord", name: "Discord Bot Ping / Erwähnung", badge: "DISCORD", color: "#89b4fa", bg: "rgba(137, 180, 250, 0.15)", icon: "🌐", description: "Startet bei Erwähnung des Bots im Discord-Server." },
-                    { id: "manual", name: "Manueller Start / Chat-App", badge: "MANUELL", color: "#cba6f7", bg: "rgba(203, 166, 247, 0.15)", icon: "💬", description: "Wird vom Benutzer manuell im Chat aufgerufen." },
-                    { id: "webhook", name: "Externer Webhook / REST-API", badge: "WEBHOOK", color: "#a6e3a1", bg: "rgba(166, 227, 161, 0.15)", icon: "⚡", description: "Wird über HTTP POST an /api/agent-runs/trigger ausgelöst." },
-                    { id: "calendar", name: "Kalender & Termine", badge: "KALENDER", color: "#94e2d5", bg: "rgba(148, 226, 213, 0.15)", icon: "📅", description: "Wird bei Kalenderereignissen oder Terminerinnerungen aktiv." },
-                    { id: "task", name: "Aufgaben & Fälligkeiten", badge: "AUFGABEN", color: "#f9e2af", bg: "rgba(249, 226, 175, 0.15)", icon: "✅", description: "Wird bei fälligen To-Dos aufgerufen." },
-                    { id: "schedule", name: "Zeitplan / Intervall (Cron)", badge: "ZEITPLAN", color: "#f5c2e7", bg: "rgba(245, 194, 231, 0.15)", icon: "⏱️", description: "Wird zyklisch im Hintergrund ausgeführt." }
-                ];
-
-                renderAgentSettingsCards();
+                window.currentAgentSettings = currentAgentSettings;
+                if (data.plugins) availablePluginsForAgents = data.plugins;
+                if (data.availableTriggers) availableTriggersForAgents = data.availableTriggers;
+                return currentAgentSettings;
             } catch (err) {
                 console.warn('Fehler beim Laden der Agenten-Einstellungen:', err);
-                container.innerHTML = '<div style="color: #f38ba8; font-size: 0.8rem; padding: 10px;">Konnte Agenten-Einstellungen nicht laden.</div>';
+                return currentAgentSettings;
+            }
+        }
+        window.loadAgentSettings = loadAgentSettings;
+
+        async function loadAgentSettingsUI() {
+            const container = document.getElementById('agent-settings-container');
+            if (container) {
+                container.innerHTML = '<div style="text-align: center; padding: 12px; color: #a6adc8; font-size: 0.8rem;">Lade Agenten-Einstellungen...</div>';
+            }
+
+            try {
+                await loadAgentSettings();
+                if (container) {
+                    renderAgentSettingsCards();
+                }
+            } catch (err) {
+                console.warn('Fehler beim Laden der Agenten-Einstellungen:', err);
+                if (container) {
+                    container.innerHTML = '<div style="color: #f38ba8; font-size: 0.8rem; padding: 10px;">Konnte Agenten-Einstellungen nicht laden.</div>';
+                }
             }
         }
 
@@ -2742,7 +2852,7 @@
             const autostart = autostartCheckbox ? autostartCheckbox.checked : false;
 
             const modelSelect = document.getElementById('settings-ai-model');
-            const aiModel = modelSelect ? modelSelect.value : 'gemini-3.5-flash';
+            const aiModel = modelSelect ? modelSelect.value : 'gemini-2.5-flash';
             
             try {
                 const res = await fetch(getApiUrl('/settings'), {
@@ -3002,24 +3112,43 @@
 
 
         window.deleteCalendarEvent = async function(eventId, datum, isRecurring) {
-            if (isRecurring) {
-                const cancelOccurrence = confirm(
-                    "Möchtest du NUR DIESES EINE VORKOMMEN löschen?\n\n" +
-                    "(Klicke 'OK' für nur dieses Vorkommen, oder 'Abbrechen' für die GESAMTE SERIE)"
-                );
-                
-                if (cancelOccurrence) {
-                    await callTool('loesche_termin', { eventId, datum, nurDiesesVorkommen: true });
+            try {
+                if (!eventId) {
+                    alert("Keine Termin-ID übergeben.");
+                    return;
+                }
+                const targetDate = datum || window.currentCalendarDate || (typeof getLocalDateString === 'function' ? getLocalDateString() : new Date().toISOString().split('T')[0]);
+                const isRec = isRecurring === true || isRecurring === 'true' || String(eventId).startsWith('rec-');
+                let nurDiesesVorkommen = false;
+
+                if (isRec) {
+                    const cancelOccurrence = confirm(
+                        "Dies ist ein Serientermin.\n\nKlicke 'OK' um NUR DIESES EINE Vorkommen zu löschen.\nKlicke 'Abbrechen', um die GESAMTE SERIE zu löschen (oder ESC zum Abbrechen)."
+                    );
+                    nurDiesesVorkommen = cancelOccurrence;
                 } else {
-                    const deleteSeries = confirm("Möchtest du wirklich die GESAMTE SERIE löschen?");
-                    if (deleteSeries) {
-                        await callTool('loesche_termin', { eventId, datum, nurDiesesVorkommen: false });
-                    }
+                    if (!confirm("Möchtest du diesen Termin wirklich löschen?")) return;
                 }
-            } else {
-                if (confirm("Möchtest du diesen Termin wirklich löschen?")) {
-                    await callTool('loesche_termin', { eventId, datum, nurDiesesVorkommen: false });
+
+                const res = await callTool('loesche_termin', { eventId: String(eventId), datum: targetDate, nurDiesesVorkommen });
+                if (res && res.status === 'error') {
+                    alert("Fehler beim Löschen des Termins: " + (res.message || 'Unbekannter Fehler'));
+                    return;
                 }
+
+                if (window.calendarTimelineCache) {
+                    delete window.calendarTimelineCache[targetDate];
+                    if (window.currentCalendarDate) delete window.calendarTimelineCache[window.currentCalendarDate];
+                }
+                if (typeof jumpToTimelineDate === 'function') {
+                    await jumpToTimelineDate(window.currentCalendarDate || targetDate);
+                }
+                if (typeof loadTopWidgets === 'function') {
+                    loadTopWidgets();
+                }
+            } catch (err) {
+                console.error("Fehler beim Löschen des Termins:", err);
+                alert("Fehler beim Löschen des Termins: " + (err.message || err));
             }
         };
 

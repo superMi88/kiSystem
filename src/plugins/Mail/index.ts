@@ -1,7 +1,6 @@
 import { Plugin, PluginAlert } from "../types.js";
 import { SchemaType } from "@google/generative-ai";
 import { MailService } from "./service.js";
-import { checkTripRealtime, lookupStationEva } from "./dbBahnService.js";
 
 export const mailPlugin: Plugin = {
   name: "Mail",
@@ -190,7 +189,12 @@ export const mailPlugin: Plugin = {
           properties: {
             mailId: { type: SchemaType.INTEGER, description: "Die ID der E-Mail, auf die geantwortet werden soll." },
             nachricht: { type: SchemaType.STRING, description: "Der Text der Antwortnachricht." },
-            betreff: { type: SchemaType.STRING, description: "Optionaler abweichender Betreff (standardmäßig wird 'Re: <Originalbetreff>' verwendet)." }
+            betreff: { type: SchemaType.STRING, description: "Optionaler abweichender Betreff (standardmäßig wird 'Re: <Originalbetreff>' verwendet)." },
+            anhaenge: {
+              type: SchemaType.ARRAY,
+              description: "Optionale Dateinamen oder Pfade von anzuhängenden Dokumenten/Dateien (z.B. ['Anschreiben_Vorlage.txt'])",
+              items: { type: SchemaType.STRING }
+            }
           },
           required: ["mailId", "nachricht"]
         } as any
@@ -216,7 +220,8 @@ export const mailPlugin: Plugin = {
             subject: replySubject,
             body: args.nachricht,
             inReplyTo: mail.messageId || undefined,
-            references: mail.messageId || undefined
+            references: mail.messageId || undefined,
+            attachments: args.anhaenge || undefined
           },
           prisma
         );
@@ -242,7 +247,12 @@ export const mailPlugin: Plugin = {
             kontoId: { type: SchemaType.INTEGER, description: "ID des Absender-Kontos (siehe Kontoverwaltung)." },
             empfaenger: { type: SchemaType.STRING, description: "E-Mail-Adresse des Empfängers." },
             betreff: { type: SchemaType.STRING, description: "Betreff der Nachricht." },
-            nachricht: { type: SchemaType.STRING, description: "Textinhalt der Nachricht." }
+            nachricht: { type: SchemaType.STRING, description: "Textinhalt der Nachricht." },
+            anhaenge: {
+              type: SchemaType.ARRAY,
+              description: "Optionale Dateinamen oder Pfade von anzuhängenden Dokumenten/Dateien (z.B. ['Anschreiben_Vorlage.txt'])",
+              items: { type: SchemaType.STRING }
+            }
           },
           required: ["kontoId", "empfaenger", "betreff", "nachricht"]
         } as any
@@ -254,7 +264,8 @@ export const mailPlugin: Plugin = {
           {
             to: args.empfaenger,
             subject: args.betreff,
-            body: args.nachricht
+            body: args.nachricht,
+            attachments: args.anhaenge || undefined
           },
           prisma
         );
@@ -330,49 +341,6 @@ export const mailPlugin: Plugin = {
         }
 
         throw new Error(`Unbekannte Aktion: ${args.aktion}`);
-      }
-    },
-    {
-      definition: {
-        name: "pruefe_zug_status",
-        description: "Prüft den Live-Fahrplan, Verspätung und das Abfahrtsgleis eines Zugs an einem bestimmten Bahnhof über die bahn.expert-Echtzeit-API.",
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {
-            zugnummer: { type: SchemaType.STRING, description: "Die Zugnummer (z. B. 'ICE 593' oder 'RE 1')" },
-            startbahnhof: { type: SchemaType.STRING, description: "Name des Bahnhofs (z. B. 'Berlin Hbf' oder 'München Hbf')" },
-            uhrzeit: { type: SchemaType.STRING, description: "Optionale Abfahrtszeit im Format YYYY-MM-DDTHH:mm:ss" }
-          },
-          required: ["zugnummer", "startbahnhof"]
-        } as any
-      },
-      handler: async (args) => {
-        const departureTime = args.uhrzeit ? new Date(args.uhrzeit) : new Date();
-        const rt = await checkTripRealtime({
-          trainNumber: args.zugnummer,
-          originStation: args.startbahnhof,
-          departureTime
-        });
-
-        if (!rt.found) {
-          return {
-            status: "not_found",
-            message: `Für Zug '${args.zugnummer}' ab '${args.startbahnhof}' konnten aktuell keine Echtzeit-Abfahrten gefunden werden.`
-          };
-        }
-
-        return {
-          status: "success",
-          zugnummer: rt.trainNumber,
-          geplanteAbfahrt: rt.scheduledDeparture.toISOString(),
-          tatsaechlicheAbfahrt: rt.realtimeDeparture ? rt.realtimeDeparture.toISOString() : null,
-          verspaetungMinuten: rt.delayMinutes,
-          geplantesGleis: rt.scheduledPlatform || "Unbekannt",
-          tatsaechlichesGleis: rt.realtimePlatform || rt.scheduledPlatform || "Unbekannt",
-          gleiswechsel: rt.isPlatformChanged,
-          ausfall: rt.isCancelled,
-          hinweis: rt.message || (rt.delayMinutes > 0 ? `+${rt.delayMinutes} Min. Verspätung` : "Pünktlich")
-        };
       }
     },
     {

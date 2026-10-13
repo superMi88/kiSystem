@@ -19,6 +19,7 @@ const fileInput = document.getElementById('file-input');
             bookmarks: "M160-80v-560q0-33 23.5-56.5T240-720h320q33 0 56.5 23.5T640-640v560L400-200 160-80Zm80-121 160-86 160 86v-439H240v439Zm480-39v-560H280v-80h440q33 0 56.5 23.5T800-800v560h-80ZM240-640h320-320Z",
             calendar_add_on: "M680-80v-120H560v-80h120v-120h80v120h120v80H760v120h-80Zm-480-80q-33 0-56.5-23.5T120-240v-480q0-33 23.5-56.5T200-800h40v-80h80v80h240v-80h80v80h40q33 0 56.5 23.5T760-720v244q-20-3-40-3t-40 3v-84H200v320h280q0 20 3 40t11 40H200Zm0-480h480v-80H200v80Zm0 0v-80 80Z",
             calendar: "M680-80v-120H560v-80h120v-120h80v120h120v80H760v120h-80Zm-480-80q-33 0-56.5-23.5T120-240v-480q0-33 23.5-56.5T200-800h40v-80h80v80h240v-80h80v80h40q33 0 56.5 23.5T760-720v244q-20-3-40-3t-40 3v-84H200v320h280q0 20 3 40t11 40H200Zm0-480h480v-80H200v80Zm0 0v-80 80Z",
+            chat: "M80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z",
             check: "M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z",
             clear_day: "M440-760v-160h80v160h-80Zm266 110-55-55 112-115 56 57-113 113Zm54 210v-80h160v80H760ZM440-40v-160h80v160h-80ZM254-652 140-763l57-56 113 113-56 54Zm508 512L651-255l54-54 114 110-57 59ZM40-440v-80h160v80H40Zm157 300-56-57 112-112 29 27 29 28-114 114Zm113-170q-70-70-70-170t70-170q70-70 170-70t170 70q70 70 70 170t-70 170q-70 70-170 70t-170-70Zm283-57q47-47 47-113t-47-113q-47-47-113-47t-113 47q-47 47-47 113t47 113q47 47 113 47t113-47ZM480-480Z",
             close: "m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z",
@@ -42,6 +43,7 @@ const fileInput = document.getElementById('file-input');
             map: "m600-120-240-84-186 72q-20 8-37-4.5T120-170v-560q0-13 7.5-23t20.5-15l212-72 240 84 186-72q20-8 37 4.5t17 33.5v560q0 13-7.5 23T812-192l-212 72Zm-40-98v-468l-160-56v468l160 56Zm80 0 120-40v-474l-120 46v468Zm-440-10 120-46v-468l-120 40v474Zm440-458v468-468Zm-320-56v468-468Z",
             map_pin_heart: "M480-388q54-50 84-80t47-50q16-20 22.5-37t6.5-37q0-36-26-62t-62-26q-21 0-40.5 8.5T480-648q-12-15-31-23.5t-41-8.5q-36 0-62 26t-26 62q0 21 6 37t22 36q17 20 46 50t86 81Zm0 202q122-112 181-203.5T720-552q0-109-69.5-178.5T480-800q-101 0-170.5 69.5T240-552q0 71 59 162.5T480-186Zm0 106Q319-217 239.5-334.5T160-552q0-150 96.5-239T480-880q127 0 223.5 89T800-552q0 100-79.5 217.5T480-80Zm0-480Z",
             map_search: "M640-560v-126 126ZM174-132q-20 8-37-4.5T120-170v-560q0-13 7.5-23t20.5-15l212-72 240 84 186-72q20-8 37 4.5t17 33.5v337q-15-23-35.5-42T760-528v-204l-120 46v126q-21 0-41 3.5T560-546v-140l-160-56v523l-226 87Zm26-96 120-46v-468l-120 40v474Zm496.5-32q22.5-20 23.5-60 1-34-22.5-57T640-400q-34 0-57 23t-23 57q0 34 23 57t57 23q34 0 56.5-20ZM640-160q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 23-5.5 43.5T778-238l102 102-56 56-102-102q-18 11-38.5 16.5T640-160ZM320-742v468-468Z",
+            mail: "M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm320-280L160-640v400h640v-400L480-440Zm0-80 320-200H160l320 200ZM160-640v-80 480-400Z",
             person: "M367-527q-47-47-47-113t47-113q47-47 113-47t113 47q47 47 47 113t-47 113q-47 47-113 47t-113-47ZM160-160v-112q0-34 17.5-62.5T224-378q62-31 126-46.5T480-440q66 0 130 15.5T736-378q29 15 46.5 43.5T800-272v112H160Zm80-80h480v-32q0-11-5.5-20T700-306q-54-27-109-40.5T480-360q-56 0-111 13.5T260-306q-9 5-14.5 14t-5.5 20v32Zm296.5-343.5Q560-607 560-640t-23.5-56.5Q513-720 480-720t-56.5 23.5Q400-673 400-640t23.5 56.5Q447-560 480-560t56.5-23.5ZM480-640Zm0 400Z",
             public: "M324-111.5Q251-143 197-197t-85.5-127Q80-397 80-480t31.5-156Q143-709 197-763t127-85.5Q397-880 480-880t156 31.5Q709-817 763-763t85.5 127Q880-563 880-480t-31.5 156Q817-251 763-197t-127 85.5Q563-80 480-80t-156-31.5ZM440-162v-78q-33 0-56.5-23.5T360-320v-40L168-552q-3 18-5.5 36t-2.5 36q0 121 79.5 212T440-162Zm276-102q41-45 62.5-100.5T800-480q0-98-54.5-179T600-776v16q0 33-23.5 56.5T520-680h-80v80q0 17-11.5 28.5T400-560h-80v80h240q17 0 28.5 11.5T600-440v120h40q26 0 47 15.5t29 40.5Z",
             search: "M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z",
@@ -116,6 +118,34 @@ const fileInput = document.getElementById('file-input');
                 const searchBar = document.getElementById('header-memory-search-bar');
                 const defaultBar = document.getElementById('header-memory-default-bar');
                 if (searchBar && defaultBar && !personSearchQuery) {
+                    searchBar.style.display = 'none';
+                    defaultBar.style.display = 'flex';
+                }
+            } else if (viewName === 'locations') {
+                const searchBar = document.getElementById('header-locations-search-bar');
+                const defaultBar = document.getElementById('header-locations-default-bar');
+                if (searchBar && defaultBar && (!window.locationSearchQuery)) {
+                    searchBar.style.display = 'none';
+                    defaultBar.style.display = 'flex';
+                }
+            } else if (viewName === 'photos') {
+                const searchBar = document.getElementById('header-photos-search-bar');
+                const defaultBar = document.getElementById('header-photos-default-bar');
+                if (searchBar && defaultBar && (!window.photosSearchQuery)) {
+                    searchBar.style.display = 'none';
+                    defaultBar.style.display = 'flex';
+                }
+            } else if (viewName === 'docs') {
+                const searchBar = document.getElementById('header-docs-search-bar');
+                const defaultBar = document.getElementById('header-docs-default-bar');
+                if (searchBar && defaultBar && (!window.docsSearchQuery)) {
+                    searchBar.style.display = 'none';
+                    defaultBar.style.display = 'flex';
+                }
+            } else if (viewName === 'media') {
+                const searchBar = document.getElementById('header-media-search-bar');
+                const defaultBar = document.getElementById('header-media-default-bar');
+                if (searchBar && defaultBar && (!window.mediaSearchQuery)) {
                     searchBar.style.display = 'none';
                     defaultBar.style.display = 'flex';
                 }
@@ -445,7 +475,7 @@ const fileInput = document.getElementById('file-input');
             }
 
             // Remove all view classes from body
-            document.body.classList.remove('view-chat', 'view-dashboard', 'view-calendar', 'view-timer', 'view-tasks', 'view-projects', 'view-plugins', 'view-settings', 'view-history', 'view-memory', 'view-journal', 'view-mail', 'view-briefing');
+            document.body.classList.remove('view-chat', 'view-dashboard', 'view-calendar', 'view-timer', 'view-tasks', 'view-projects', 'view-plugins', 'view-settings', 'view-history', 'view-memory', 'view-locations', 'view-media', 'view-photos', 'view-docs', 'view-journal', 'view-mail', 'view-briefing');
             
             // Add the new active view class
             document.body.classList.add('view-' + viewName);
@@ -469,6 +499,10 @@ const fileInput = document.getElementById('file-input');
                     'timer': 'Timer & Wecker',
                     'projects': 'Projekte',
                     'memory': 'Personen & Gedächtnis',
+                    'locations': 'Orte',
+                    'photos': 'Fotos & Galerie',
+                    'docs': 'Dokumente & Dateien',
+                    'media': 'Dateien & Fotos',
                     'mail': 'E-Mails (Posteingang)'
                 };
                 titleEl.textContent = titles[viewName] || 'Plugins & Dashboard';
@@ -484,6 +518,10 @@ const fileInput = document.getElementById('file-input');
                     'timer': 'Timer',
                     'projects': 'Projekte',
                     'memory': 'Gedächtnis',
+                    'locations': 'Orte',
+                    'photos': 'Fotos',
+                    'docs': 'Dokumente',
+                    'media': 'Dateien',
                     'mail': 'E-Mails',
                     'chat': 'Chat',
                     'history': 'Verlauf',
@@ -558,20 +596,37 @@ const fileInput = document.getElementById('file-input');
                 }
             }
 
-            // Update bottom navigation tabs (Chat & Kalender & Briefing)
+            // Update bottom navigation tabs (Chat & Kalender & Briefing & Orte & Medien)
             const tabChat = document.getElementById('tab-btn-chat');
             const tabDashboard = document.getElementById('tab-btn-dashboard');
             const tabBriefing = document.getElementById('tab-btn-briefing');
+            const tabLocations = document.getElementById('tab-btn-locations');
+            const tabPhotos = document.getElementById('tab-btn-photos');
+            const tabDocs = document.getElementById('tab-btn-docs');
+            const tabMedia = document.getElementById('tab-btn-media');
             if (tabChat && tabDashboard) {
                 tabChat.classList.remove('active');
                 tabDashboard.classList.remove('active');
                 if (tabBriefing) tabBriefing.classList.remove('active');
+                if (tabLocations) tabLocations.classList.remove('active');
+                if (tabPhotos) tabPhotos.classList.remove('active');
+                if (tabDocs) tabDocs.classList.remove('active');
+                if (tabMedia) tabMedia.classList.remove('active');
                 if (viewName === 'chat') {
                     tabChat.classList.add('active');
                 } else if (viewName === 'dashboard' || viewName === 'calendar') {
                     tabDashboard.classList.add('active');
                 } else if (viewName === 'briefing' && tabBriefing) {
                     tabBriefing.classList.add('active');
+                } else if (viewName === 'locations' && tabLocations) {
+                    tabLocations.classList.add('active');
+                } else if (viewName === 'photos' && tabPhotos) {
+                    tabPhotos.classList.add('active');
+                } else if (viewName === 'docs' && tabDocs) {
+                    tabDocs.classList.add('active');
+                } else if (viewName === 'media') {
+                    if (tabPhotos) tabPhotos.classList.add('active');
+                    else if (tabMedia) tabMedia.classList.add('active');
                 }
             }
 
@@ -709,6 +764,9 @@ const fileInput = document.getElementById('file-input');
 
         function focusWidget(name) {
             if (name === 'arbeitstisch' || name === 'heute' || name === 'dashboard') name = 'calendar';
+            if (name === 'media') {
+                name = document.getElementById('widget-photos') ? 'photos' : (document.getElementById('widget-docs') ? 'docs' : 'media');
+            }
             if (typeof isClosingMailReadModal !== 'undefined' && !isClosingMailReadModal && document.body.classList.contains('mail-read-active') && name !== 'mail') {
                 if (typeof closeMailReadModal === 'function') {
                     closeMailReadModal();
@@ -901,10 +959,61 @@ const fileInput = document.getElementById('file-input');
 
 
 
-        function getEventTimeBadge(ev) {
-            if (ev.isAllDay) {
-                return `<span class="timeline-time-badge event-time-badge" style="background: rgba(149, 165, 166, 0.15); color: #bdc3c7; border-color: rgba(149, 165, 166, 0.3);">Ganztägig</span>`;
+        function getEventTimeBadges(ev, dateStr) {
+            if (!ev) return { startBadge: '', endBadge: '', startStr: '', endStr: '', isStartLocked: false, isEndLocked: false };
+
+            const isTravel = !ev.isTask && (
+                ev.isTravelTime || !!ev.travelMode ||
+                /\b(fahrt|wegzeit|wegezeit|anreise|abreise|hinfahrt|rückfahrt|rueckfahrt|reise|zugfahrt|flug|heimweg)\b/i.test((ev.title || '').trim()) ||
+                (ev.title && (ev.title.includes('🚗') || ev.title.includes('🚆') || ev.title.includes('🚲') || ev.title.includes('🚶') || ev.title.includes('✈️') || ev.title.includes('🗺️')))
+            );
+            const badgeTypeClass = isTravel ? 'travel-time-badge' : 'event-time-badge';
+
+            let isStartLocked = false;
+            let isEndLocked = false;
+
+            if (isTravel) {
+                let details = {};
+                try {
+                    if (typeof ev.travelTransitDetails === 'string') {
+                        details = JSON.parse(ev.travelTransitDetails);
+                    } else if (ev.travelTransitDetails) {
+                        details = ev.travelTransitDetails;
+                    }
+                } catch (_) {}
+
+                const titleLower = (ev.title || '').toLowerCase();
+                const isArrivalTitle = /^(hinfahrt|anreise|fahrt\s+zu|anreise\s+zu)\b/i.test(titleLower.trim()) || titleLower.includes('hinfahrt') || titleLower.includes('anreise');
+                const isDepartureTitle = /^(rückfahrt|rueckfahrt|heimweg|abreise|fahrt\s+nach\s+hause)\b/i.test(titleLower.trim()) || titleLower.includes('rückfahrt') || titleLower.includes('rueckfahrt') || titleLower.includes('heimweg');
+
+                if (details.targetArrivalTime || details.requestedArrivalTime || (isArrivalTitle && !isDepartureTitle)) {
+                    isEndLocked = true;
+                } else if (details.requestedDepartureTime || details.earliestDepartureTime || isDepartureTitle) {
+                    isStartLocked = true;
+                }
             }
+
+            if (ev.isAllDay) {
+                let endBadge = '';
+                let endStr = '';
+                if (ev.endTime || ev.end) {
+                    const sDate = (ev.time || ev.start) ? new Date(ev.time || ev.start) : null;
+                    const eDate = new Date(ev.endTime || ev.end);
+                    if (sDate && !isNaN(sDate.getTime()) && !isNaN(eDate.getTime()) && eDate.toDateString() !== sDate.toDateString()) {
+                        endStr = eDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+                        endBadge = `<span class="timeline-time-badge ${badgeTypeClass} end-time-badge">${endStr}</span>`;
+                    }
+                }
+                return {
+                    startBadge: `<span class="timeline-time-badge ${badgeTypeClass} start-time-badge" style="background: rgba(149, 165, 166, 0.15); color: #bdc3c7; border-color: rgba(149, 165, 166, 0.3);">Ganztägig</span>`,
+                    endBadge: endBadge,
+                    startStr: 'Ganztägig',
+                    endStr: endStr,
+                    isStartLocked: false,
+                    isEndLocked: false
+                };
+            }
+
             if (ev.fuzzyTime) {
                 let fStyle = '';
                 if (ev.fuzzyTime === "morgens") fStyle = "background: rgba(241, 196, 15, 0.15); color: #f1c40f; border-color: rgba(241, 196, 15, 0.3);";
@@ -912,29 +1021,83 @@ const fileInput = document.getElementById('file-input');
                 else if (ev.fuzzyTime === "mittags") fStyle = "background: rgba(46, 204, 113, 0.15); color: #2ecc71; border-color: rgba(46, 204, 113, 0.3);";
                 else if (ev.fuzzyTime === "nachmittag") fStyle = "background: rgba(52, 152, 219, 0.15); color: #3498db; border-color: rgba(52, 152, 219, 0.3);";
                 else if (ev.fuzzyTime === "abends") fStyle = "background: rgba(155, 89, 182, 0.15); color: #9b59b6; border-color: rgba(155, 89, 182, 0.3);";
-                return `<span class="timeline-time-badge event-time-badge" style="${fStyle}">${escapeHtml(ev.fuzzyTime)}</span>`;
+                return {
+                    startBadge: `<span class="timeline-time-badge ${badgeTypeClass} start-time-badge" style="${fStyle}">${escapeHtml(ev.fuzzyTime)}</span>`,
+                    endBadge: '',
+                    startStr: ev.fuzzyTime,
+                    endStr: '',
+                    isStartLocked: false,
+                    isEndLocked: false
+                };
             }
+
             const eventTime = ev.time || ev.start;
-            if (!eventTime) return '';
+            if (!eventTime) {
+                return { startBadge: '', endBadge: '', startStr: '', endStr: '', isStartLocked, isEndLocked };
+            }
+
             const start = new Date(eventTime);
-            if (isNaN(start.getTime())) return '';
+            if (isNaN(start.getTime())) {
+                return { startBadge: '', endBadge: '', startStr: '', endStr: '', isStartLocked, isEndLocked };
+            }
+
             const formatTime = (d) => d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-            const startStr = formatTime(start);
+            let startStr = `${formatTime(start)} Uhr`;
+
+            if (dateStr) {
+                const startDayStr = typeof getLocalDateString === 'function' ? getLocalDateString(start) : start.toISOString().split('T')[0];
+                if (startDayStr !== dateStr) {
+                    startStr = `${start.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })} ${formatTime(start)} Uhr`;
+                }
+            }
+
+            const lockIconStart = isStartLocked 
+                ? `<span class="time-lock-icon" style="margin-right: 4px; font-size: 0.68rem;" title="Feste Abfahrtszeit (gelockt)">🔒</span>`
+                : '';
+            const startBadgeTitle = isStartLocked ? 'title="Feste Abfahrtszeit (gelockt)"' : '';
+            const startBadge = `<span class="timeline-time-badge ${badgeTypeClass} start-time-badge ${isStartLocked ? 'is-time-locked' : ''}" ${startBadgeTitle}>${lockIconStart}${startStr}</span>`;
+
             const eventEndTime = ev.endTime || ev.end;
+            let endBadge = '';
             let endStr = '';
             if (eventEndTime) {
                 const end = new Date(eventEndTime);
                 if (!isNaN(end.getTime()) && end.getTime() > start.getTime()) {
-                    if (start.toDateString() === end.toDateString()) {
-                        endStr = formatTime(end);
-                    } else {
-                        endStr = `${end.toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit'})} ${formatTime(end)}`;
+                    endStr = `${formatTime(end)} Uhr`;
+                    const endDayStr = typeof getLocalDateString === 'function' ? getLocalDateString(end) : end.toISOString().split('T')[0];
+                    const refDateStr = dateStr || (typeof getLocalDateString === 'function' ? getLocalDateString(start) : start.toISOString().split('T')[0]);
+                    if (endDayStr !== refDateStr) {
+                        endStr = `${end.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })} ${formatTime(end)} Uhr`;
                     }
+                    const lockIconEnd = isEndLocked 
+                        ? `<span class="time-lock-icon" style="margin-right: 4px; font-size: 0.68rem;" title="Feste Ankunftszeit (gelockt)">🔒</span>`
+                        : '';
+                    const endBadgeTitle = isEndLocked ? 'title="Feste Ankunftszeit (gelockt)"' : '';
+                    endBadge = `<span class="timeline-time-badge ${badgeTypeClass} end-time-badge ${isEndLocked ? 'is-time-locked' : ''}" ${endBadgeTitle}>${lockIconEnd}${endStr}</span>`;
                 }
             }
-            const text = endStr ? `${startStr} – ${endStr} Uhr` : `${startStr} Uhr`;
-            return `<span class="timeline-time-badge event-time-badge">${text}</span>`;
+
+            return { startBadge, endBadge, startStr, endStr, isStartLocked, isEndLocked };
         }
+        window.getEventTimeBadges = getEventTimeBadges;
+
+        function getEventTimeBadge(ev) {
+            const { startBadge, startStr, endStr, isStartLocked, isEndLocked } = getEventTimeBadges(ev);
+            if (endStr) {
+                const isTravel = !ev.isTask && (
+                    ev.isTravelTime || !!ev.travelMode ||
+                    /\b(fahrt|wegzeit|wegezeit|anreise|abreise|hinfahrt|rückfahrt|rueckfahrt|reise|zugfahrt|flug|heimweg)\b/i.test((ev.title || '').trim()) ||
+                    (ev.title && (ev.title.includes('🚗') || ev.title.includes('🚆') || ev.title.includes('🚲') || ev.title.includes('🚶') || ev.title.includes('✈️') || ev.title.includes('🗺️')))
+                );
+                const badgeTypeClass = isTravel ? 'travel-time-badge' : 'event-time-badge';
+                const sText = isStartLocked ? `🔒 ${startStr.replace(/ Uhr$/, '')}` : startStr.replace(/ Uhr$/, '');
+                const eText = isEndLocked ? `${endStr} 🔒` : endStr;
+                const lockTitle = isStartLocked ? 'title="Feste Abfahrtszeit (gelockt)"' : (isEndLocked ? 'title="Feste Ankunftszeit (gelockt)"' : '');
+                return `<span class="timeline-time-badge ${badgeTypeClass}" ${lockTitle}>${sText} – ${eText}</span>`;
+            }
+            return startBadge;
+        }
+        window.getEventTimeBadge = getEventTimeBadge;
 
 
 
@@ -1055,6 +1218,30 @@ const fileInput = document.getElementById('file-input');
                 closeMailReadModal();
             }
             focusWidget('memory');
+        };
+
+        window.handleDrawerPhotos = function() {
+            closeMobileDrawer();
+            if (document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
+                closeMailReadModal();
+            }
+            focusWidget('photos');
+        };
+
+        window.handleDrawerDocs = function() {
+            closeMobileDrawer();
+            if (document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
+                closeMailReadModal();
+            }
+            focusWidget('docs');
+        };
+
+        window.handleDrawerMedia = function() {
+            closeMobileDrawer();
+            if (document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
+                closeMailReadModal();
+            }
+            focusWidget('photos');
         };
 
 

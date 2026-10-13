@@ -593,6 +593,32 @@ body.mobile-mode .arbeitstisch-card-body {
     color: var(--accent);
     border: 1px solid rgba(137, 180, 250, 0.35);
 }
+.timeline-time-badge.start-time-badge {
+    font-weight: 700;
+}
+.timeline-time-badge.end-time-badge {
+    font-size: 0.66rem;
+    font-weight: 600;
+    opacity: 0.92;
+}
+.timeline-time-badge.is-time-locked {
+    border-color: rgba(249, 226, 175, 0.45);
+    background: rgba(249, 226, 175, 0.12);
+}
+.time-lock-icon {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.65rem;
+    line-height: 1;
+}
+
+.timeline-event-end-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+    margin-top: 5px;
+}
 
 .timeline-current-progress-box {
     margin-top: 6px;
@@ -772,7 +798,8 @@ body.mobile-mode .arbeitstisch-card-body {
     box-shadow: none !important;
     padding: 7px 11px !important;
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     box-sizing: border-box;
     width: 100%;
     max-width: 100%;
@@ -887,33 +914,39 @@ body.mobile-mode .arbeitstisch-card-body {
 .mode-switch-btn {
     background: transparent;
     border: none;
+    color: #ffffff !important;
     padding: 3px 5px;
     font-size: 0.75rem;
     cursor: pointer;
     border-radius: 4px;
-    opacity: 0.65;
+    opacity: 0.75;
     transition: all 0.15s;
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
-.mode-switch-btn svg {
-    fill: #cdd6f4;
+.mode-switch-btn svg,
+.mode-switch-btn .google-icon,
+.mode-switch-btn .material-symbols-outlined {
+    fill: #ffffff !important;
+    color: #ffffff !important;
     width: 14px;
     height: 14px;
     display: inline-block;
 }
 .mode-switch-btn:hover {
     opacity: 1;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.15);
 }
 .mode-switch-btn.active {
     opacity: 1;
     background: rgba(166, 227, 161, 0.25);
     box-shadow: 0 0 5px rgba(166, 227, 161, 0.4);
 }
-.mode-switch-btn.active svg {
-    fill: #a6e3a1;
+.mode-switch-btn.active svg,
+.mode-switch-btn.active .google-icon {
+    fill: #ffffff !important;
+    color: #ffffff !important;
 }
 
 /* --- Interaktive Nachfragekarte: Wie willst du dein Ziel erreichen? --- */
@@ -975,6 +1008,12 @@ body.mobile-mode .arbeitstisch-card-body {
     border-color: #a6e3a1;
     transform: translateY(-1px);
     box-shadow: 0 3px 8px rgba(166, 227, 161, 0.3);
+}
+.route-choice-btn svg,
+.route-choice-btn .google-icon,
+.route-choice-btn .material-symbols-outlined {
+    fill: #ffffff !important;
+    color: #ffffff !important;
 }
 
 /* Arbeitstisch Items (Events, Tasks, Mails) */
@@ -1124,7 +1163,7 @@ body.mobile-mode .arbeitstisch-card-body {
 /* --- Ausklappbare Bahn- und ÖPNV-Verbindungsdetails (default zugeklappt) --- */
 .travel-transit-accordion {
     width: 100%;
-    margin-top: 8px;
+    margin-top: 4px;
     background: rgba(0, 0, 0, 0.25);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 6px;
@@ -1139,7 +1178,7 @@ body.mobile-mode .arbeitstisch-card-body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 6px 9px;
+    padding: 4px 8px;
     cursor: pointer;
     user-select: none;
     list-style: none;

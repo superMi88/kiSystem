@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PluginManager } from "../plugins/index.js";
 import { GoogleGenerativeAI, FunctionCallingMode } from "@google/generative-ai";
 import { getSettings, getAgentConfig } from "../settings.js";
+import { getGermanTimeContext } from "./routeService.js";
 
 export interface QueueEmailRunItem {
   emailId: number;
@@ -300,23 +301,21 @@ Analysiere diese E-Mail auf Relevanz und Handlungsbedarf. Der Benutzer möchte n
     // 4. Gemini mit Tools initialisieren
     try {
       const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
-      const now = new Date();
-      const dateString = now.toLocaleDateString("de-DE", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric"
-      });
-      const timeString = now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-      const todayIso = now.toISOString().split("T")[0];
+      const timeCtx = getGermanTimeContext();
+      const dateString = timeCtx.dateString;
+      const timeString = timeCtx.timeString;
+      const todayIso = timeCtx.todayIso;
+      const offsetStr = timeCtx.offsetStr;
+      const tzName = timeCtx.tzName;
 
       const isDiscord = conversation.triggerType === "discord";
 
     const systemPrompt = isDiscord
       ? `Du bist ein autonomer persönlicher KI-Agent im System, verbunden mit dem Discord-Bot.
 Du bearbeitest eine Rückmeldung oder Fortsetzung des Benutzers auf Discord.
-Heute ist ${dateString}, ${todayIso}, es ist ${timeString} Uhr (deutsche Lokalzeit, UTC+2).
+Heute ist ${dateString}, ${todayIso}, es ist ${timeString} Uhr (deutsche Lokalzeit, ${tzName}, ${offsetStr}).
 Nutze '${todayIso}' als Basis für alle Datumsberechnungen.
+Alle Zeitangaben beziehen sich strikt auf die deutsche Lokalzeit (Europe/Berlin). Wandle Zeiten niemals in UTC um und hänge kein 'Z' an.
 
 OBERSTE REGELN:
 - Wenn der Benutzer einer Aktion zugestimmt hat (z. B. 'Ja, bitte abschicken', 'Ja, erstelle die Aufgabe', 'Ja, trage den Termin ein'), führe das entsprechende Werkzeug (wie 'discord_send_announcement', 'fuege_termin_hinzu', 'erstelle_aufgabe') SOFORT per Function Call aus!
@@ -324,8 +323,9 @@ OBERSTE REGELN:
 - Melde NIEMALS Scheinerfolge.
 - Antworte auf Deutsch, präzise und freundlich.`
       : `Du bist ein autonomer persönlicher KI-Agent im System. Du bearbeitest Anweisungen und Antworten des Benutzers zu einem vorherigen Vorgang (z.B. E-Mail).
-Heute ist ${dateString}, ${todayIso}, es ist ${timeString} Uhr (deutsche Lokalzeit, UTC+2).
+Heute ist ${dateString}, ${todayIso}, es ist ${timeString} Uhr (deutsche Lokalzeit, ${tzName}, ${offsetStr}).
 Nutze '${todayIso}' als Basis für alle Datumsberechnungen.
+Alle Zeitangaben beziehen sich strikt auf die deutsche Lokalzeit (Europe/Berlin). Wandle Zeiten niemals in UTC um und hänge kein 'Z' an.
 
 OBERSTE REGELN:
 - Wenn der Benutzer einer Aktion zugestimmt hat (z. B. 'Ja, trage den Termin bitte ein' oder 'Ja, erstelle die Aufgabe'), führe das entsprechende Werkzeug ('fuege_termin_hinzu', 'erstelle_aufgabe' etc.) SOFORT per Function Call aus!
@@ -333,7 +333,7 @@ OBERSTE REGELN:
 - Antworte auf Deutsch, präzise und freundlich.`;
 
     const userModel = getSettings().aiModel;
-      const modelName = userModel || process.env.GEMINI_MODEL || "gemini-3.5-flash";
+    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
       const model = genAI.getGenerativeModel({
         model: modelName,
@@ -657,23 +657,21 @@ OBERSTE REGELN FÜR DEN AGENTEN:
 
     try {
       const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
-      const now = new Date();
-      const dateString = now.toLocaleDateString("de-DE", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric"
-      });
-      const timeString = now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-      const todayIso = now.toISOString().split("T")[0];
+      const timeCtx = getGermanTimeContext();
+      const dateString = timeCtx.dateString;
+      const timeString = timeCtx.timeString;
+      const todayIso = timeCtx.todayIso;
+      const offsetStr = timeCtx.offsetStr;
+      const tzName = timeCtx.tzName;
 
       const userModel = getSettings().aiModel;
-      const modelName = userModel || process.env.GEMINI_MODEL || "gemini-3.5-flash";
+      const modelName = userModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
       const systemPrompt = `Du bist ein autonomer persönlicher KI-Agent im System, verbunden mit dem Discord-Bot.
 Ein Benutzer hat dir über Discord eine Frage gestellt oder einen Auftrag erteilt.
-Heute ist ${dateString}, ${todayIso}, es ist ${timeString} Uhr (deutsche Lokalzeit, UTC+2).
+Heute ist ${dateString}, ${todayIso}, es ist ${timeString} Uhr (deutsche Lokalzeit, ${tzName}, ${offsetStr}).
 Nutze '${todayIso}' als Basis für alle Datumsberechnungen (z. B. morgen = nächster Tag im Format YYYY-MM-DD).
+Alle Zeitangaben beziehen sich strikt auf die deutsche Lokalzeit (Europe/Berlin). Wandle Zeiten niemals in UTC um und hänge kein 'Z' an.
 
 DISCORD-KONTEXT:
 - Absender: ${author.displayName || author.username} (Discord-ID: ${author.id})
@@ -943,25 +941,23 @@ OBERSTE REGELN FÜR DEN DISCORD AGENTEN:
 
     // 3. Gemini aufrufen mit Werkzeugen
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
-    const now = new Date();
-    const dateString = now.toLocaleDateString("de-DE", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric"
-    });
-    const timeString = now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-    const todayIso = now.toISOString().split("T")[0];
+    const timeCtx = getGermanTimeContext();
+    const dateString = timeCtx.dateString;
+    const timeString = timeCtx.timeString;
+    const todayIso = timeCtx.todayIso;
+    const offsetStr = timeCtx.offsetStr;
+    const tzName = timeCtx.tzName;
 
     const userModel = getSettings().aiModel;
-    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-3.5-flash";
+    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
     const isDiscord = conversation.triggerType === "discord";
     const systemPrompt = isDiscord
       ? `Du bist ein autonomer persönlicher KI-Agent im System, verbunden mit dem Discord-Bot.
 Du bearbeitest eine Rückmeldung oder Fortsetzung des Benutzers auf Discord.
-Heute ist ${dateString}, ${todayIso}, es ist ${timeString} Uhr (deutsche Lokalzeit, UTC+2).
+Heute ist ${dateString}, ${todayIso}, es ist ${timeString} Uhr (deutsche Lokalzeit, ${tzName}, ${offsetStr}).
 Nutze '${todayIso}' als Basis für alle Datumsberechnungen.
+Alle Zeitangaben beziehen sich strikt auf die deutsche Lokalzeit (Europe/Berlin). Wandle Zeiten niemals in UTC um und hänge kein 'Z' an.
 
 OBERSTE REGELN:
 - Wenn der Benutzer einer Aktion zugestimmt hat (z. B. 'Ja, bitte abschicken', 'Ja, erstelle die Aufgabe', 'Ja, trage den Termin ein'), führe das entsprechende Werkzeug (wie 'discord_send_announcement', 'fuege_termin_hinzu', 'erstelle_aufgabe') SOFORT per Function Call aus!
@@ -969,8 +965,9 @@ OBERSTE REGELN:
 - Melde NIEMALS Scheinerfolge.
 - Antworte auf Deutsch, präzise und freundlich.`
       : `Du bist ein autonomer persönlicher KI-Agent im System. Du bearbeitest Anweisungen und Antworten des Benutzers zu einem vorherigen Vorgang (z.B. E-Mail).
-Heute ist ${dateString}, ${todayIso}, es ist ${timeString} Uhr (deutsche Lokalzeit, UTC+2).
+Heute ist ${dateString}, ${todayIso}, es ist ${timeString} Uhr (deutsche Lokalzeit, ${tzName}, ${offsetStr}).
 Nutze '${todayIso}' als Basis für alle Datumsberechnungen.
+Alle Zeitangaben beziehen sich strikt auf die deutsche Lokalzeit (Europe/Berlin). Wandle Zeiten niemals in UTC um und hänge kein 'Z' an.
 
 OBERSTE REGELN:
 - Wenn der Benutzer einer Aktion zugestimmt hat (z. B. 'Ja, trage den Termin bitte ein' oder 'Ja, erstelle die Aufgabe'), führe das entsprechende Werkzeug ('fuege_termin_hinzu', 'erstelle_aufgabe' etc.) SOFORT per Function Call aus!
@@ -1212,7 +1209,7 @@ OBERSTE REGELN:
 
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
     const userModel = getSettings().aiModel;
-    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-3.5-flash";
+    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
     const model = genAI.getGenerativeModel({
       model: modelName,

@@ -1,6 +1,37 @@
 
 
         // =========================================================================
+        // Mail Accounts Cache for Draft Cards
+        // =========================================================================
+        window.systemMailAccounts = window.systemMailAccounts || [];
+        async function ensureSystemMailAccounts() {
+            if (window.systemMailAccounts && window.systemMailAccounts.length > 0) return window.systemMailAccounts;
+            try {
+                const apiUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/mail/accounts') : '/api/mail/accounts';
+                const res = await fetch(apiUrl);
+                if (res.ok) {
+                    window.systemMailAccounts = await res.json();
+                    document.querySelectorAll('.mail-draft-preview').forEach(card => {
+                        const vonRow = card.querySelector('.mail-draft-von-row');
+                        if (vonRow && (vonRow.getAttribute('data-empty') === 'true' || !vonRow.innerText.trim())) {
+                            const accId = vonRow.getAttribute('data-account-id');
+                            const acc = (accId ? window.systemMailAccounts.find(a => a.id === Number(accId)) : null) || window.systemMailAccounts[0];
+                            if (acc) {
+                                const fromDisplay = acc.name && acc.name !== acc.email ? `${acc.name} <${acc.email}>` : acc.email;
+                                vonRow.innerHTML = `<strong style="color: #89b4fa;">Von:</strong> <span style="color: #ffffff;">${escapeHtml(fromDisplay)}</span>`;
+                                vonRow.removeAttribute('data-empty');
+                                vonRow.style.display = 'block';
+                            }
+                        }
+                    });
+                    return window.systemMailAccounts;
+                }
+            } catch (_) {}
+            return [];
+        }
+        ensureSystemMailAccounts();
+
+        // =========================================================================
         // Chat Swipe-to-Reply & Jump Helpers
         // =========================================================================
         let activeChatReply = null;
@@ -100,7 +131,9 @@
             const fallbackLinkConfigs = {
                 day: { icon: '📅', color: 'rgba(137, 180, 250, 0.15)', borderColor: '#89b4fa' },
                 pause: { icon: '☕', color: 'rgba(249, 226, 175, 0.15)', borderColor: '#f9e2af' },
-                travel: { icon: '🗺️', color: 'rgba(166, 227, 161, 0.15)', borderColor: '#a6e3a1' }
+                travel: { icon: '🗺️', color: 'rgba(166, 227, 161, 0.15)', borderColor: '#a6e3a1' },
+                media: { icon: '📁', color: 'rgba(249, 226, 175, 0.15)', borderColor: '#f9e2af' },
+                file: { icon: '📁', color: 'rgba(249, 226, 175, 0.15)', borderColor: '#f9e2af' }
             };
             html = html.replace(linkRegex, (match, label, url, type, id) => {
                 const config = entityConfigs[type] || fallbackLinkConfigs[type] || { icon: '🔗', color: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' };
@@ -167,14 +200,53 @@
 
 
 
+        function extractToolCallFromText(text) {
+            const toolNames = ['schlage_mail_vor', 'schlage_mail_antwort_vor', 'schlage_termin_vor', 'schlage_aufgabe_vor', 'erstelle_benachrichtigung'];
+            for (const tool of toolNames) {
+                const marker = tool + '(';
+                const idx = text.indexOf(marker);
+                if (idx !== -1) {
+                    let start = idx + marker.length;
+                    let depth = 1;
+                    let inQuote = false;
+                    let quoteChar = '';
+                    let end = start;
+                    while (end < text.length && depth > 0) {
+                        const c = text[end];
+                        if (inQuote) {
+                            if (c === '\\') {
+                                end += 2;
+                                continue;
+                            } else if (c === quoteChar) {
+                                inQuote = false;
+                            }
+                        } else {
+                            if (c === '"' || c === "'") {
+                                inQuote = true;
+                                quoteChar = c;
+                            } else if (c === '(') {
+                                depth++;
+                            } else if (c === ')') {
+                                depth--;
+                            }
+                        }
+                        end++;
+                    }
+                    return {
+                        toolName: tool,
+                        argsStr: text.substring(start, depth === 0 ? end - 1 : end)
+                    };
+                }
+            }
+            return null;
+        }
+
         function parseNotificationFromText(text) {
-            if (!text || !text.includes('erstelle_benachrichtigung')) return null;
+            if (!text) return null;
+            const extracted = extractToolCallFromText(text);
+            if (!extracted) return null;
 
-            const regex = /erstelle_benachrichtigung\(([\s\S]+?)\)/;
-            const match = text.match(regex);
-            if (!match) return null;
-
-            const argsStr = match[1];
+            const { toolName, argsStr } = extracted;
 
             const getParam = (key) => {
                 const m = argsStr.match(new RegExp(key + ':\\s*"((?:[^"\\\\]|\\\\.)*)"'));
@@ -188,10 +260,44 @@
                 return null;
             };
 
-            const title = getParam('titel') || getParam('title') || 'Benachrichtigung';
-            const message = getParam('nachricht') || getParam('message') || '';
-            const type = getParam('typ') || getParam('type') || 'question';
-            const conversationId = getParam('conversationId') || null;
+            const getArrayParam = (key) => {
+                const m = argsStr.match(new RegExp(key + ':\\s*(\\[[^\\]]*\\])'));
+                if (m) {
+                    try {
+                        return JSON.parse(m[1]);
+                    } catch (e) {
+                        try { return eval('(' + m[1] + ')'); } catch (_) {}
+                    }
+                }
+                return [];
+            };
+
+            const title = getParam('betreff') || getParam('titel') || getParam('title') || (toolName.includes('mail') ? 'E-Mail-Entwurf' : 'Benachrichtigung');
+            const mailBody = getParam('inhalt') || getParam('antwortText') || '';
+            const to = getParam('empfaenger') || getParam('to') || '';
+            const begruendung = getParam('begruendung') || '';
+            const type = getParam('typ') || getParam('type') || (toolName.includes('mail') ? 'action_required' : 'question');
+            const conversationId = getParam('conversationId') || currentConversationId || null;
+            const attachments = getArrayParam('anhaenge') || getArrayParam('attachments') || [];
+            const kontoId = getParam('kontoId') || (argsStr.match(/kontoId:\s*([0-9]+)/) ? Number(argsStr.match(/kontoId:\s*([0-9]+)/)[1]) : null);
+            const fromArg = getParam('absender') || getParam('from') || '';
+
+            let message = '';
+            if (toolName.includes('mail')) {
+                message = begruendung
+                    ? `**Inhalt / Kontext:**\n${begruendung}\n\nIch habe folgenden E-Mail-Entwurf vorbereitet. Soll ich diesen Entwurf abschicken oder möchtest du ihn im Editor anpassen?`
+                    : (to ? `Ich habe folgenden E-Mail-Entwurf für **${to}** vorbereitet. Soll ich diese E-Mail so abschicken oder möchtest du sie im Editor anpassen?` : 'Ich habe folgenden E-Mail-Entwurf vorbereitet. Soll ich diese E-Mail so abschicken oder möchtest du sie im Editor anpassen?');
+            } else {
+                message = getParam('nachricht') || getParam('message') || begruendung || '';
+            }
+
+            // Falls 'message' im Tool-Aufruf gekürzt oder nicht enthalten war, den Haupttext vor der Aktionszusammenfassung nutzen:
+            if (!message && text) {
+                const clean = text.replace(/>\s*⚙️\s*\*\*Ausgeführte Aktionen[\s\S]*$/i, '').trim();
+                if (clean) {
+                    message = clean;
+                }
+            }
 
             let buttons = null;
             const btnMatch = argsStr.match(/buttons:\s*(\[[\s\S]*?\])(?:,\s*[a-zA-Z0-9]+:|\s*$)/);
@@ -206,7 +312,13 @@
             }
 
             if (!buttons || !Array.isArray(buttons) || buttons.length === 0) {
-                if (type === 'question') {
+                if (toolName.includes('mail') || title.toLowerCase().includes('mail') || title.toLowerCase().includes('entwurf')) {
+                    buttons = [
+                        { label: 'Ja, abschicken', action: 'reply', replyText: 'Ja, bitte abschicken', style: 'primary' },
+                        { label: 'Bearbeiten', action: 'open_composer', style: 'secondary' },
+                        { label: 'Nein, abbrechen', action: 'dismiss', replyText: 'Nein, abbrechen', style: 'secondary' }
+                    ];
+                } else if (type === 'question') {
                     buttons = [
                         { label: 'Ja, abschicken', action: 'reply', replyText: 'Ja, bitte abschicken', style: 'primary' },
                         { label: 'Nein, abbrechen', action: 'dismiss', replyText: 'Nein, abbrechen', style: 'secondary' }
@@ -214,12 +326,42 @@
                 }
             }
 
+            let actionData = null;
+            if (toolName === 'schlage_mail_vor' || toolName === 'schlage_mail_antwort_vor' || (title && title.toLowerCase().includes('mail'))) {
+                let senderAccount = null;
+                if (window.systemMailAccounts && window.systemMailAccounts.length > 0) {
+                    if (kontoId) {
+                        senderAccount = window.systemMailAccounts.find(a => a.id === Number(kontoId));
+                    }
+                    if (!senderAccount) {
+                        senderAccount = window.systemMailAccounts[0];
+                    }
+                }
+                const fromDisplay = fromArg || (senderAccount ? (senderAccount.name && senderAccount.name !== senderAccount.email ? `${senderAccount.name} <${senderAccount.email}>` : senderAccount.email) : '');
+
+                actionData = {
+                    actionType: 'send_mail',
+                    mailData: {
+                        to: to,
+                        subject: title,
+                        body: mailBody || message,
+                        attachments: attachments,
+                        accountId: kontoId || senderAccount?.id || null,
+                        from: fromDisplay || null,
+                        fromEmail: senderAccount?.email || null,
+                        accountName: senderAccount?.name || null
+                    }
+                };
+            }
+
             return {
                 id: null,
                 title,
                 message,
+                reasoning: begruendung || null,
                 type,
                 buttons,
+                actionData,
                 conversationId,
                 isDismissed: false,
                 selectedButton: null
@@ -242,91 +384,134 @@
 
 
 
+        const CANONICAL_AGENTS = {
+            mail: {
+                id: 'mail',
+                name: 'E-Mail Agent',
+                avatar: '✉️',
+                color: '#fab387',
+                trigger: 'mail'
+            },
+            discord: {
+                id: 'discord',
+                name: 'Discord Bot Agent',
+                avatar: '🌐',
+                color: '#89b4fa',
+                trigger: 'discord'
+            },
+            default: {
+                id: 'default',
+                name: 'Haupt-Assistent (Web / App)',
+                avatar: '🤖',
+                color: '#cba6f7',
+                trigger: 'manual'
+            }
+        };
+        window.CANONICAL_AGENTS = CANONICAL_AGENTS;
+
         function getNotifAgentInfo(notif) {
-            if (!notif) return { id: 'unknown', name: 'KI-Agent', avatar: '🤖', color: '#89b4fa' };
-            let rawName = (notif.agentName || '').trim();
-            let avatar = (notif.agentAvatar && notif.agentAvatar !== '??') ? notif.agentAvatar : '';
-            let color = notif.agentColor || '';
-
-            // Check against currentAgentSettings
-            if (typeof currentAgentSettings === 'object' && currentAgentSettings) {
-                // Pass 1: Prioritize matching configured agent by name
-                if (rawName) {
-                    const cleanR = rawName.toLowerCase().replace(/[^a-z0-9]/g, '');
-                    for (const [key, conf] of Object.entries(currentAgentSettings)) {
-                        if (!conf) continue;
-                        const cleanC = (conf.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                        if (cleanC && cleanR && (cleanC === cleanR || cleanR.includes(cleanC) || cleanC.includes(cleanR))) {
-                            return {
-                                id: key,
-                                name: conf.name || rawName,
-                                avatar: (avatar || conf.avatar || '🤖').replace(/^\?\?$/, '🤖'),
-                                color: color || conf.color || '#89b4fa'
-                            };
-                        }
-                    }
+            const getConf = (key) => {
+                const base = CANONICAL_AGENTS[key] || CANONICAL_AGENTS.default;
+                if (typeof currentAgentSettings === 'object' && currentAgentSettings && currentAgentSettings[key]) {
+                    const c = currentAgentSettings[key];
+                    return {
+                        id: key,
+                        name: c.name || base.name,
+                        avatar: (c.avatar || base.avatar).replace(/^\?\?$/, '🤖'),
+                        color: c.color || base.color
+                    };
                 }
+                return { ...base };
+            };
 
-                // Pass 2: Match by trigger or sourceType if no specific name match
-                for (const [key, conf] of Object.entries(currentAgentSettings)) {
-                    if (!conf) continue;
-                    const matchesTrigger = Boolean(notif.sourceType && conf.trigger === notif.sourceType);
-                    const matchesMail = Boolean(notif.sourceType === 'mail' && (conf.id === 'mail' || key === 'mail'));
-                    const matchesRoute = Boolean((notif.sourceType === 'route_planner' || notif.sourceType === 'calendar') && (conf.id === 'routenplaner' || key === 'routenplaner'));
-                    const matchesDiscord = Boolean(notif.sourceType === 'discord' && (conf.id === 'discord' || key === 'discord'));
+            if (!notif) return getConf('default');
 
-                    if (matchesTrigger || matchesMail || matchesRoute || matchesDiscord) {
-                        return {
-                            id: key,
-                            name: conf.name || rawName || 'Agent',
-                            avatar: (avatar || conf.avatar || '🤖').replace(/^\?\?$/, '🤖'),
-                            color: color || conf.color || '#89b4fa'
-                        };
-                    }
-                }
+            const rawName = (notif.agentName || '').trim().toLowerCase();
+            const sourceType = (notif.sourceType || '').trim().toLowerCase();
+            const title = (notif.title || '').toLowerCase();
+
+            // 1. Discord Bot Agent
+            if (sourceType === 'discord' || rawName.includes('discord') || title.includes('discord') || title.includes('ankündigung')) {
+                return getConf('discord');
             }
 
-            // Fallback if not matched in currentAgentSettings
-            let name = rawName;
-            if (!name) {
-                if (notif.sourceType === 'mail') name = 'E-Mail Agent';
-                else if (notif.sourceType === 'route_planner') name = 'Routenplaner Agent';
-                else if (notif.sourceType === 'discord') name = 'Discord Bot';
-                else name = 'KI-Agent';
+            // 2. E-Mail Agent (strictly incoming emails, mail responses, or mail triage)
+            let actionData = notif.actionData;
+            if (typeof actionData === 'string') {
+                try { actionData = JSON.parse(actionData); } catch (e) {}
+            }
+            const isMailReplyAction = Boolean(actionData && (actionData.actionType === 'send_mail_reply' || actionData.actionType === 'mail_reply'));
+            const isExplicitMailAgent = rawName === 'e-mail agent' || rawName === 'e-mail-agent' || rawName === 'mail agent' || rawName === 'mail';
+            const isIncomingMailTriage = sourceType === 'mail' && !title.includes('bewerbung');
+
+            if (isIncomingMailTriage || isMailReplyAction || isExplicitMailAgent) {
+                return getConf('mail');
             }
 
-            const id = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
-            if (!avatar) {
-                if (id.includes('mail')) avatar = '✉️';
-                else if (id.includes('route')) avatar = '🗺️';
-                else if (id.includes('discord')) avatar = '💬';
-                else avatar = '🤖';
-            }
-            if (!color) {
-                if (id.includes('mail')) color = '#fab387';
-                else if (id.includes('route')) color = '#a6e3a1';
-                else if (id.includes('discord')) color = '#5865F2';
-                else color = '#89b4fa';
-            }
-
-            return { id, name, avatar, color };
+            // 3. Haupt-Assistent (Web / App)
+            // Route planning, calendar, chat tasks, applications (Bewerbungen), user questions, system tasks
+            return getConf('default');
         }
-
-
         window.getNotifAgentInfo = getNotifAgentInfo;
 
+        function getNotifOriginInfo(notif, resolvedAgentId) {
+            if (!notif) return { label: 'Haupt-Assistent', badge: '🤖 System' };
 
+            const sourceType = (notif.sourceType || '').trim().toLowerCase();
+            const title = (notif.title || '').toLowerCase();
 
-        function getNotificationCardHtml(notif, convId) {
+            let actionData = notif.actionData;
+            if (typeof actionData === 'string') {
+                try { actionData = JSON.parse(actionData); } catch (e) {}
+            }
+            const actionType = actionData?.actionType || '';
+
+            if (resolvedAgentId === 'discord' || sourceType === 'discord') {
+                return { label: 'Discord Server', badge: '🌐 Discord Bot' };
+            }
+
+            if (resolvedAgentId === 'mail' || sourceType === 'mail') {
+                if (actionType === 'send_mail_reply' || title.includes('antwort')) {
+                    return { label: 'E-Mail Antwort', badge: '✉️ Postfach' };
+                }
+                return { label: 'E-Mail Eingang', badge: '✉️ Postfach' };
+            }
+
+            if (sourceType === 'route_planner' || sourceType === 'route_planner_location' || title.includes('route') || title.includes('standort')) {
+                return { label: 'Routen- & Wegezeit', badge: '🗺️ Routenplaner' };
+            }
+
+            if (sourceType === 'calendar' || actionType === 'create_event' || title.includes('termin')) {
+                return { label: 'Kalender / Termine', badge: '📅 Kalender' };
+            }
+
+            if (sourceType === 'task' || actionType === 'create_task' || title.includes('aufgabe')) {
+                return { label: 'Aufgaben / To-Dos', badge: '📋 Aufgabe' };
+            }
+
+            if (actionType === 'send_mail' || title.includes('bewerbung') || title.includes('entwurf')) {
+                return { label: 'Chat / Entwurf', badge: '✍️ Entwurf' };
+            }
+
+            if (sourceType === 'chat' || notif.conversationId) {
+                return { label: 'Chat / Manuell', badge: '💬 Chat' };
+            }
+
+            return { label: 'Haupt-Assistent', badge: '🤖 Assistent' };
+        }
+        window.getNotifOriginInfo = getNotifOriginInfo;
+
+        function getNotificationCardHtml(notif, convId, isBriefing = false) {
             const notifType = notif.type || 'info';
             const dismissedClass = notif.isDismissed ? ' dismissed' : '';
             const notifId = notif.id ? String(notif.id) : '';
             const targetConvId = convId || notif.conversationId || '';
 
-            // Agent Color & Avatar Resolution
+            // Agent Color & Avatar Resolution (strictly canonical 3 agents)
             const agentInfo = getNotifAgentInfo(notif);
             const agentColor = agentInfo.color;
             const agentAvatar = agentInfo.avatar;
+            const originInfo = getNotifOriginInfo(notif, agentInfo.id);
 
             let typeBadgeText = 'ℹ️ Information';
             let badgeBg = hexToRgba(agentColor, 0.15);
@@ -338,12 +523,25 @@
                 typeBadgeText = '⚡ Handlungsbedarf';
             }
 
-            const agentLabel = notif.agentName || agentInfo.name;
+            const agentLabel = agentInfo.name;
             const agentBadgeHtml = `
-                <span class="chat-agent-badge" style="font-size: 0.7rem; background: ${hexToRgba(agentColor, 0.18)}; color: #ffffff; padding: 2px 8px; border-radius: 6px; font-weight: 700; border: 1px solid ${hexToRgba(agentColor, 0.45)}; display: inline-flex; align-items: center; gap: 4px;">
+                <span class="chat-agent-badge" title="Zuständiger Agent: ${escapeHtml(agentLabel)}" style="font-size: 0.72rem; background: ${hexToRgba(agentColor, 0.18)}; color: #ffffff; padding: 2px 8px; border-radius: 6px; font-weight: 700; border: 1px solid ${hexToRgba(agentColor, 0.45)}; display: inline-flex; align-items: center; gap: 4px;">
                     <span style="font-size: 0.85rem;">${agentAvatar}</span>
                     <span>${escapeHtml(agentLabel)}</span>
                 </span>
+            `;
+
+            const originBadgeHtml = `
+                <span class="chat-origin-badge" title="Ausgelöst durch: ${escapeHtml(originInfo.label)}" style="font-size: 0.68rem; background: rgba(255, 255, 255, 0.08); color: #cdd6f4; padding: 2px 7px; border-radius: 6px; font-weight: 600; border: 1px solid rgba(255, 255, 255, 0.14); display: inline-flex; align-items: center; gap: 4px;">
+                    <span>${escapeHtml(originInfo.badge)}</span>
+                </span>
+            `;
+
+            const badgesHtml = `
+                <div class="chat-notification-badges-row" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 2px;">
+                    ${agentBadgeHtml}
+                    ${originBadgeHtml}
+                </div>
             `;
 
             let timeStr = '';
@@ -374,9 +572,14 @@
             }
 
             let messageBodyHtml = '';
-            const rawMsg = notif.message || '';
+            const rawMsg = (notif.message || '').trim();
 
-            if (actionData && actionData.actionType) {
+            const isMailAction = actionData && (actionData.actionType === 'send_mail' || actionData.actionType === 'send_mail_reply');
+
+            if (isMailAction) {
+                // Beim Entwurf soll der Text "um was es geht" NICHT in der Karte stehen (er steht in der Chat-Nachricht oben)
+                messageBodyHtml = '';
+            } else if (actionData && actionData.actionType) {
                 // If message contains redundant bullet points (Termin, Aufgabe, Datum, Uhrzeit, etc.) or embedded codeblocks:
                 const hasDuplicateBullets = /•\s*\*\*(Termin|Aufgabe|Datum|Uhrzeit|Fälligkeit|Ort|Notiz|Beschreibung)\*\*/i.test(rawMsg);
                 const hasCodeBlockReply = /```/.test(rawMsg) || /_CODEBLOCK/i.test(rawMsg);
@@ -442,18 +645,77 @@
                             ${td.notes ? `<div style="font-size: 0.72rem; color: #a6adc8; margin-top: 2px;">${escapeHtml(td.notes)}</div>` : ''}
                         </div>
                     `;
-                } else if (actionData.actionType === 'send_mail_reply' && actionData.replyData) {
-                    const rd = actionData.replyData;
+                } else if ((actionData.actionType === 'send_mail_reply' || actionData.actionType === 'send_mail') && (actionData.replyData || actionData.mailData)) {
+                    const rd = actionData.mailData || actionData.replyData;
+                    let fromDisplay = rd.from || '';
+                    if (!fromDisplay && (rd.accountName || rd.fromEmail)) {
+                        fromDisplay = rd.accountName && rd.fromEmail && rd.accountName !== rd.fromEmail
+                            ? `${rd.accountName} <${rd.fromEmail}>`
+                            : (rd.fromEmail || rd.accountName);
+                    }
+                    if (!fromDisplay && window.systemMailAccounts && window.systemMailAccounts.length > 0) {
+                        const acc = (rd.accountId ? window.systemMailAccounts.find(a => a.id === Number(rd.accountId)) : null) || window.systemMailAccounts[0];
+                        if (acc) {
+                            fromDisplay = acc.name && acc.name !== acc.email ? `${acc.name} <${acc.email}>` : acc.email;
+                        }
+                    }
                     actionPreviewHtml = `
-                        <div class="action-preview-box" style="margin-top: 8px; background: rgba(0,0,0,0.35); border: 1px solid ${hexToRgba(agentColor, 0.4)}; border-left: 4px solid ${agentColor}; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px;">
-                            <div style="font-size: 0.72rem; font-weight: 700; color: ${agentColor}; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px;">
-                                <span>✉️ E-Mail-Antwort (Wird erst nach "Ja" versendet)</span>
+                        <div class="mail-draft-preview" style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
+                            <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.82rem; padding: 4px 0 8px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
+                                ${fromDisplay
+                                    ? `<div class="mail-draft-von-row" data-account-id="${rd.accountId || ''}" style="color: #cdd6f4;"><strong style="color: #89b4fa;">Von:</strong> <span style="color: #ffffff;">${escapeHtml(fromDisplay)}</span></div>`
+                                    : `<div class="mail-draft-von-row" data-account-id="${rd.accountId || ''}" data-empty="true" style="display: none; color: #cdd6f4;"></div>`
+                                }
+                                ${rd.to ? `<div style="color: #cdd6f4;"><strong style="color: #89b4fa;">An:</strong> <span style="color: #ffffff;">${escapeHtml(rd.to)}</span></div>` : ''}
+                                ${rd.subject ? `<div style="color: #cdd6f4;"><strong style="color: #89b4fa;">Betreff:</strong> <span style="color: #ffffff; font-weight: 600;">${escapeHtml(rd.subject)}</span></div>` : ''}
                             </div>
-                            <div style="font-size: 0.76rem; color: #cdd6f4;"><strong>An:</strong> ${escapeHtml(rd.to)}</div>
-                            <div style="font-size: 0.76rem; color: #cdd6f4;"><strong>Betreff:</strong> ${escapeHtml(rd.subject)}</div>
-                            <div style="font-size: 0.74rem; color: #ffffff; white-space: pre-wrap; background: rgba(255,255,255,0.03); padding: 6px 8px; border-radius: 6px; margin-top: 4px; border: 1px solid rgba(255,255,255,0.05);">${escapeHtml(rd.body)}</div>
+                            ${rd.body ? `<div style="font-size: 0.84rem; line-height: 1.6; color: #ffffff; white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; padding: 6px 0 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.08);">${escapeHtml(rd.body)}</div>` : ''}
                         </div>
                     `;
+                }
+            }
+
+            // Anhänge erkennen und Vorschau-Chips rendern
+            const attachmentsList = (actionData && (actionData.mailData?.attachments || actionData.replyData?.attachments || actionData.attachments)) || [];
+            if (attachmentsList.length === 0 && rawMsg) {
+                const matches = rawMsg.match(/[a-zA-Z0-9_\-\u00C0-\u017F]+\.(?:txt|pdf|docx?|xlsx?|png|jpe?g|svg)/gi);
+                if (matches) {
+                    matches.forEach(f => {
+                        if (!attachmentsList.includes(f)) attachmentsList.push(f);
+                    });
+                }
+            }
+            if (attachmentsList && attachmentsList.length > 0) {
+                const chips = attachmentsList.map(a => {
+                    const name = typeof a === 'string' ? a : (a.filename || a.name || 'Anhang');
+                    return `<span style="background: rgba(137, 180, 250, 0.16); color: #89b4fa; border: 1px solid rgba(137, 180, 250, 0.35); border-radius: 6px; padding: 2px 8px; font-size: 0.73rem; display: inline-flex; align-items: center; gap: 5px; font-weight: 600;"><span style="font-size: 0.85rem;">📎</span><span>${escapeHtml(name)}</span></span>`;
+                }).join(' ');
+                const attChipsHtml = `
+                    <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <span style="font-size: 0.74rem; color: #a6adc8; font-weight: 700;">Anhang:</span>
+                        ${chips}
+                    </div>
+                `;
+                if (actionPreviewHtml) {
+                    actionPreviewHtml += attChipsHtml;
+                } else {
+                    messageBodyHtml += attChipsHtml;
+                }
+            }
+
+            // Automatischer "Bearbeiten"-Button für E-Mail-Entwürfe
+            const isEmailDraft = (actionData && (actionData.actionType === 'send_mail' || actionData.actionType === 'send_mail_reply'))
+                || (notif.title && (notif.title.toLowerCase().includes('mail') || notif.title.toLowerCase().includes('entwurf')))
+                || (notif.sourceType === 'mail');
+
+            if (isEmailDraft && !notif.isDismissed && Array.isArray(buttonsList)) {
+                const hasEdit = buttonsList.some(b => b.action === 'open_composer' || b.action === 'edit_mail' || (b.label && b.label.toLowerCase().includes('bearbeit')));
+                if (!hasEdit) {
+                    buttonsList.splice(1, 0, {
+                        label: '✏️ Bearbeiten',
+                        action: 'open_composer',
+                        style: 'secondary'
+                    });
                 }
             }
 
@@ -486,7 +748,7 @@
             let statusHtml = '';
             if (notif.isDismissed) {
                 if (notif.selectedButton) {
-                    statusHtml = '<span class="chat-notification-status" style="background: rgba(166, 227, 161, 0.15); color: #a6e3a1; border: 1px solid rgba(166, 227, 161, 0.3);">✅ Ausgeführt / Beantwortet: "' + escapeHtml(notif.selectedButton) + '"</span>';
+                    statusHtml = '<span class="chat-notification-status" style="background: rgba(166, 227, 161, 0.15); color: #a6e3a1; border: 1px solid rgba(166, 227, 161, 0.3);">✅ Ausgeführt: "' + escapeHtml(notif.selectedButton) + '"</span>';
                 } else {
                     statusHtml = '<span class="chat-notification-status" style="background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.6);">✕ Geschlossen</span>';
                 }
@@ -494,34 +756,51 @@
                 statusHtml = '<button type="button" onclick="dismissNotification(event, ' + notif.id + ')" title="Benachrichtigung schließen" style="background: none; border: none; color: rgba(255,255,255,0.4); cursor: pointer; padding: 2px 6px; font-size: 0.85rem; line-height: 1; border-radius: 4px; transition: color 0.2s;" onmouseover="this.style.color=\'#f38ba8\'" onmouseout="this.style.color=\'rgba(255,255,255,0.4)\'">✕</button>';
             }
 
-            // Quick Links
-            const mailLinkBtn = (notif.sourceType === 'mail' && notif.sourceId) 
-                ? '<button type="button" onclick="event.stopPropagation(); openMailReadModal(' + notif.sourceId + ', \'dashboard\')" class="nav-btn" style="padding: 3px 8px; font-size: 0.72rem; background: rgba(137, 180, 250, 0.12); color: var(--accent); border: 1px solid rgba(137, 180, 250, 0.3); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" title="Verknüpfte E-Mail öffnen">✉️ Zur E-Mail ➔</button>' 
+            // Quick Links - Kreis-Buttons mit Icon (Mail & Agent-Chat)
+            const mailId = notif.sourceId || (actionData && (actionData.mailId || actionData.emailId || (actionData.replyData && actionData.replyData.mailId)));
+            const mailLinkBtn = mailId
+                ? `<button type="button" onclick="event.stopPropagation(); openMailReadModal(${JSON.stringify(mailId)}, 'dashboard')" class="briefing-circle-btn mail-circle-btn" title="Verknüpfte E-Mail öffnen">${googleIcon('mail', '14px', 'fill: #89b4fa;')}</button>`
                 : '';
 
-            const chatLinkBtn = (notif.conversationId || targetConvId) 
-                ? '<button type="button" onclick="event.stopPropagation(); loadAgentRun(\'' + (notif.conversationId || targetConvId) + '\')" class="nav-btn" style="padding: 3px 8px; font-size: 0.72rem; background: rgba(203, 166, 247, 0.15); color: #cba6f7; border: 1px solid rgba(203, 166, 247, 0.35); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" title="Agent Run Chatverlauf öffnen">💬 Agent-Chat ➔</button>' 
-                : '';
+            const conversationRunId = notif.conversationId || targetConvId || (actionData && actionData.conversationId);
+            const chatLinkBtn = conversationRunId
+                ? `<button type="button" onclick="event.stopPropagation(); loadAgentRun('${conversationRunId}')" class="briefing-circle-btn chat-circle-btn" title="Agent-Chatverlauf öffnen">${googleIcon('chat', '14px', 'fill: #cba6f7;')}</button>`
+                : (mailId ? `<button type="button" onclick="event.stopPropagation(); openAgentChatForMail(event, ${JSON.stringify(mailId)})" class="briefing-circle-btn chat-circle-btn" title="Agent-Chatverlauf öffnen">${googleIcon('chat', '14px', 'fill: #cba6f7;')}</button>` : '');
 
-            let linksHtml = '';
-            if (mailLinkBtn || chatLinkBtn) {
-                linksHtml = '<div class="chat-notification-links" style="display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.05);">' + chatLinkBtn + mailLinkBtn + '</div>';
-            }
+            const briefingCardStyle = `
+                border-left: none !important;
+                border-right: none !important;
+                border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+                background: transparent !important;
+                padding: 16px 4px !important;
+                margin: 0 !important;
+            `;
 
-            const cardStyle = notif.isDismissed
+            const defaultCardStyle = notif.isDismissed
                 ? `border-left: 5px solid ${agentColor}88 !important;`
                 : `border-left: 5px solid ${agentColor} !important; border-color: ${hexToRgba(agentColor, 0.45)} !important; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 18px ${hexToRgba(agentColor, 0.22)} !important;`;
 
+            const cardStyle = isBriefing ? briefingCardStyle : defaultCardStyle;
+            const cardClass = `chat-notification-card type-${notifType}${dismissedClass} ${isBriefing ? 'is-briefing-view' : ''}`;
+
+            const cardDisplayTitle = isMailAction
+                ? (actionData.actionType === 'send_mail_reply' ? '✉️ E-Mail-Antwort' : '✉️ E-Mail-Entwurf')
+                : escTitle;
+
             return `
-                <div class="chat-notification-card type-${notifType}${dismissedClass}" style="${cardStyle}" ${notifId ? `data-notification-id="${notifId}"` : ''}>
-                    <div class="chat-notification-header">
-                        <div class="chat-notification-title-wrap">
-                            <span class="chat-notification-badge" style="background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${hexToRgba(agentColor, 0.3)};">${typeBadgeText}</span>
-                            ${agentBadgeHtml}
-                            <span class="chat-notification-title">${escTitle}</span>
+                <div class="${cardClass}" style="${cardStyle}" ${notifId ? `data-notification-id="${notifId}"` : ''}>
+                    <div class="chat-notification-header" style="${isBriefing ? 'border-bottom: none; padding-bottom: 4px;' : ''}">
+                        <div class="chat-notification-title-wrap" style="display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1;">
+                            ${badgesHtml}
+                            <span class="chat-notification-title" style="font-weight: 700; font-size: 0.95rem; color: #ffffff; line-height: 1.35;">${cardDisplayTitle}</span>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-                            ${timeStr ? `<span class="chat-notification-meta" style="font-size: 0.72rem; opacity: 0.65;">${timeStr}</span>` : ''}
+                        <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                            ${chatLinkBtn}
+                            ${mailLinkBtn}
+                            ${timeStr ? `<span class="chat-notification-meta" style="font-size: 0.72rem; opacity: 0.65; white-space: nowrap;">${timeStr}</span>` : ''}
                             <div class="chat-notification-status-container">${statusHtml}</div>
                         </div>
                     </div>
@@ -530,7 +809,6 @@
                         ${actionPreviewHtml}
                     </div>
                     ${buttonsHtml ? `<div class="chat-notification-actions">${buttonsHtml}</div>` : ''}
-                    ${linksHtml}
                 </div>
             `;
         }
@@ -548,8 +826,108 @@
 
 
 
+        async function openComposeFromNotification(notifId, cardEl, replyText) {
+            let notif = null;
+            if (typeof currentConversationNotifications !== 'undefined') {
+                notif = currentConversationNotifications.find(n => String(n.id) === String(notifId));
+            }
+            if (!notif && notifId) {
+                try {
+                    const r = await fetch(getApiUrl(`/api/notifications/${notifId}`));
+                    if (r.ok) notif = await r.json();
+                } catch (_) {}
+            }
+
+            let to = '';
+            let subject = '';
+            let body = '';
+            let attachments = [];
+            let accountId = null;
+
+            let actionData = notif?.actionData;
+            if (typeof actionData === 'string') {
+                try { actionData = JSON.parse(actionData); } catch (_) {}
+            }
+
+            const mailData = actionData?.mailData || actionData?.replyData;
+            if (mailData) {
+                to = mailData.to || '';
+                subject = mailData.subject || '';
+                body = mailData.body || '';
+                accountId = mailData.accountId || null;
+                if (Array.isArray(mailData.attachments)) {
+                    attachments = [...mailData.attachments];
+                }
+            }
+
+            const rawMsg = notif?.message || (cardEl ? cardEl.querySelector('.chat-notification-body')?.innerText : '') || '';
+            if (!to) {
+                const mTo = rawMsg.match(/(?:Empf[äa]nger|An):\s*([^\n\r*<]+)/i);
+                if (mTo) to = mTo[1].trim();
+            }
+            if (!subject) {
+                const mSub = rawMsg.match(/Betreff:\s*([^\n\r*]+)/i);
+                if (mSub) subject = mSub[1].trim();
+            }
+            if (!body && cardEl) {
+                const previewBody = cardEl.querySelector('.action-preview-box div[style*="white-space: pre-wrap"]');
+                if (previewBody) {
+                    body = previewBody.innerText.trim();
+                }
+            }
+            if (!body && rawMsg) {
+                if (rawMsg.includes('--------------------------------------------------')) {
+                    const parts = rawMsg.split('--------------------------------------------------');
+                    if (parts.length >= 3) {
+                        body = parts[1].replace(/\*\*Absender[^\n]+\n/g, '').replace(/\*\*Empf[^\n]+\n/g, '').replace(/\*\*Betreff[^\n]+\n/g, '').trim();
+                    }
+                }
+                if (!body) body = rawMsg;
+            }
+
+            if (attachments.length === 0 && rawMsg) {
+                const matches = rawMsg.match(/[a-zA-Z0-9_\-\u00C0-\u017F]+\.(?:txt|pdf|docx?|xlsx?|png|jpe?g|svg)/gi);
+                if (matches) {
+                    matches.forEach(f => {
+                        if (!attachments.includes(f)) attachments.push(f);
+                    });
+                }
+            }
+
+            const replyToId = actionData?.replyData?.mailId || (notif?.sourceType === 'mail' && notif?.sourceId ? Number(notif.sourceId) : null) || (replyText && !isNaN(Number(replyText)) ? Number(replyText) : null);
+
+            if (!accountId && cardEl) {
+                const vonRow = cardEl.querySelector('.mail-draft-von-row');
+                if (vonRow && vonRow.getAttribute('data-account-id')) {
+                    accountId = Number(vonRow.getAttribute('data-account-id')) || null;
+                }
+            }
+            if (!accountId && window.systemMailAccounts && window.systemMailAccounts.length > 0) {
+                accountId = window.systemMailAccounts[0].id;
+            }
+
+            if (typeof openMailComposeModal === 'function') {
+                openMailComposeModal(replyToId, accountId, {
+                    to,
+                    subject,
+                    body,
+                    attachments,
+                    accountId,
+                    notificationId: notifId
+                });
+            }
+        }
+        window.openComposeFromNotification = openComposeFromNotification;
+
+
+
         async function handleChatNotificationClick(btnEl, notifId, label, action, replyText, conversationId) {
             const cardEl = btnEl.closest('.chat-notification-card');
+            if (action === 'open_composer' || action === 'edit_mail') {
+                openComposeFromNotification(notifId, cardEl, replyText);
+                return;
+            }
+
             if (cardEl) {
                 cardEl.querySelectorAll('.chat-notification-btn').forEach(b => b.disabled = true);
             }
@@ -702,12 +1080,10 @@
                 });
                 msg.appendChild(attachmentsDiv);
             }
-            
-            if (text) {
-                const textDiv = document.createElement('div');
-                textDiv.innerHTML = renderMarkdown(text);
-                msg.appendChild(textDiv);
+            let cleanText = text || '';
+            let notifCard = null;
 
+            if (text) {
                 // Inline Notification Box für Fragen / Bestätigungen im Chat rendern
                 if (!isUser) {
                     let notifObj = notification;
@@ -716,40 +1092,116 @@
                             if (n._rendered) return false;
                             if (n.title && text.includes(n.title)) return true;
                             if (n.message && text.includes(n.message.slice(0, 30))) return true;
+                            // Mail-Entwurf / Mail-Aktion in diesem Text erkennen
+                            if (text.includes('schlage_mail_vor') || text.includes('schlage_mail_antwort_vor')) {
+                                let act = n.actionData;
+                                if (typeof act === 'string') {
+                                    try { act = JSON.parse(act); } catch (_) {}
+                                }
+                                if (act && (act.actionType === 'send_mail' || act.actionType === 'send_mail_reply')) return true;
+                            }
+                            if (text.includes('schlage_termin_vor')) {
+                                let act = n.actionData;
+                                if (typeof act === 'string') {
+                                    try { act = JSON.parse(act); } catch (_) {}
+                                }
+                                if (act && act.actionType === 'create_event') return true;
+                            }
+                            if (text.includes('schlage_aufgabe_vor')) {
+                                let act = n.actionData;
+                                if (typeof act === 'string') {
+                                    try { act = JSON.parse(act); } catch (_) {}
+                                }
+                                if (act && act.actionType === 'create_task') return true;
+                            }
                             return false;
                         });
-                        if (notifObj) notifObj._rendered = true;
+                        if (notifObj) {
+                            if (typeof notifObj.actionData === 'string') {
+                                try { notifObj.actionData = JSON.parse(notifObj.actionData); } catch (_) {}
+                            }
+                            notifObj._rendered = true;
+                        }
                     }
                     if (!notifObj) {
                         notifObj = parseNotificationFromText(text);
                         if (notifObj && typeof currentConversationNotifications !== 'undefined' && currentConversationNotifications.length > 0) {
-                            const dbMatch = currentConversationNotifications.find(n => n.title === notifObj.title || (notifObj.conversationId && n.conversationId === notifObj.conversationId));
+                            const dbMatch = currentConversationNotifications.find(n => {
+                                if (n._rendered) return false;
+                                if (n.title && notifObj.title && (n.title === notifObj.title || n.title.includes(notifObj.title) || notifObj.title.includes(n.title))) return true;
+                                if (notifObj.actionData && n.actionData) {
+                                    let nAct = typeof n.actionData === 'string' ? JSON.parse(n.actionData) : n.actionData;
+                                    if (nAct && nAct.actionType === notifObj.actionData.actionType) return true;
+                                }
+                                if (n.sourceType === 'mail' && (notifObj.actionData?.actionType?.includes('mail') || (notifObj.title && notifObj.title.toLowerCase().includes('mail')))) return true;
+                                if (notifObj.conversationId && n.conversationId === notifObj.conversationId) return true;
+                                return false;
+                            });
                             if (dbMatch) {
-                                notifObj.id = dbMatch.id;
-                                notifObj.isDismissed = dbMatch.isDismissed;
-                                notifObj.selectedButton = dbMatch.selectedButton;
+                                let dbAct = dbMatch.actionData;
+                                if (typeof dbAct === 'string') {
+                                    try { dbAct = JSON.parse(dbAct); } catch (_) {}
+                                }
+                                notifObj = {
+                                    ...notifObj,
+                                    ...dbMatch,
+                                    id: dbMatch.id,
+                                    title: dbMatch.title || notifObj.title,
+                                    message: dbMatch.message || notifObj.message,
+                                    actionData: dbAct || dbMatch.actionData || notifObj.actionData,
+                                    isDismissed: dbMatch.isDismissed,
+                                    selectedButton: dbMatch.selectedButton
+                                };
                                 dbMatch._rendered = true;
                             }
                         }
                     }
-                    if (notifObj) {
-                        const notifCard = createNotificationCardElement(notifObj, currentConversationId);
-                        msg.appendChild(notifCard);
+
+                    const isMailDraftCard = notifObj && (
+                        (notifObj.actionData && (notifObj.actionData.actionType === 'send_mail' || notifObj.actionData.actionType === 'send_mail_reply')) ||
+                        (notifObj.title && (notifObj.title.toLowerCase().includes('mail') || notifObj.title.toLowerCase().includes('entwurf')))
+                    );
+                    if (isMailDraftCard) {
+                        cleanText = cleanText.replace(/\*{0,2}E-Mail-Inhalt:?\*{0,2}\s*(?:\r?\n\s*>[^\n]*)+/gi, '').replace(/\n{3,}/g, '\n\n').trim();
                     }
+
+                    if (cleanText.trim().length > 0) {
+                        const textDiv = document.createElement('div');
+                        textDiv.innerHTML = renderMarkdown(cleanText);
+                        msg.appendChild(textDiv);
+                    }
+
+                    if (notifObj) {
+                        notifCard = createNotificationCardElement(notifObj, currentConversationId);
+                    }
+                } else {
+                    const textDiv = document.createElement('div');
+                    textDiv.innerHTML = renderMarkdown(text);
+                    msg.appendChild(textDiv);
                 }
 
-                const copyBtn = document.createElement('button');
-                copyBtn.className = 'message-copy-btn';
-                copyBtn.setAttribute('title', 'Nachricht kopieren');
-                copyBtn.innerHTML = '📋';
-                copyBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    copyMessageText(copyBtn);
-                };
-                msg.appendChild(copyBtn);
+                if (cleanText.trim().length > 0) {
+                    const copyBtn = document.createElement('button');
+                    copyBtn.className = 'message-copy-btn';
+                    copyBtn.setAttribute('title', 'Nachricht kopieren');
+                    copyBtn.innerHTML = '📋';
+                    copyBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        copyMessageText(copyBtn);
+                    };
+                    msg.appendChild(copyBtn);
+                }
             }
 
-            chatBox.appendChild(msg);
+            const hasMsgContent = (cleanText && cleanText.trim().length > 0) || (attachments && attachments.length > 0) || (replyTo && replyTo.id);
+            if (hasMsgContent) {
+                msg.setAttribute('data-msg-text', cleanText || '');
+                chatBox.appendChild(msg);
+            }
+
+            if (notifCard) {
+                chatBox.appendChild(notifCard);
+            }
 
             if (widget) {
                 renderWidget(widget, chatBox);
@@ -827,14 +1279,13 @@
                             const repeatBadge = isRec ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrender Termin">🔄</span>` : '';
                             const rescheduleBadge = ev.originalStart ? ` <span style="background: rgba(249, 226, 175, 0.15); color: #f9e2af; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase;" title="Dieser Termin wurde verschoben">verschoben</span>` : '';
                             const originalTimeText = ev.originalStart ? ` <span style="font-size: 0.7rem; opacity: 0.65; color: #f9e2af;">(ursprünglich: ${new Date(ev.originalStart).toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit'})} ${new Date(ev.originalStart).toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'})})</span>` : '';
-                            const targetDate = ev.occurrenceDate || ev.time.split('T')[0];
+                            const targetDate = ev.occurrenceDate || (ev.time ? (typeof ev.time === 'string' ? ev.time.split('T')[0] : new Date(ev.time).toISOString().split('T')[0]) : (ev.start ? new Date(ev.start).toISOString().split('T')[0] : ''));
                             
                             const cancelStyle = ev.isCancelled ? 'color: var(--off); text-decoration: line-through;' : '';
                             const titleCancelStyle = ev.isCancelled ? 'color: var(--off); font-weight: 500;' : 'font-weight: 500;';
                             const reasonHtml = (ev.isCancelled && ev.cancellationReason) ? ` <span style="font-size: 0.75rem; color: var(--off); text-decoration: none; font-style: italic;">(${escapeHtml(ev.cancellationReason)})</span>` : (ev.isCancelled ? ' <span style="font-size: 0.75rem; color: var(--off); text-decoration: none; font-style: italic;">(Ausgefallen)</span>' : '');
                             const escTitle = escapeHtml(ev.title).replace(/'/g, "\\'");
-
-                            const timeBadgeHtml = getEventTimeBadge(ev);
+                            const timeBadgeHtml = (typeof window.getEventTimeBadge === 'function') ? window.getEventTimeBadge(ev) : '';
 
                             let personsHtml = "";
                             if (ev.persons && ev.persons.length > 0) {
@@ -1008,8 +1459,9 @@
                 }
             }, 300);
 
+            let res;
             try {
-                const res = await fetch(getApiUrl('/chat'), {
+                res = await fetch(getApiUrl('/chat'), {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ 
@@ -1018,21 +1470,44 @@
                         conversationId: currentConversationId 
                     })
                 });
-                const data = await res.json();
-                
+            } catch (networkErr) {
                 clearInterval(pollInterval);
                 thinkingDiv.remove();
+                addMessage("Fehler beim Senden der Nachricht: Netzwerkverbindung fehlgeschlagen.", false);
+                return;
+            }
 
+            clearInterval(pollInterval);
+            thinkingDiv.remove();
+
+            if (!res.ok) {
+                let errMsg = "Fehler beim Verarbeiten der Nachricht auf dem Server.";
+                try {
+                    const errData = await res.json();
+                    if (errData && errData.error) errMsg = errData.error;
+                } catch (_) {}
+                addMessage(errMsg, false);
+                return;
+            }
+
+            try {
+                const data = await res.json();
                 currentConversationId = data.conversationId;
-                addMessage(data.text, false, data.widget);
-                loadTopWidgets();
+                if (Array.isArray(data.notifications) && data.notifications.length > 0) {
+                    currentConversationNotifications = data.notifications;
+                    currentConversationNotifications.forEach(n => n._rendered = false);
+                } else if (data.notification) {
+                    currentConversationNotifications = [data.notification];
+                }
+                addMessage(data.text, false, data.widget, [], null, data.notification);
+                if (typeof loadTopWidgets === 'function') {
+                    loadTopWidgets();
+                }
                 if (isElectron && ipcRenderer) {
                     ipcRenderer.send('widgets-updated');
                 }
-            } catch (e) {
-                clearInterval(pollInterval);
-                thinkingDiv.remove();
-                addMessage("Fehler beim Senden der Nachricht.", false);
+            } catch (renderErr) {
+                console.error("Fehler beim Anzeigen der Antwort im Chat:", renderErr);
             }
         }
 
@@ -1057,43 +1532,6 @@
 
 
 
-        function getEventTimeBadge(ev) {
-            if (ev.isAllDay) {
-                return `<span class="timeline-time-badge event-time-badge" style="background: rgba(149, 165, 166, 0.15); color: #bdc3c7; border-color: rgba(149, 165, 166, 0.3);">Ganztägig</span>`;
-            }
-            if (ev.fuzzyTime) {
-                let fStyle = '';
-                if (ev.fuzzyTime === "morgens") fStyle = "background: rgba(241, 196, 15, 0.15); color: #f1c40f; border-color: rgba(241, 196, 15, 0.3);";
-                else if (ev.fuzzyTime === "vormittag") fStyle = "background: rgba(230, 126, 34, 0.15); color: #e67e22; border-color: rgba(230, 126, 34, 0.3);";
-                else if (ev.fuzzyTime === "mittags") fStyle = "background: rgba(46, 204, 113, 0.15); color: #2ecc71; border-color: rgba(46, 204, 113, 0.3);";
-                else if (ev.fuzzyTime === "nachmittag") fStyle = "background: rgba(52, 152, 219, 0.15); color: #3498db; border-color: rgba(52, 152, 219, 0.3);";
-                else if (ev.fuzzyTime === "abends") fStyle = "background: rgba(155, 89, 182, 0.15); color: #9b59b6; border-color: rgba(155, 89, 182, 0.3);";
-                return `<span class="timeline-time-badge event-time-badge" style="${fStyle}">${escapeHtml(ev.fuzzyTime)}</span>`;
-            }
-            const eventTime = ev.time || ev.start;
-            if (!eventTime) return '';
-            const start = new Date(eventTime);
-            if (isNaN(start.getTime())) return '';
-            const formatTime = (d) => d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-            const startStr = formatTime(start);
-            const eventEndTime = ev.endTime || ev.end;
-            let endStr = '';
-            if (eventEndTime) {
-                const end = new Date(eventEndTime);
-                if (!isNaN(end.getTime()) && end.getTime() > start.getTime()) {
-                    if (start.toDateString() === end.toDateString()) {
-                        endStr = formatTime(end);
-                    } else {
-                        endStr = `${end.toLocaleDateString('de-DE', {day: '2-digit', month: '2-digit'})} ${formatTime(end)}`;
-                    }
-                }
-            }
-            const text = endStr ? `${startStr} – ${endStr} Uhr` : `${startStr} Uhr`;
-            return `<span class="timeline-time-badge event-time-badge">${text}</span>`;
-        }
-
-
-
         function getElementTopRelativeToParent(element, parent) {
             let top = 0;
             let curr = element;
@@ -1106,12 +1544,18 @@
 
 
 
-        if (plusBtn && fileInput) {
+        if (plusBtn) {
             plusBtn.onclick = (e) => {
                 e.preventDefault();
-                fileInput.click();
+                if (typeof toggleChatAttachmentMenu === 'function') {
+                    toggleChatAttachmentMenu(e);
+                } else if (fileInput) {
+                    fileInput.click();
+                }
             };
+        }
 
+        if (fileInput) {
             fileInput.onchange = async () => {
                 const files = fileInput.files;
                 if (files && files.length > 0) {

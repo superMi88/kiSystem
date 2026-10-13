@@ -24,7 +24,7 @@
                 
                 const modelSelect = document.getElementById('settings-ai-model');
                 if (modelSelect) {
-                    modelSelect.value = settings.aiModel || 'gemini-3.5-flash';
+                    modelSelect.value = settings.aiModel || 'gemini-2.5-flash';
                 }
 
                 try {

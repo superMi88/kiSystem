@@ -265,3 +265,88 @@
     border: 1px solid rgba(249, 226, 175, 0.4);
 }
 
+/* --- Briefing Action Cards: Striche oben/unten statt Box-Umrandung --- */
+.briefing-dashboard .chat-notification-card,
+.chat-notification-card.is-briefing-view {
+    border-left: none !important;
+    border-right: none !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 16px 4px !important;
+    margin: 0 !important;
+    animation: none !important;
+}
+
+.briefing-dashboard .chat-notification-card + .chat-notification-card,
+.chat-notification-card.is-briefing-view + .chat-notification-card.is-briefing-view {
+    border-top: none !important;
+}
+
+.briefing-dashboard .chat-notification-card:hover,
+.chat-notification-card.is-briefing-view:hover {
+    background: rgba(255, 255, 255, 0.015) !important;
+}
+
+.chat-notification-card.is-briefing-view .chat-notification-header {
+    border-bottom: none !important;
+    padding-bottom: 4px !important;
+}
+
+/* --- Kreis-Buttons mit Icon für Mail & Agent-Chat --- */
+.briefing-circle-btn {
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    min-height: 28px !important;
+    border-radius: 50% !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    padding: 0 !important;
+    border: none;
+    outline: none;
+    line-height: 1;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+.briefing-circle-btn.mail-circle-btn {
+    background: rgba(137, 180, 250, 0.14) !important;
+    border: 1px solid rgba(137, 180, 250, 0.35) !important;
+    color: #89b4fa !important;
+}
+
+.briefing-circle-btn.mail-circle-btn:hover {
+    background: rgba(137, 180, 250, 0.3) !important;
+    border-color: #89b4fa !important;
+    transform: scale(1.12);
+    box-shadow: 0 0 10px rgba(137, 180, 250, 0.35);
+}
+
+.briefing-circle-btn.chat-circle-btn {
+    background: rgba(203, 166, 247, 0.16) !important;
+    border: 1px solid rgba(203, 166, 247, 0.38) !important;
+    color: #cba6f7 !important;
+}
+
+.briefing-circle-btn.chat-circle-btn:hover {
+    background: rgba(203, 166, 247, 0.32) !important;
+    border-color: #cba6f7 !important;
+    transform: scale(1.12);
+    box-shadow: 0 0 10px rgba(203, 166, 247, 0.35);
+}
+
+.briefing-circle-btn svg,
+.briefing-circle-btn .google-icon {
+    width: 14px;
+    height: 14px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+

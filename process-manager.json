@@ -32,8 +32,8 @@
           "key": "GEMINI_MODEL",
           "label": "Gemini Modell",
           "type": "credential",
-          "defaultValue": "gemini-3.5-flash",
-          "description": "Standard Gemini Modell (z. B. gemini-3.5-flash)"
+          "defaultValue": "gemini-2.5-flash",
+          "description": "Standard Gemini Modell (z. B. gemini-2.5-flash)"
         },
         {
           "key": "MOBILE_SERVER_URL",

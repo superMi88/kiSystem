@@ -5,6 +5,8 @@ import xss, { IFilterXSSOptions } from "xss";
 import { PrismaClient, MailAccount } from "@prisma/client";
 import { parseDbBookingEmail, lookupStationEva } from "./dbBahnService.js";
 import { processEmailForActionItems } from "./actionItemService.js";
+import fs from "fs";
+import path from "path";
 
 /**
  * Sichere HTML-Bereinigung für E-Mail-Inhalte.
@@ -832,6 +834,71 @@ export class MailService {
   }
 
   /**
+   * Löst Anhänge (Namen, Pfade oder MediaItem-IDs) in gültige Nodemailer-Attachment-Objekte auf.
+   */
+  static async resolveAttachment(att: any, prisma: PrismaClient): Promise<{ filename: string; path: string; contentType?: string } | null> {
+    if (!att) return null;
+    if (typeof att === "object" && att.filename) {
+      let fPath = att.path;
+      if (fPath && !path.isAbsolute(fPath)) {
+        fPath = path.join(process.cwd(), "public", fPath.replace(/^\//, ""));
+      }
+      return {
+        filename: att.filename,
+        path: fPath || "",
+        contentType: att.contentType
+      };
+    }
+    const queryStr = String(att).trim();
+    if (!queryStr) return null;
+
+    // In MediaItem Datenbank suchen
+    const media = await prisma.mediaItem.findFirst({
+      where: {
+        isDeleted: false,
+        OR: [
+          { fileName: { contains: queryStr, mode: "insensitive" } },
+          { title: { contains: queryStr, mode: "insensitive" } },
+          { filePath: { contains: queryStr, mode: "insensitive" } }
+        ]
+      }
+    });
+
+    if (media) {
+      const absPath = path.join(process.cwd(), "public", media.filePath.replace(/^\//, ""));
+      if (fs.existsSync(absPath)) {
+        return {
+          filename: media.fileName,
+          path: absPath,
+          contentType: media.fileType || undefined
+        };
+      }
+    }
+
+    // Direkt in public/uploads prüfen
+    const baseName = path.basename(queryStr);
+    const directPath = path.join(process.cwd(), "public", "uploads", baseName);
+    if (fs.existsSync(directPath)) {
+      return {
+        filename: baseName,
+        path: directPath
+      };
+    }
+
+    return null;
+  }
+
+  static async resolveAttachments(attachments: any[], prisma: PrismaClient): Promise<Array<{ filename: string; path: string; contentType?: string }>> {
+    if (!Array.isArray(attachments)) return [];
+    const list: Array<{ filename: string; path: string; contentType?: string }> = [];
+    for (const item of attachments) {
+      const res = await this.resolveAttachment(item, prisma);
+      if (res) list.push(res);
+    }
+    return list;
+  }
+
+  /**
    * Sendet eine E-Mail via SMTP über das angegebene Konto.
    */
   static async sendEmail(
@@ -842,6 +909,7 @@ export class MailService {
       body: string;
       inReplyTo?: string;
       references?: string;
+      attachments?: any[];
     },
     prisma: PrismaClient
   ): Promise<{ success: boolean; messageId?: string; error?: string }> {
@@ -867,13 +935,18 @@ export class MailService {
     });
 
     try {
+      const resolvedAttachments = params.attachments && params.attachments.length > 0
+        ? await this.resolveAttachments(params.attachments, prisma)
+        : undefined;
+
       const mailOptions: nodemailer.SendMailOptions = {
         from: `"${account.name}" <${account.email}>`,
         to: params.to,
         subject: params.subject,
         text: params.body,
         inReplyTo: params.inReplyTo,
-        references: params.references
+        references: params.references,
+        attachments: resolvedAttachments && resolvedAttachments.length > 0 ? resolvedAttachments : undefined
       };
 
       const info = await transporter.sendMail(mailOptions);

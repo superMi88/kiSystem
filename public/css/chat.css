@@ -78,6 +78,7 @@ button.tool.active-off { background: var(--off); color: #11111b; box-shadow: 0 0
     border-radius: 8px;
     font-size: 0.9rem;
     line-height: 1.5;
+    flex-shrink: 0;
 }
 
 .message.user {
@@ -283,7 +284,7 @@ input:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--acc
     outline: none;
 }
 
-#plus-btn, #mic-btn, #send-btn, #tab-btn-chat, #tab-btn-dashboard, #tab-btn-briefing {
+#plus-btn, #mic-btn, #send-btn, .row-switch-btn, #tab-btn-chat, #tab-btn-dashboard, #tab-btn-briefing, #tab-btn-locations, #tab-btn-photos, #tab-btn-docs, #tab-btn-media {
     background: transparent !important;
     border: none !important;
     width: 36px;
@@ -301,31 +302,31 @@ input:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--acc
     margin-bottom: 2px;
 }
 
-#plus-btn:hover, #mic-btn:hover, #send-btn:hover, #tab-btn-chat:hover:not(.active), #tab-btn-dashboard:hover:not(.active), #tab-btn-briefing:hover:not(.active) {
+#plus-btn:hover, #mic-btn:hover, #send-btn:hover, .row-switch-btn:hover:not(.active), #tab-btn-chat:hover:not(.active), #tab-btn-dashboard:hover:not(.active), #tab-btn-briefing:hover:not(.active), #tab-btn-locations:hover:not(.active), #tab-btn-photos:hover:not(.active), #tab-btn-docs:hover:not(.active), #tab-btn-media:hover:not(.active) {
     background: rgba(255, 255, 255, 0.08) !important;
 }
 
-#plus-btn:active, #mic-btn:active, #send-btn:active, #tab-btn-chat:active, #tab-btn-dashboard:active, #tab-btn-briefing:active {
+#plus-btn:active, #mic-btn:active, #send-btn:active, .row-switch-btn:active {
     transform: scale(0.92);
 }
 
-#tab-btn-chat svg, #tab-btn-dashboard svg, #tab-btn-briefing svg {
+.row-switch-btn svg, #tab-btn-chat svg, #tab-btn-dashboard svg, #tab-btn-briefing svg, #tab-btn-locations svg, #tab-btn-photos svg, #tab-btn-docs svg, #tab-btn-media svg {
     stroke: var(--accent);
     transition: transform 0.2s, stroke 0.2s;
 }
 
-#tab-btn-chat:hover:not(.active) svg, #tab-btn-dashboard:hover:not(.active) svg, #tab-btn-briefing:hover:not(.active) svg {
+.row-switch-btn:hover:not(.active) svg {
     stroke: #ffffff;
     transform: scale(1.1);
 }
 
-/* Active Highlight for selected view (Chat vs Arbeitsbereich vs Briefing) */
-#tab-btn-chat.active, #tab-btn-dashboard.active, #tab-btn-briefing.active {
+/* Active Highlight for selected view */
+.row-switch-btn.active, #tab-btn-chat.active, #tab-btn-dashboard.active, #tab-btn-briefing.active, #tab-btn-locations.active, #tab-btn-photos.active, #tab-btn-docs.active, #tab-btn-media.active {
     background: var(--accent) !important;
     box-shadow: 0 0 12px rgba(137, 180, 250, 0.45) !important;
 }
 
-#tab-btn-chat.active svg, #tab-btn-dashboard.active svg, #tab-btn-briefing.active svg {
+.row-switch-btn.active svg, #tab-btn-chat.active svg, #tab-btn-dashboard.active svg, #tab-btn-briefing.active svg, #tab-btn-locations.active svg, #tab-btn-photos.active svg, #tab-btn-docs.active svg, #tab-btn-media.active svg {
     stroke: #11111b !important;
     transform: scale(1.05);
 }
@@ -733,6 +734,27 @@ input:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--acc
 .arbeitstisch-card-body .chat-notification-card {
     margin-top: 0;
     margin-bottom: 0;
+}
+
+/* Getrennt als eigenständige Entwurfs- & Benachrichtigungskarte im Chat */
+.chat-area > .chat-notification-card {
+    align-self: flex-start;
+    width: 100%;
+    max-width: 88%;
+    min-width: min(100%, 360px);
+    flex-shrink: 0 !important;
+    min-height: fit-content !important;
+    margin-top: 0;
+    margin-bottom: 6px;
+    box-sizing: border-box;
+    overflow: visible !important;
+}
+
+@media (max-width: 600px) {
+    .chat-area > .chat-notification-card {
+        max-width: 96%;
+        min-width: 0;
+    }
 }
 
 .chat-notification-card.type-action_required {

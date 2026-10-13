@@ -70,6 +70,26 @@
                             html += getFilteredPeopleListHtml(currentMemoryPeopleList, personSearchQuery);
                             html += `</div>`;
                             widgetDiv.innerHTML = html;
+                        } else if (widget.data.widgetType === 'locations_list') {
+                            widgetDiv.id = 'widget-locations';
+                            if (typeof renderLocationsWidget === 'function') {
+                                renderLocationsWidget(widget.data, widgetDiv);
+                            }
+                        } else if (widget.data.widgetType === 'photos_gallery') {
+                            widgetDiv.id = 'widget-photos';
+                            if (typeof renderPhotosWidget === 'function') {
+                                renderPhotosWidget(widget.data, widgetDiv);
+                            }
+                        } else if (widget.data.widgetType === 'docs_overview') {
+                            widgetDiv.id = 'widget-docs';
+                            if (typeof renderDocsWidget === 'function') {
+                                renderDocsWidget(widget.data, widgetDiv);
+                            }
+                        } else if (widget.data.widgetType === 'media_gallery') {
+                            widgetDiv.id = 'widget-media';
+                            if (typeof renderMediaWidget === 'function') {
+                                renderMediaWidget(widget.data, widgetDiv);
+                            }
                         } else if (widget.data.widgetType === 'tasks_overview') {
                             let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">`;
                             

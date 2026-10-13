@@ -1,0 +1,8 @@
+LEBENSLAUF
+Name: Tom Mustermann
+Beruf: Senior Fullstack & KI Entwickler
+Erfahrung:
+- 2021 - Heute: Lead Developer bei CloudTech Solutions (TypeScript, Node.js, React, Docker, Gemini AI Integration)
+- 2018 - 2021: Fullstack Web Developer bei Digital Pioneers (REST APIs, PostgreSQL, Vue.js)
+Ausbildung: B.Sc. Informatik an der TU München
+Kernkompetenzen: TypeScript, Node.js, Python, PostgreSQL, Prisma, Systemarchitektur, LLM Prompt Engineering & Autonomous Agents, Fullstack AI Systems
