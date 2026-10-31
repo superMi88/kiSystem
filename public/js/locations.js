@@ -2,7 +2,7 @@
 // Locations & Places Module
 // ==========================================================================
 
-(function() {
+(function () {
     window.currentLocationsList = [];
     window.currentLocationsFilter = 'all';
     window.locationSearchQuery = '';
@@ -47,10 +47,17 @@
             return true;
         });
 
+        const isFilterOpen = Boolean(window.locationsFilterOpen);
+        const locFilterBtn = document.getElementById('header-locations-filter-btn');
+        if (locFilterBtn) {
+            if (isFilterOpen) locFilterBtn.classList.add('active');
+            else locFilterBtn.classList.remove('active');
+        }
+
         let html = `
-            <div class="locations-dashboard">
-                <!-- Filter Pills -->
-                <div class="locations-filter-bar">
+            < div class="locations-dashboard" >
+                < !--Filter Pills-- >
+                <div class="locations-filter-bar" id="locations-filter-bar" style="display: ${isFilterOpen ? 'flex' : 'none'};">
                     <button type="button" onclick="switchLocationsFilter('all')" class="locations-filter-pill ${filter === 'all' ? 'active' : ''}">
                         <span>✨ Alle</span>
                         <span class="locations-filter-count">${totalCount}</span>
@@ -73,12 +80,12 @@
                     </button>
                 </div>
 
-                <!-- Liste der Orte -->
-                <div class="locations-grid">
-        `;
+                <!--Liste der Orte-- >
+            <div class="locations-grid">
+                `;
 
-        if (filtered.length === 0) {
-            html += `
+                if (filtered.length === 0) {
+                    html += `
                 <div class="locations-empty-state">
                     <span style="font-size: 2.2rem;">📍</span>
                     <h4 style="margin: 0; color: #ffffff;">Keine Orte gefunden</h4>
@@ -91,32 +98,35 @@
                 </div>
             `;
         } else {
-            filtered.forEach(loc => {
-                const isFav = !!loc.isFavorite;
-                const typeIcon = loc.type === 'residence' ? '🏠' : loc.type === 'office' ? '🏢' : loc.type === 'city' ? '🏙️' : loc.type === 'state' ? '🗺️' : '📍';
-                const typeLabel = loc.type === 'residence' ? 'Wohnsitz' : loc.type === 'office' ? 'Büro / Arbeit' : loc.type === 'city' ? 'Stadt' : loc.type === 'state' ? 'Bundesland' : 'Ort';
-                const typeClass = loc.type === 'residence' ? 'residence' : loc.type === 'office' ? 'office' : loc.type === 'city' ? 'city' : loc.type === 'state' ? 'state' : 'other';
+                    filtered.forEach(loc => {
+                        const isFav = !!loc.isFavorite;
+                        const typeIcon = loc.type === 'residence' ? '🏠' : loc.type === 'office' ? '🏢' : loc.type === 'city' ? '🏙️' : loc.type === 'state' ? '🗺️' : '📍';
+                        const typeLabel = loc.type === 'residence' ? 'Wohnsitz' : loc.type === 'office' ? 'Büro / Arbeit' : loc.type === 'city' ? 'Stadt' : loc.type === 'state' ? 'Bundesland' : 'Ort';
+                        const typeClass = loc.type === 'residence' ? 'residence' : loc.type === 'office' ? 'office' : loc.type === 'city' ? 'city' : loc.type === 'state' ? 'state' : 'other';
 
-                const formattedAddr = loc.formattedAddress || loc.address || loc.name;
-                const encodedMaps = encodeURIComponent(formattedAddr);
-                const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedMaps}`;
+                        const formattedAddr = loc.formattedAddress || loc.address || loc.name;
+                        const encodedMaps = encodeURIComponent(formattedAddr);
+                        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedMaps}`;
 
-                const persons = loc.persons || [];
-                const directPersons = persons.filter(p => p.isDirect !== false);
-                const regionalPersons = persons.filter(p => p.isDirect === false);
+                        const persons = loc.persons || [];
+                        const directPersons = persons.filter(p => p.isDirect !== false);
+                        const regionalPersons = persons.filter(p => p.isDirect === false);
 
-                html += `
-                    <div class="location-card" id="location-card-${loc.id}">
+                        let cardInner = `
+                    <div class="location-card" id="location-card-${loc.id}" style="cursor: pointer;">
                         <div class="location-card-header">
-                            <div class="location-title-box">
-                                <div class="location-name-line">
-                                    <span style="font-size: 1.15rem; line-height: 1;">${typeIcon}</span>
-                                    <span class="location-name">${escapeHtml(loc.name)}</span>
-                                    <span class="location-type-badge ${typeClass}">${typeLabel}</span>
+                            <div class="location-title-box" style="width: 100%;">
+                                <div class="location-name-line" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
+                                    <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap;">
+                                        <span style="font-size: 1.15rem; line-height: 1;">${typeIcon}</span>
+                                        <span class="location-name">${escapeHtml(loc.name)}</span>
+                                        <span class="location-type-badge ${typeClass}">${typeLabel}</span>
+                                    </div>
+                                    ${isFav ? '<span title="Favorit" style="font-size: 0.95rem; line-height: 1; flex-shrink: 0;">⭐</span>' : ''}
                                 </div>
                                 <div class="location-address">
                                     <span>📍 ${escapeHtml(formattedAddr)}</span>
-                                    <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" style="color: #a6e3a1; text-decoration: underline; font-size: 0.72rem; margin-left: 4px;" title="In Google Maps öffnen">
+                                    <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" style="color: #a6e3a1; text-decoration: underline; font-size: 0.72rem; margin-left: 4px;" title="In Google Maps öffnen">
                                         Maps ↗
                                     </a>
                                 </div>
@@ -136,39 +146,39 @@
                         </div>
                 `;
 
-                // Personen-Abschnitt
-                if (directPersons.length > 0 || regionalPersons.length > 0) {
-                    html += `<div class="location-persons-section">`;
+                        // Personen-Abschnitt
+                        if (directPersons.length > 0 || regionalPersons.length > 0) {
+                            cardInner += `<div class="location-persons-section">`;
 
-                    if (directPersons.length > 0) {
-                        html += `
+                            if (directPersons.length > 0) {
+                                cardInner += `
                             <div class="location-persons-label">
                                 <span>👤</span> Verknüpfte Personen (${directPersons.length}):
                             </div>
                             <div class="location-persons-list">
                         `;
-                        directPersons.forEach(p => {
-                            html += `
-                                <div class="location-person-chip" onclick="openPersonProfileModal(${p.id})" title="Profil von ${escapeHtml(p.name)} öffnen">
+                                directPersons.forEach(p => {
+                                    cardInner += `
+                                <div class="location-person-chip" onclick="event.stopPropagation(); openPersonProfileModal(${p.id})" title="Profil von ${escapeHtml(p.name)} öffnen">
                                     <span>👤</span>
                                     <span>${escapeHtml(p.name)}</span>
                                     <span class="location-person-chip-badge">${escapeHtml(p.label || 'Wohnsitz')}</span>
                                 </div>
                             `;
-                        });
-                        html += `</div>`;
-                    }
+                                });
+                                cardInner += `</div>`;
+                            }
 
-                    if (regionalPersons.length > 0) {
-                        html += `
+                            if (regionalPersons.length > 0) {
+                                cardInner += `
                             <div class="location-persons-label" style="margin-top: 6px; color: #a6e3a1;">
                                 <span>🗺️</span> Personen in diesem ${loc.type === 'state' ? 'Bundesland' : 'Ort'} (${regionalPersons.length}):
                             </div>
                             <div class="location-persons-list">
                         `;
-                        regionalPersons.forEach(p => {
-                            html += `
-                                <div class="location-person-chip regional" onclick="openPersonProfileModal(${p.id})" title="${escapeHtml(p.name)} wohnt in ${escapeHtml(p.originCity || p.originLocationName || loc.name)}">
+                                regionalPersons.forEach(p => {
+                                    cardInner += `
+                                <div class="location-person-chip regional" onclick="event.stopPropagation(); openPersonProfileModal(${p.id})" title="${escapeHtml(p.name)} wohnt in ${escapeHtml(p.originCity || p.originLocationName || loc.name)}">
                                     <span>👤</span>
                                     <span>${escapeHtml(p.name)}</span>
                                     <span class="location-person-chip-badge" style="background: rgba(166, 227, 161, 0.2); color: #a6e3a1;">
@@ -176,21 +186,26 @@
                                     </span>
                                 </div>
                             `;
-                        });
-                        html += `</div>`;
-                    }
+                                });
+                                cardInner += `</div>`;
+                            }
 
-                    html += `</div>`;
-                }
+                            cardInner += `</div>`;
+                        }
 
-                html += `</div>`; // location-card
-            });
+                        cardInner += `</div>`; // location-card
+
+                        const extraData = `data-location-id="${loc.id}" data-location-name="${escapeHtml(loc.name || '').replace(/"/g, '&quot;')}" data-location-is-favorite="${isFav}"`;
+                        html += typeof renderSwipeLinkWrapper === 'function'
+                            ? renderSwipeLinkWrapper(cardInner, loc.name, 'location', loc.id, '', '', 'margin-bottom: 0;', extraData)
+                            : cardInner;
+                    });
         }
 
-        html += `
-                </div>
+                html += `
             </div>
-        `;
+            </div >
+            `;
 
         container.innerHTML = html;
     }
@@ -200,6 +215,17 @@
     /**
      * Filter wechseln
      */
+    
+    window.toggleLocationsFilter = function() {
+        window.locationsFilterOpen = !window.locationsFilterOpen;
+        if (!window.locationsFilterOpen) {
+            window.currentLocationsFilter = 'all';
+        }
+        if (window.lastLocationsContainer) {
+            renderLocationsWidget(window.lastLocationsData, window.lastLocationsContainer);
+        }
+    };
+
     window.switchLocationsFilter = function(filter) {
         window.currentLocationsFilter = filter;
         if (window.lastLocationsContainer) {
@@ -257,154 +283,154 @@
      */
     window.toggleLocationFavorite = async function(id, isFav) {
         try {
-            const res = await fetch(getApiUrl(`/api/locations/${id}/favorite`), {
-                method: 'PUT',
+            const res = await fetch(getApiUrl(`/ api / locations / ${ id }/favorite`), {
+            method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ isFavorite: isFav })
-            });
-            if (res.ok) {
-                await refreshLocationsData();
-            }
-        } catch (e) {
-            console.error('Fehler beim Aktualisieren des Favoritenstatus:', e);
+            body: JSON.stringify({ isFavorite: isFav })
+        });
+        if (res.ok) {
+            await refreshLocationsData();
         }
-    };
+    } catch (e) {
+        console.error('Fehler beim Aktualisieren des Favoritenstatus:', e);
+    }
+};
 
-    /**
-     * Ort löschen
-     */
-    window.deleteLocation = async function(id) {
-        if (!confirm('Möchtest du diesen Ort wirklich löschen?')) return;
-        try {
-            const res = await fetch(getApiUrl(`/api/locations/${id}`), {
-                method: 'DELETE'
-            });
-            if (res.ok) {
-                await refreshLocationsData();
-            }
-        } catch (e) {
-            console.error('Fehler beim Löschen des Ortes:', e);
+/**
+ * Ort löschen
+ */
+window.deleteLocation = async function (id) {
+    if (!confirm('Möchtest du diesen Ort wirklich löschen?')) return;
+    try {
+        const res = await fetch(getApiUrl(`/api/locations/${id}`), {
+            method: 'DELETE'
+        });
+        if (res.ok) {
+            await refreshLocationsData();
         }
-    };
+    } catch (e) {
+        console.error('Fehler beim Löschen des Ortes:', e);
+    }
+};
 
-    /**
-     * Daten neu laden
-     */
-    async function refreshLocationsData() {
-        if (typeof loadTopWidgets === 'function') {
-            await loadTopWidgets();
-        } else {
-            const res = await fetch(getApiUrl('/api/locations'));
-            const list = await res.json();
-            window.currentLocationsList = list;
-            if (window.lastLocationsContainer) {
-                renderLocationsWidget({ locations: list }, window.lastLocationsContainer);
-            }
+/**
+ * Daten neu laden
+ */
+async function refreshLocationsData() {
+    if (typeof loadTopWidgets === 'function') {
+        await loadTopWidgets();
+    } else {
+        const res = await fetch(getApiUrl('/api/locations'));
+        const list = await res.json();
+        window.currentLocationsList = list;
+        if (window.lastLocationsContainer) {
+            renderLocationsWidget({ locations: list }, window.lastLocationsContainer);
         }
     }
-    window.refreshLocationsData = refreshLocationsData;
+}
+window.refreshLocationsData = refreshLocationsData;
 
-    /**
-     * Ort erstellen / bearbeiten Modal öffnen
-     */
-    window.openLocationEditModal = async function(id, prefillPersonId) {
-        const modal = document.getElementById('location-edit-modal');
-        if (!modal) return;
+/**
+ * Ort erstellen / bearbeiten Modal öffnen
+ */
+window.openLocationEditModal = async function (id, prefillPersonId) {
+    const modal = document.getElementById('location-edit-modal');
+    if (!modal) return;
 
-        // Reset fields
-        document.getElementById('location-edit-id').value = id || '';
-        document.getElementById('location-edit-name').value = '';
-        document.getElementById('location-edit-type').value = 'residence';
-        document.getElementById('location-edit-address').value = '';
-        document.getElementById('location-edit-postal').value = '';
-        document.getElementById('location-edit-city').value = '';
-        document.getElementById('location-edit-state').value = '';
-        document.getElementById('location-edit-country').value = 'Deutschland';
-        document.getElementById('location-edit-notes').value = '';
+    // Reset fields
+    document.getElementById('location-edit-id').value = id || '';
+    document.getElementById('location-edit-name').value = '';
+    document.getElementById('location-edit-type').value = 'residence';
+    document.getElementById('location-edit-address').value = '';
+    document.getElementById('location-edit-postal').value = '';
+    document.getElementById('location-edit-city').value = '';
+    document.getElementById('location-edit-state').value = '';
+    document.getElementById('location-edit-country').value = 'Deutschland';
+    document.getElementById('location-edit-notes').value = '';
 
-        const titleEl = document.getElementById('location-edit-modal-title');
-        titleEl.textContent = id ? '📍 Ort bearbeiten' : '📍 Neuen Ort erstellen';
+    const titleEl = document.getElementById('location-edit-modal-title');
+    titleEl.textContent = id ? '📍 Ort bearbeiten' : '📍 Neuen Ort erstellen';
 
-        // Personen-Auswahl vorbereiten
-        await populatePeopleDropdownForLocation(prefillPersonId);
+    // Personen-Auswahl vorbereiten
+    await populatePeopleDropdownForLocation(prefillPersonId);
 
-        const personsSection = document.getElementById('location-edit-persons-section');
-        if (personsSection) {
-            personsSection.style.display = id ? 'block' : 'block';
-        }
+    const personsSection = document.getElementById('location-edit-persons-section');
+    if (personsSection) {
+        personsSection.style.display = id ? 'block' : 'block';
+    }
 
-        const personsListEl = document.getElementById('location-edit-linked-persons-list');
-        if (personsListEl) personsListEl.innerHTML = '';
+    const personsListEl = document.getElementById('location-edit-linked-persons-list');
+    if (personsListEl) personsListEl.innerHTML = '';
 
-        if (id) {
-            try {
-                const res = await fetch(getApiUrl(`/api/locations/${id}`));
-                if (res.ok) {
-                    const loc = await res.json();
-                    document.getElementById('location-edit-name').value = loc.name || '';
-                    document.getElementById('location-edit-type').value = loc.type || 'residence';
-                    document.getElementById('location-edit-address').value = loc.address || '';
-                    document.getElementById('location-edit-postal').value = loc.postalCode || '';
-                    document.getElementById('location-edit-city').value = loc.city || '';
-                    document.getElementById('location-edit-state').value = loc.state || '';
-                    document.getElementById('location-edit-country').value = loc.country || 'Deutschland';
-                    document.getElementById('location-edit-notes').value = loc.notes || '';
-
-                    // Liste der verknüpften Personen rendern
-                    renderLinkedPersonsInModal(loc.id, loc.persons || []);
-                }
-            } catch (e) {
-                console.error('Fehler beim Laden der Ortsdetails:', e);
-            }
-        }
-
-        modal.style.display = 'flex';
-        document.body.classList.add('modal-active');
-    };
-
-    window.closeLocationEditModal = function() {
-        const modal = document.getElementById('location-edit-modal');
-        if (modal) modal.style.display = 'none';
-        document.body.classList.remove('modal-active');
-    };
-
-    /**
-     * Personen in Dropdown laden
-     */
-    async function populatePeopleDropdownForLocation(prefillPersonId) {
-        const select = document.getElementById('location-person-select');
-        if (!select) return;
-
+    if (id) {
         try {
-            const res = await fetch(getApiUrl('/api/memory/people'));
-            const people = await res.json();
-            let options = '<option value="">-- Person auswählen (optional) --</option>';
-            people.forEach(p => {
-                const isSelected = prefillPersonId && Number(prefillPersonId) === p.id;
-                options += `<option value="${p.id}" ${isSelected ? 'selected' : ''}>👤 ${escapeHtml(p.name)}</option>`;
-            });
-            select.innerHTML = options;
+            const res = await fetch(getApiUrl(`/api/locations/${id}`));
+            if (res.ok) {
+                const loc = await res.json();
+                document.getElementById('location-edit-name').value = loc.name || '';
+                document.getElementById('location-edit-type').value = loc.type || 'residence';
+                document.getElementById('location-edit-address').value = loc.address || '';
+                document.getElementById('location-edit-postal').value = loc.postalCode || '';
+                document.getElementById('location-edit-city').value = loc.city || '';
+                document.getElementById('location-edit-state').value = loc.state || '';
+                document.getElementById('location-edit-country').value = loc.country || 'Deutschland';
+                document.getElementById('location-edit-notes').value = loc.notes || '';
+
+                // Liste der verknüpften Personen rendern
+                renderLinkedPersonsInModal(loc.id, loc.persons || []);
+            }
         } catch (e) {
-            console.error('Fehler beim Laden der Personen für Dropdown:', e);
+            console.error('Fehler beim Laden der Ortsdetails:', e);
         }
     }
 
-    /**
-     * Verknüpfte Personen in Modal rendern
-     */
-    function renderLinkedPersonsInModal(locationId, persons) {
-        const container = document.getElementById('location-edit-linked-persons-list');
-        if (!container) return;
+    modal.style.display = 'flex';
+    document.body.classList.add('modal-active');
+};
 
-        const direct = persons.filter(p => p.isDirect !== false);
-        if (direct.length === 0) {
-            container.innerHTML = '<span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Noch keine Personen direkt mit diesem Ort verknüpft.</span>';
-            return;
-        }
+window.closeLocationEditModal = function () {
+    const modal = document.getElementById('location-edit-modal');
+    if (modal) modal.style.display = 'none';
+    document.body.classList.remove('modal-active');
+};
 
-        let html = '';
-        direct.forEach(p => {
-            html += `
+/**
+ * Personen in Dropdown laden
+ */
+async function populatePeopleDropdownForLocation(prefillPersonId) {
+    const select = document.getElementById('location-person-select');
+    if (!select) return;
+
+    try {
+        const res = await fetch(getApiUrl('/api/memory/people'));
+        const people = await res.json();
+        let options = '<option value="">-- Person auswählen (optional) --</option>';
+        people.forEach(p => {
+            const isSelected = prefillPersonId && Number(prefillPersonId) === p.id;
+            options += `<option value="${p.id}" ${isSelected ? 'selected' : ''}>👤 ${escapeHtml(p.name)}</option>`;
+        });
+        select.innerHTML = options;
+    } catch (e) {
+        console.error('Fehler beim Laden der Personen für Dropdown:', e);
+    }
+}
+
+/**
+ * Verknüpfte Personen in Modal rendern
+ */
+function renderLinkedPersonsInModal(locationId, persons) {
+    const container = document.getElementById('location-edit-linked-persons-list');
+    if (!container) return;
+
+    const direct = persons.filter(p => p.isDirect !== false);
+    if (direct.length === 0) {
+        container.innerHTML = '<span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Noch keine Personen direkt mit diesem Ort verknüpft.</span>';
+        return;
+    }
+
+    let html = '';
+    direct.forEach(p => {
+        html += `
                 <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; background: rgba(255,255,255,0.04); border-radius: 6px; font-size: 0.78rem;">
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <span>👤</span>
@@ -416,156 +442,156 @@
                     </button>
                 </div>
             `;
+    });
+    container.innerHTML = html;
+}
+
+/**
+ * Person von Ort entkoppeln
+ */
+window.unlinkPersonFromLocation = async function (locationId, personId) {
+    try {
+        const res = await fetch(getApiUrl(`/api/locations/${locationId}/persons/${personId}`), {
+            method: 'DELETE'
         });
-        container.innerHTML = html;
+        if (res.ok) {
+            const data = await res.json();
+            renderLinkedPersonsInModal(locationId, data.persons || []);
+            await refreshLocationsData();
+        }
+    } catch (e) {
+        console.error('Fehler beim Entkoppeln der Person:', e);
+    }
+};
+
+/**
+ * Person im Modal zum Ort hinzufügen
+ */
+window.linkSelectedPersonToLocation = async function () {
+    const locationId = Number(document.getElementById('location-edit-id').value);
+    const personId = Number(document.getElementById('location-person-select').value);
+    const relationType = document.getElementById('location-person-rel-type').value;
+    const label = document.getElementById('location-person-label').value.trim();
+
+    if (!locationId) {
+        alert('Bitte speichere den Ort zuerst, bevor du Personen hinzufügst.');
+        return;
+    }
+    if (!personId) {
+        alert('Bitte wähle eine Person aus.');
+        return;
     }
 
-    /**
-     * Person von Ort entkoppeln
-     */
-    window.unlinkPersonFromLocation = async function(locationId, personId) {
-        try {
-            const res = await fetch(getApiUrl(`/api/locations/${locationId}/persons/${personId}`), {
-                method: 'DELETE'
-            });
-            if (res.ok) {
-                const data = await res.json();
-                renderLinkedPersonsInModal(locationId, data.persons || []);
-                await refreshLocationsData();
-            }
-        } catch (e) {
-            console.error('Fehler beim Entkoppeln der Person:', e);
+    try {
+        const res = await fetch(getApiUrl(`/api/locations/${locationId}/persons`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ personId, relationType, label, isPrimary: true })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            renderLinkedPersonsInModal(locationId, data.persons || []);
+            document.getElementById('location-person-select').value = '';
+            document.getElementById('location-person-label').value = '';
+            await refreshLocationsData();
         }
+    } catch (e) {
+        console.error('Fehler beim Verknüpfen der Person:', e);
+    }
+};
+
+/**
+ * Ort im Modal speichern
+ */
+window.saveLocationEditModal = async function () {
+    const id = document.getElementById('location-edit-id').value;
+    const name = document.getElementById('location-edit-name').value.trim();
+    const type = document.getElementById('location-edit-type').value;
+    const address = document.getElementById('location-edit-address').value.trim();
+    const postalCode = document.getElementById('location-edit-postal').value.trim();
+    const city = document.getElementById('location-edit-city').value.trim();
+    const state = document.getElementById('location-edit-state').value.trim();
+    const country = document.getElementById('location-edit-country').value.trim() || 'Deutschland';
+    const notes = document.getElementById('location-edit-notes').value.trim();
+
+    const personId = document.getElementById('location-person-select') ? document.getElementById('location-person-select').value : '';
+    const relationType = document.getElementById('location-person-rel-type') ? document.getElementById('location-person-rel-type').value : 'residence';
+    const label = document.getElementById('location-person-label') ? document.getElementById('location-person-label').value.trim() : '';
+
+    if (!name) {
+        alert('Bitte gib einen Namen für den Ort ein.');
+        return;
+    }
+
+    const payload = {
+        name,
+        type,
+        address,
+        postalCode,
+        city,
+        state,
+        country,
+        notes,
+        ...(personId && !id ? { personId: Number(personId), relationType, label, isPrimary: true } : {})
     };
 
-    /**
-     * Person im Modal zum Ort hinzufügen
-     */
-    window.linkSelectedPersonToLocation = async function() {
-        const locationId = Number(document.getElementById('location-edit-id').value);
-        const personId = Number(document.getElementById('location-person-select').value);
-        const relationType = document.getElementById('location-person-rel-type').value;
-        const label = document.getElementById('location-person-label').value.trim();
+    try {
+        const url = id ? `/api/locations/${id}` : '/api/locations';
+        const method = id ? 'PUT' : 'POST';
 
-        if (!locationId) {
-            alert('Bitte speichere den Ort zuerst, bevor du Personen hinzufügst.');
+        const res = await fetch(getApiUrl(url), {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            closeLocationEditModal();
+            await refreshLocationsData();
+        } else {
+            const err = await res.json();
+            alert(`Fehler beim Speichern: ${err.error || 'Unbekannter Fehler'}`);
+        }
+    } catch (e) {
+        console.error('Fehler beim Speichern des Ortes:', e);
+        alert('Netzwerkfehler beim Speichern des Ortes.');
+    }
+};
+
+/**
+ * Orte einer Person für das Personenprofil-Modal laden
+ */
+window.loadPersonLocationsIntoModal = async function (personId) {
+    const container = document.getElementById('person-profile-locations-list');
+    if (!container) return;
+
+    container.innerHTML = '<span style="font-size: 0.75rem; opacity: 0.5;">Lade Orte...</span>';
+
+    try {
+        const res = await fetch(getApiUrl(`/api/persons/${personId}/locations`));
+        if (!res.ok) {
+            container.innerHTML = '<span style="font-size: 0.75rem; color: var(--off);">Konnte Orte nicht laden.</span>';
             return;
         }
-        if (!personId) {
-            alert('Bitte wähle eine Person aus.');
-            return;
-        }
+        const list = await res.json();
 
-        try {
-            const res = await fetch(getApiUrl(`/api/locations/${locationId}/persons`), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ personId, relationType, label, isPrimary: true })
-            });
-            if (res.ok) {
-                const data = await res.json();
-                renderLinkedPersonsInModal(locationId, data.persons || []);
-                document.getElementById('location-person-select').value = '';
-                document.getElementById('location-person-label').value = '';
-                await refreshLocationsData();
-            }
-        } catch (e) {
-            console.error('Fehler beim Verknüpfen der Person:', e);
-        }
-    };
-
-    /**
-     * Ort im Modal speichern
-     */
-    window.saveLocationEditModal = async function() {
-        const id = document.getElementById('location-edit-id').value;
-        const name = document.getElementById('location-edit-name').value.trim();
-        const type = document.getElementById('location-edit-type').value;
-        const address = document.getElementById('location-edit-address').value.trim();
-        const postalCode = document.getElementById('location-edit-postal').value.trim();
-        const city = document.getElementById('location-edit-city').value.trim();
-        const state = document.getElementById('location-edit-state').value.trim();
-        const country = document.getElementById('location-edit-country').value.trim() || 'Deutschland';
-        const notes = document.getElementById('location-edit-notes').value.trim();
-
-        const personId = document.getElementById('location-person-select') ? document.getElementById('location-person-select').value : '';
-        const relationType = document.getElementById('location-person-rel-type') ? document.getElementById('location-person-rel-type').value : 'residence';
-        const label = document.getElementById('location-person-label') ? document.getElementById('location-person-label').value.trim() : '';
-
-        if (!name) {
-            alert('Bitte gib einen Namen für den Ort ein.');
-            return;
-        }
-
-        const payload = {
-            name,
-            type,
-            address,
-            postalCode,
-            city,
-            state,
-            country,
-            notes,
-            ...(personId && !id ? { personId: Number(personId), relationType, label, isPrimary: true } : {})
-        };
-
-        try {
-            const url = id ? `/api/locations/${id}` : '/api/locations';
-            const method = id ? 'PUT' : 'POST';
-
-            const res = await fetch(getApiUrl(url), {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (res.ok) {
-                closeLocationEditModal();
-                await refreshLocationsData();
-            } else {
-                const err = await res.json();
-                alert(`Fehler beim Speichern: ${err.error || 'Unbekannter Fehler'}`);
-            }
-        } catch (e) {
-            console.error('Fehler beim Speichern des Ortes:', e);
-            alert('Netzwerkfehler beim Speichern des Ortes.');
-        }
-    };
-
-    /**
-     * Orte einer Person für das Personenprofil-Modal laden
-     */
-    window.loadPersonLocationsIntoModal = async function(personId) {
-        const container = document.getElementById('person-profile-locations-list');
-        if (!container) return;
-
-        container.innerHTML = '<span style="font-size: 0.75rem; opacity: 0.5;">Lade Orte...</span>';
-
-        try {
-            const res = await fetch(getApiUrl(`/api/persons/${personId}/locations`));
-            if (!res.ok) {
-                container.innerHTML = '<span style="font-size: 0.75rem; color: var(--off);">Konnte Orte nicht laden.</span>';
-                return;
-            }
-            const list = await res.json();
-
-            if (list.length === 0) {
-                container.innerHTML = `
+        if (list.length === 0) {
+            container.innerHTML = `
                     <div style="font-size: 0.76rem; color: rgba(255,255,255,0.45); padding: 6px 0;">
                         Noch keine Adressen oder Wohnsitze für diese Person hinterlegt.
                     </div>
                 `;
-                return;
-            }
+            return;
+        }
 
-            let html = '<div style="display: flex; flex-direction: column; gap: 6px;">';
-            list.forEach(item => {
-                const loc = item.location;
-                const typeIcon = loc.type === 'residence' ? '🏠' : loc.type === 'office' ? '🏢' : loc.type === 'city' ? '🏙️' : '📍';
-                const formatted = loc.formattedAddress || loc.address || loc.name;
-                const encodedMaps = encodeURIComponent(formatted);
+        let html = '<div style="display: flex; flex-direction: column; gap: 6px;">';
+        list.forEach(item => {
+            const loc = item.location;
+            const typeIcon = loc.type === 'residence' ? '🏠' : loc.type === 'office' ? '🏢' : loc.type === 'city' ? '🏙️' : '📍';
+            const formatted = loc.formattedAddress || loc.address || loc.name;
+            const encodedMaps = encodeURIComponent(formatted);
 
-                html += `
+            html += `
                     <div style="display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; gap: 8px;">
                         <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;">
                             <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
@@ -586,21 +612,21 @@
                         </div>
                     </div>
                 `;
-            });
-            html += '</div>';
+        });
+        html += '</div>';
 
-            container.innerHTML = html;
-        } catch (e) {
-            console.error('Fehler beim Laden der Personenorte:', e);
-            container.innerHTML = '<span style="font-size: 0.75rem; color: var(--off);">Fehler beim Laden.</span>';
-        }
-    };
+        container.innerHTML = html;
+    } catch (e) {
+        console.error('Fehler beim Laden der Personenorte:', e);
+        container.innerHTML = '<span style="font-size: 0.75rem; color: var(--off);">Fehler beim Laden.</span>';
+    }
+};
 
-    /**
-     * Button "+ Ort verknüpfen" im Personenprofil
-     */
-    window.openAddLocationForPersonModal = function(personId) {
-        openLocationEditModal(null, personId);
-    };
+/**
+ * Button "+ Ort verknüpfen" im Personenprofil
+ */
+window.openAddLocationForPersonModal = function (personId) {
+    openLocationEditModal(null, personId);
+};
 
-})();
+}) ();

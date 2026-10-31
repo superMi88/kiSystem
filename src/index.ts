@@ -31,6 +31,13 @@ import path from "path";
 
 dotenv.config();
 
+process.on("unhandledRejection", (reason, promise) => {
+  console.warn("[Process] Abgefangene unhandledRejection:", reason);
+});
+process.on("uncaughtException", (error) => {
+  console.error("[Process] Abgefangene uncaughtException:", error);
+});
+
 const mediaStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = path.join(process.cwd(), "public", "uploads");
@@ -271,6 +278,25 @@ app.get("/api/notifications/:id", async (req, res) => {
       return res.status(404).json({ error: `Benachrichtigung mit ID ${notifId} nicht gefunden.` });
     }
     res.json(notif);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch("/api/notifications/:id", async (req, res) => {
+  try {
+    const notifId = Number(req.params.id);
+    const { title, message, actionData, reasoning } = req.body;
+    const dataToUpdate: any = {};
+    if (title !== undefined) dataToUpdate.title = title;
+    if (message !== undefined) dataToUpdate.message = message;
+    if (actionData !== undefined) dataToUpdate.actionData = actionData;
+    if (reasoning !== undefined) dataToUpdate.reasoning = reasoning;
+    const updated = await prisma.agentNotification.update({
+      where: { id: notifId },
+      data: dataToUpdate
+    });
+    res.json({ success: true, notification: updated });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -919,12 +945,19 @@ app.post("/tasks/complete", async (req, res) => {
       });
       res.json({ success: true, message: "Wiederkehrende Aufgabe erledigt und auf das nächste Datum verschoben.", nextDue: nextDue.toISOString() });
     } else {
+      let statusToSet: string = targetCompleted ? 'done' : 'in_progress';
+      if (task && task.projectId) {
+        const parentProj = await prisma.project.findUnique({ where: { id: task.projectId } });
+        if (parentProj && (parentProj as any).categories) {
+          statusToSet = task.status || (targetCompleted ? 'done' : 'in_progress');
+        }
+      }
       await prisma.task.update({
         where: { id: Number(taskId) },
         data: {
           completed: targetCompleted,
           completedAt: targetCompleted ? now : null,
-          status: targetCompleted ? 'done' : 'in_progress'
+          status: statusToSet
         }
       });
       res.json({ success: true, message: `Aufgabe erfolgreich ${targetCompleted ? 'erledigt' : 'wieder geöffnet'}.` });
@@ -961,6 +994,21 @@ const handleProjectPin = async (req: any, res: any) => {
 app.post("/api/projects/:id/star", handleProjectPin);
 app.post("/api/projects/:id/pin", handleProjectPin);
 
+app.post("/api/projects/:id/categories", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { categories } = req.body;
+    const updated = await prisma.project.update({
+      where: { id },
+      data: { categories: categories || null }
+    });
+    res.json({ success: true, project: updated });
+  } catch (e: any) {
+    console.error("Fehler beim Speichern der Projekt-Kategorien:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 const handleTaskPin = async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
@@ -988,8 +1036,8 @@ app.post("/api/tasks/:id/status", async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { status } = req.body;
-    if (!status || !['suggestion', 'in_progress', 'done'].includes(status)) {
-      return res.status(400).json({ error: "Gültiger status ('suggestion', 'in_progress', 'done') erforderlich." });
+    if (!status || typeof status !== 'string') {
+      return res.status(400).json({ error: "Gültiger status erforderlich." });
     }
     const now = new Date();
     const updateData: any = { status };
@@ -3565,6 +3613,75 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
     console.error("Detailed Error:", error);
     res.status(500).json({ text: `Fehler: ${error.message || "Unbekannter Fehler"}` });
   }
+});
+
+
+// =========================================================================
+// Client-Side SPA Routing Endpoints & Fallback
+// =========================================================================
+const frontendSpaRoutes = [
+  '/',
+  '/chat',
+  '/chat/:id',
+  '/kalender',
+  '/kalender/:date',
+  '/calendar',
+  '/calendar/:date',
+  '/mail',
+  '/mail/:id',
+  '/mails',
+  '/mails/:id',
+  '/projekte',
+  '/projekte/:id',
+  '/projects',
+  '/projects/:id',
+  '/gedaechtnis',
+  '/gedaechtnis/:id',
+  '/memory',
+  '/memory/:id',
+  '/personen',
+  '/personen/:id',
+  '/orte',
+  '/orte/:id',
+  '/locations',
+  '/locations/:id',
+  '/fotos',
+  '/photos',
+  '/dokumente',
+  '/docs',
+  '/medien',
+  '/media',
+  '/briefing',
+  '/timer',
+  '/verlauf',
+  '/history',
+  '/einstellungen'
+];
+
+frontendSpaRoutes.forEach((route) => {
+  app.get(route, (req, res) => {
+    res.sendFile(path.join(process.cwd(), "public", "index.html"));
+  });
+});
+
+// General SPA fallback for client-side routing on any non-API GET request
+app.use((req, res, next) => {
+  if (
+    req.method === "GET" &&
+    !req.path.startsWith("/api") &&
+    !req.path.startsWith("/sse") &&
+    !req.path.startsWith("/messages") &&
+    !req.path.startsWith("/conversations") &&
+    !req.path.startsWith("/widgets") &&
+    !req.path.startsWith("/uploads") &&
+    !req.path.startsWith("/settings") &&
+    !req.path.startsWith("/alerts") &&
+    !req.path.startsWith("/apps") &&
+    !req.path.includes(".")
+  ) {
+    return res.sendFile(path.join(process.cwd(), "public", "index.html"));
+  }
+  next();
 });
 
 

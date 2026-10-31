@@ -350,3 +350,63 @@
 }
 
 
+
+
+/* Subtle Edit Icon Button in Header */
+.briefing-circle-btn.edit-circle-btn {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: #cdd6f4 !important;
+}
+
+.briefing-circle-btn.edit-circle-btn:hover {
+    background: rgba(137, 180, 250, 0.22) !important;
+    border-color: #89b4fa !important;
+    color: #89b4fa !important;
+    transform: scale(1.12) !important;
+    box-shadow: 0 0 10px rgba(137, 180, 250, 0.35) !important;
+}
+
+/* Subtle Dismiss/Cancel Icon Button in Proposal Box */
+.briefing-circle-btn.dismiss-circle-btn {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: #cdd6f4 !important;
+}
+
+.briefing-circle-btn.dismiss-circle-btn:hover {
+    background: rgba(243, 139, 168, 0.22) !important;
+    border-color: #f38ba8 !important;
+    color: #f38ba8 !important;
+    transform: scale(1.12) !important;
+    box-shadow: 0 0 10px rgba(243, 139, 168, 0.35) !important;
+}
+
+.chat-notification-card.is-briefing-view .chat-notification-header {
+    text-align: left !important;
+    align-items: center !important;
+}
+
+.chat-notification-card.is-briefing-view .chat-notification-title-wrap {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    text-align: left !important;
+    gap: 8px !important;
+}
+
+.chat-notification-card.is-briefing-view .chat-notification-title {
+    text-align: left !important;
+}
+
+/* Header Context Briefing Toggle Switch */
+.briefing-toggle-switch button {
+    cursor: pointer;
+    user-select: none;
+    line-height: 1;
+}
+
+.briefing-toggle-switch button:hover {
+    opacity: 1 !important;
+}

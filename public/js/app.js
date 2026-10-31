@@ -34,23 +34,37 @@
                         widgetDiv.id = 'widget-timer';
                     }
                     
-                    if (widget.type === 'timer_list') {
-                        let html = `<div class="timer-list-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%;">`;
-                        if (widget.data.timers.length === 0) {
-                            html += `<p style="font-size: 0.75rem; opacity: 0.6; margin: 0; padding: 10px; text-align: center; background: rgba(0,0,0,0.15); border-radius: 8px;">Keine aktiven Timer.</p>`;
+                    if (widget.type === 'timer_list' || widget.pluginName === 'Timer') {
+                        widgetDiv.id = 'widget-timer';
+                        let html = `<div class="timer-list-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%; padding: 4px 0;">`;
+                        if (!widget.data || !widget.data.timers || widget.data.timers.length === 0) {
+                            html += `
+                                <div style="text-align: center; padding: 40px 16px; color: rgba(255, 255, 255, 0.45); font-size: 0.85rem; font-weight: 500;">
+                                    Keine aktiven Wecker oder Timer.
+                                </div>
+                            `;
                         } else {
                             widget.data.timers.forEach(t => {
                                 const escTitle = escapeHtml(t.title).replace(/"/g, '&quot;');
+                                const expDate = new Date(t.expiresAt);
+                                const isToday = expDate.toDateString() === new Date().toDateString();
+                                const timeStr = expDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                                const dateStr = isToday ? 'Heute' : expDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+
                                 const timerContent = `
-                                    <div class="timer-card" id="timer-card-${t.id}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" style="padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); width: 100%; position: relative;">
-                                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
-                                            <span style="font-size: 0.85rem; font-weight: bold; color: var(--text);">${escapeHtml(t.title)}</span>
+                                    <div class="timer-card" id="timer-card-${t.id}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" style="padding: 12px 14px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); width: 100%; position: relative;">
+                                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; gap: 8px;">
+                                            <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+                                                <span style="font-size: 1rem;">⏰</span>
+                                                <span style="font-size: 0.88rem; font-weight: 700; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(t.title)}</span>
+                                            </div>
+                                            <button type="button" onclick="event.stopPropagation(); deleteTimer('${t.id}')" style="background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 0.85rem; opacity: 0.75; padding: 2px 4px; transition: opacity 0.2s;" title="Wecker / Timer löschen">🗑️</button>
                                         </div>
-                                        <div class="timer-countdown" style="font-family: monospace; font-size: 1.1rem; font-weight: bold; color: var(--accent); margin-bottom: 6px;">--:--:--</div>
-                                        <div class="timer-progress-bg" style="width: 100%; height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; margin-bottom: 4px;">
-                                            <div class="timer-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--on)); border-radius: 2px; transition: width 0.5s linear;"></div>
+                                        <div class="timer-countdown" style="font-family: monospace; font-size: 1.25rem; font-weight: 800; color: var(--accent); margin-bottom: 6px; letter-spacing: 1px;">--:--:--</div>
+                                        <div class="timer-progress-bg" style="width: 100%; height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
+                                            <div class="timer-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--on)); border-radius: 3px; transition: width 0.5s linear;"></div>
                                         </div>
-                                        <div style="font-size: 0.65rem; opacity: 0.4;">Bis: ${new Date(t.expiresAt).toLocaleTimeString('de-DE', {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</div>
+                                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Zielzeit: ${dateStr}, ${timeStr} Uhr</div>
                                     </div>
                                 `;
                                 const extraTimerData = `data-timer-id="${t.id}" data-timer-title="${escTitle}"`;
@@ -270,6 +284,18 @@
                 hBriefCount.style.display = notifCount > 0 ? 'inline-block' : 'none';
             }
 
+            const timerW = widgets.find(w => w.type === 'timer_list' || w.pluginName === 'Timer');
+            const timerCount = (timerW && timerW.data && timerW.data.timers) ? timerW.data.timers.length : 0;
+            const drawerTimerBadge = document.getElementById('drawer-timer-badge');
+            if (drawerTimerBadge) {
+                if (timerCount > 0) {
+                    drawerTimerBadge.textContent = timerCount;
+                    drawerTimerBadge.style.display = 'inline-block';
+                } else {
+                    drawerTimerBadge.style.display = 'none';
+                }
+            }
+
             const drawerBadge = document.getElementById('drawer-briefing-badge');
             if (drawerBadge) {
                 drawerBadge.textContent = notifCount;
@@ -358,9 +384,18 @@
 
 
         async function initializeApp() {
-            const username = localStorage.getItem('api_username');
-            const password = localStorage.getItem('api_password');
+            let username = localStorage.getItem('api_username');
+            let password = localStorage.getItem('api_password');
             
+            const isLocalhost = window.location && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+            if ((!username || !password) && isLocalhost) {
+                username = username || 'admin';
+                password = password || 'local';
+                localStorage.setItem('api_username', username);
+                localStorage.setItem('api_password', password);
+            }
+
             if (!username || !password) {
                 showSection('login');
                 return;
@@ -382,6 +417,10 @@
             checkMailNotificationsForeground(true);
             handleMailHashRouting();
             window.addEventListener('hashchange', handleMailHashRouting);
+
+            if (window.AppRouter && typeof window.AppRouter.init === 'function') {
+                await window.AppRouter.init();
+            }
         }
 
 

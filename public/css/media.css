@@ -11,20 +11,24 @@
     min-height: 260px;
 }
 
+.media-dashboard.photos-dashboard {
+    gap: 6px;
+}
+
 /* Drag & Drop Dynamic Full-Surface Overlay (Nur aktiv während Drag-Vorgang) */
 .media-drag-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    min-height: 260px;
+    position: fixed;
+    top: 62px;
+    left: 8px;
+    right: 8px;
+    bottom: 84px;
+    min-height: 220px;
     background: rgba(17, 17, 27, 0.92);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 2px dashed rgba(249, 226, 175, 0.6);
     border-radius: 14px;
-    z-index: 100;
+    z-index: 999;
     display: none;
     flex-direction: column;
     align-items: center;
@@ -291,6 +295,54 @@
     background: rgba(255, 255, 255, 0.08);
 }
 
+.photos-filter-bar {
+    padding: 4px 10px 6px 10px;
+}
+
+.media-filter-date-input {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text, #cdd6f4);
+    padding: 5px 10px;
+    border-radius: 16px;
+    font-size: 0.75rem;
+    outline: none;
+    cursor: pointer;
+    white-space: nowrap;
+    color-scheme: dark;
+    transition: all 0.2s ease;
+}
+
+.media-filter-date-input.is-active {
+    border-color: #f9e2af;
+    color: #f9e2af;
+    background: rgba(249, 226, 175, 0.12);
+}
+
+.media-filter-date-input:hover,
+.media-filter-date-input:focus {
+    border-color: #89b4fa;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.media-filter-reset-btn {
+    background: rgba(243, 139, 168, 0.12);
+    border: 1px solid rgba(243, 139, 168, 0.35);
+    color: #f38ba8;
+    padding: 5px 10px;
+    border-radius: 16px;
+    font-size: 0.73rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.media-filter-reset-btn:hover {
+    background: rgba(243, 139, 168, 0.22);
+    border-color: #f38ba8;
+}
+
 /* ==========================================================================
    Section Headers (Fotos vs. Dokumente)
    ========================================================================== */
@@ -346,35 +398,49 @@
    ========================================================================== */
 .media-photos-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
-    gap: 6px;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 2px;
     width: 100%;
+    margin: 0;
 }
 
 @media (max-width: 600px) {
     .media-photos-grid {
         grid-template-columns: repeat(3, 1fr);
-        gap: 5px;
+        gap: 2px;
     }
+}
+
+.media-photos-grid .swipe-link-wrapper {
+    margin-bottom: 0 !important;
+    border-radius: 0 !important;
+    aspect-ratio: 1 / 1;
+    width: 100%;
+    height: 100%;
+}
+
+.photo-tile-swipe-item {
+    width: 100%;
+    height: 100%;
+    border-radius: 0 !important;
 }
 
 .media-photo-tile {
     position: relative;
+    width: 100%;
+    height: 100%;
     aspect-ratio: 1 / 1;
-    border-radius: 8px;
+    border-radius: 0 !important;
     overflow: hidden;
     cursor: pointer;
     background: rgba(0, 0, 0, 0.35);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border: none !important;
     user-select: none;
-    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease, border-color 0.2s ease;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
 }
 
 .media-photo-tile:hover {
-    transform: scale(1.03);
-    z-index: 5;
-    border-color: rgba(137, 180, 250, 0.5);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+    z-index: 2;
 }
 
 .media-photo-img {
@@ -382,109 +448,56 @@
     height: 100%;
     object-fit: cover;
     display: block;
-    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.media-photo-tile:hover .media-photo-img {
-    transform: scale(1.05);
-}
-
-/* Photo Scrim Overlay on Hover */
-.media-photo-scrim {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(to top, rgba(10, 10, 16, 0.9) 0%, rgba(10, 10, 16, 0.3) 50%, transparent 80%);
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    padding: 7px;
-    gap: 4px;
+    border-radius: 0 !important;
     pointer-events: none;
 }
 
-.media-photo-tile:hover .media-photo-scrim {
-    opacity: 1;
-    pointer-events: auto;
+.media-photo-tile:hover .media-photo-img {
+    filter: brightness(1.04);
 }
 
-.media-photo-title {
-    font-size: 0.68rem;
-    font-weight: 600;
-    color: #ffffff;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
-}
-
-.media-photo-actions {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.media-photo-action-btn {
-    background: rgba(17, 17, 27, 0.75);
-    backdrop-filter: blur(4px);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    color: #ffffff;
-    border-radius: 4px;
-    padding: 2px 4px;
-    font-size: 0.68rem;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    line-height: 1;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.media-photo-action-btn:hover {
-    background: rgba(137, 180, 250, 0.35);
-    border-color: #89b4fa;
-    transform: scale(1.1);
-}
-
-/* Photo Favorite Button */
-.media-photo-fav-btn {
+/* Dezentes Favoriten-Badge auf dem Bild (ohne Button-Leiste) */
+.media-photo-fav-badge {
     position: absolute;
-    top: 5px;
-    right: 5px;
-    width: 26px;
-    height: 26px;
+    top: 6px;
+    right: 6px;
+    font-size: 0.78rem;
+    line-height: 1;
+    filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.85));
+    pointer-events: none;
+    z-index: 3;
+}
+
+/* Google-Fotos-Style Auswahl-Markierung bei Long-Press */
+.photo-tile-swipe-item.is-selected {
+    background: rgba(137, 180, 250, 0.18) !important;
+    border: none !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+.photo-tile-swipe-item.is-selected .media-photo-tile {
+    transform: scale(0.88);
+    box-shadow: 0 0 0 3px var(--accent, #89b4fa), 0 4px 14px rgba(0, 0, 0, 0.5) !important;
+}
+
+.photo-tile-swipe-item.is-selected .media-photo-tile::after {
+    content: '✓';
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
-    background: rgba(17, 17, 27, 0.65);
-    backdrop-filter: blur(6px);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: rgba(255, 255, 255, 0.6);
+    background: var(--accent, #89b4fa);
+    color: #11111b;
+    font-size: 0.78rem;
+    font-weight: 800;
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
-    font-size: 0.75rem;
-    z-index: 4;
-    transition: all 0.18s ease;
-    opacity: 0;
-}
-
-.media-photo-tile:hover .media-photo-fav-btn,
-.media-photo-fav-btn.active {
-    opacity: 1;
-}
-
-.media-photo-fav-btn.active {
-    color: #f9e2af;
-    background: rgba(249, 226, 175, 0.25);
-    border-color: #f9e2af;
-    text-shadow: 0 0 8px rgba(249, 226, 175, 0.6);
-}
-
-.media-photo-fav-btn:hover {
-    transform: scale(1.15);
-    background: rgba(17, 17, 27, 0.9);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+    z-index: 5;
 }
 
 /* ==========================================================================

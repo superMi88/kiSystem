@@ -146,6 +146,12 @@ export const mailPlugin: Plugin = {
       handler: async (args, { prisma }) => {
         const id = Number(args.mailId);
         const updated = await MailService.updateEmailCategory(prisma, id, args.kategorie);
+        if (!updated) {
+          return {
+            status: "error",
+            message: `E-Mail mit ID ${id} wurde nicht in der Datenbank gefunden.`
+          };
+        }
         return {
           status: "success",
           message: `E-Mail '${updated.subject}' wurde der Kategorie '${updated.category}' zugewiesen.`,

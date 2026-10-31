@@ -114,6 +114,7 @@ export class MailService {
       },
       logger: false
     });
+    client.on("error", () => {});
 
     try {
       await client.connect();
@@ -159,6 +160,7 @@ export class MailService {
       },
       logger: false
     });
+    client.on("error", (err: any) => console.warn(`[MailService IMAP Error] ${account.email}:`, err?.message || err));
 
     const newEmails: any[] = [];
 
@@ -482,6 +484,7 @@ export class MailService {
           connectionTimeout: 2500,
           greetingTimeout: 2500
         });
+        client.on("error", (err: any) => console.warn(`[MailService IMAP Error] ${account.email}:`, err?.message || err));
 
         await client.connect();
         const lock = await client.getMailboxLock("INBOX");
@@ -736,6 +739,7 @@ export class MailService {
             },
             logger: false
           });
+          client.on("error", () => {});
 
           await client.connect();
           const lock = await client.getMailboxLock("INBOX");
@@ -766,6 +770,15 @@ export class MailService {
     emailId: number,
     category: string | string[] | null
   ) {
+    const existing = await prisma.cachedEmail.findUnique({
+      where: { id: emailId },
+      select: { id: true }
+    });
+    if (!existing) {
+      console.warn(`[MailService] E-Mail #${emailId} existiert nicht in der Datenbank.`);
+      return null;
+    }
+
     let cleanCategory: string | null = null;
     if (Array.isArray(category)) {
       const list = category.map(c => typeof c === "string" ? c.trim() : "").filter(Boolean);

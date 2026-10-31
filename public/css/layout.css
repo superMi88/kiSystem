@@ -261,7 +261,7 @@ body.mobile-mode .top-panel-header {
 body.mobile-mode .top-panel {
     grid-column: 1 !important;
     grid-row: 1 !important;
-    padding: 60px 10px 20px 10px !important;
+    padding: 60px 6px 20px 6px !important;
     height: 100% !important;
     max-height: 100% !important;
     width: 100% !important;
@@ -276,6 +276,12 @@ body.mobile-mode .top-panel {
     border-bottom: none !important;
     box-sizing: border-box !important;
     touch-action: pan-y !important;
+}
+
+body.view-photos .top-panel,
+body.mobile-mode.view-photos .top-panel {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
 }
 
 /* Flexbox scroll spacer: guarantees bottom clearance over the floating input bar across all browsers */
@@ -512,6 +518,48 @@ body.mobile-mode #mobile-top-bar {
 .header-action-btn.primary:hover {
     background: #b4befe;
     color: #11111b;
+}
+
+.header-action-btn.active, .header-action-btn.is-active {
+    background: rgba(137, 180, 250, 0.25) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+    box-shadow: 0 0 10px rgba(137, 180, 250, 0.3) !important;
+}
+
+#header-briefing-filter-btn.active {
+    background: rgba(203, 166, 247, 0.25) !important;
+    border-color: #cba6f7 !important;
+    color: #cba6f7 !important;
+    box-shadow: 0 0 10px rgba(203, 166, 247, 0.3) !important;
+}
+
+#header-locations-filter-btn.active {
+    background: rgba(166, 227, 161, 0.25) !important;
+    border-color: #a6e3a1 !important;
+    color: #a6e3a1 !important;
+    box-shadow: 0 0 10px rgba(166, 227, 161, 0.3) !important;
+}
+
+#header-photos-filter-btn.active {
+    background: rgba(249, 226, 175, 0.25) !important;
+    border-color: #f9e2af !important;
+    color: #f9e2af !important;
+    box-shadow: 0 0 10px rgba(249, 226, 175, 0.3) !important;
+}
+
+#header-docs-filter-btn.active {
+    background: rgba(137, 220, 235, 0.25) !important;
+    border-color: #89dceb !important;
+    color: #89dceb !important;
+    box-shadow: 0 0 10px rgba(137, 220, 235, 0.3) !important;
+}
+
+#header-mail-filter-btn.active {
+    background: rgba(137, 180, 250, 0.25) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+    box-shadow: 0 0 10px rgba(137, 180, 250, 0.3) !important;
 }
 
 @keyframes spinSync {

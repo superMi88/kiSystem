@@ -229,6 +229,8 @@
             const modal = document.getElementById('event-edit-modal');
             if (modal) modal.style.display = 'none';
             document.body.classList.remove('modal-active');
+            window.pendingEventNotificationDismiss = null;
+            window.editingEventProposalNotifId = null;
         };
 
 
@@ -255,9 +257,57 @@
                 return;
             }
 
-            let startIso = `${dateVal}T${startTime || '00:00'}:00`;
+                        let startIso = `${dateVal}T${startTime || '00:00'}:00`;
             let endIso = `${dateVal}T${endTime || '01:00'}:00`;
             const isPlanned = document.getElementById('event-edit-planned-input')?.checked || false;
+
+            if (window.editingEventProposalNotifId) {
+                const notifId = window.editingEventProposalNotifId;
+                window.editingEventProposalNotifId = null;
+                closeEventEditModal();
+
+                try {
+                    const notifRes = await fetch(getApiUrl(`/api/notifications/${notifId}`));
+                    let actData = {};
+                    if (notifRes.ok) {
+                        const notif = await notifRes.json();
+                        actData = notif.actionData;
+                        if (typeof actData === 'string') {
+                            try { actData = JSON.parse(actData); } catch (_) {}
+                        }
+                    }
+                    actData = actData || {};
+                    actData.actionType = 'create_event';
+                    actData.eventData = {
+                        ...(actData.eventData || {}),
+                        title,
+                        date: dateVal,
+                        startTime: isAllDay ? null : (startTime || null),
+                        endTime: isAllDay ? null : (endTime || null),
+                        isAllDay,
+                        description: desc || null,
+                        location: locationVal || null
+                    };
+
+                    await fetch(getApiUrl(`/api/notifications/${notifId}`), {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            title: `📅 ${title}`,
+                            actionData: actData
+                        })
+                    });
+
+                    if (typeof loadTopWidgets === 'function') loadTopWidgets();
+                    if (typeof currentConversationId !== 'undefined' && currentConversationId && typeof loadConversationNotifications === 'function') {
+                        loadConversationNotifications(currentConversationId);
+                    }
+                } catch (err) {
+                    console.error("Fehler beim Aktualisieren des Terminvorschlags:", err);
+                    alert("Fehler beim Aktualisieren des Terminvorschlags.");
+                }
+                return;
+            }
 
             closeEventEditModal();
 
@@ -293,6 +343,28 @@
                     });
                 }
                 loadTopWidgets();
+
+                if (window.pendingEventNotificationDismiss) {
+                    const pendingDismiss = window.pendingEventNotificationDismiss;
+                    window.pendingEventNotificationDismiss = null;
+                    if (pendingDismiss.notifId) {
+                        try {
+                            await fetch(getApiUrl(`/api/notifications/${pendingDismiss.notifId}/dismiss`), { method: 'POST' });
+                        } catch (_) {}
+                    }
+                    if (pendingDismiss.cardEl) {
+                        pendingDismiss.cardEl.classList.add('dismissed');
+                        const statusContainer = pendingDismiss.cardEl.querySelector('.chat-notification-status-container');
+                        if (statusContainer) {
+                            statusContainer.innerHTML = '<span class="chat-notification-status" style="background: rgba(166, 227, 161, 0.15); color: #a6e3a1; border: 1px solid rgba(166, 227, 161, 0.3);">✅ Im Kalender angelegt</span>';
+                        }
+                        pendingDismiss.cardEl.querySelectorAll('.chat-notification-btn').forEach(b => b.disabled = true);
+                    }
+                    if (typeof loadTopWidgets === 'function') loadTopWidgets();
+                    if (typeof isElectron !== 'undefined' && isElectron && typeof ipcRenderer !== 'undefined' && ipcRenderer) {
+                        ipcRenderer.send('widgets-updated');
+                    }
+                }
             } catch(e) {
                 console.error("Fehler beim Speichern des Termins:", e);
                 alert("Fehler beim Speichern des Termins.");
@@ -1015,6 +1087,12 @@
                     jumpToTimelineDate(id);
                 } else if (type === 'pause' || type === 'travel') {
                     focusWidget('dashboard');
+                } else if (type === 'location') {
+                    if (typeof openLocationEditModal === 'function') {
+                        openLocationEditModal(Number(id));
+                    } else {
+                        focusWidget('locations');
+                    }
                 } else if (type === 'media' || type === 'file') {
                     const res = await fetch(getApiUrl(`/api/media/${id}`));
                     if (res.ok) {
@@ -1062,6 +1140,7 @@
                 day: { icon: '📅', color: 'rgba(137, 180, 250, 0.15)', borderColor: '#89b4fa' },
                 pause: { icon: '☕', color: 'rgba(249, 226, 175, 0.15)', borderColor: '#f9e2af' },
                 travel: { icon: '🗺️', color: 'rgba(166, 227, 161, 0.15)', borderColor: '#a6e3a1' },
+                location: { icon: '📍', color: 'rgba(166, 227, 161, 0.15)', borderColor: '#a6e3a1' },
                 media: { icon: '📁', color: 'rgba(249, 226, 175, 0.15)', borderColor: '#f9e2af' },
                 file: { icon: '📁', color: 'rgba(249, 226, 175, 0.15)', borderColor: '#f9e2af' }
             };
@@ -3034,6 +3113,7 @@
 
 
         let currentConversationId = null;
+        window.currentConversationId = null;
 
 
         let pendingAppPath = null;
@@ -3177,8 +3257,38 @@
             const starredInput = document.getElementById('task-is-starred-input');
 
             if (plannedInput) plannedInput.checked = !!isPlanned;
-            if (statusInput) statusInput.value = status || (isPlanned ? 'suggestion' : 'in_progress');
             if (starredInput) starredInput.checked = !!isStarred;
+
+            const statusGroup = statusInput ? statusInput.closest('.settings-group') : null;
+            if (statusInput) {
+                const projects = (window.lastProjectsData && window.lastProjectsData.projects) || [];
+                const currentProj = projectId ? projects.find(p => String(p.id) === String(projectId)) : null;
+                let projCats = null;
+                if (currentProj && currentProj.categories) {
+                    try {
+                        projCats = typeof currentProj.categories === 'string' ? JSON.parse(currentProj.categories) : currentProj.categories;
+                    } catch(e) {}
+                }
+
+                if (projCats && Array.isArray(projCats.items) && projCats.items.length > 0) {
+                    if (statusGroup) statusGroup.style.display = 'block';
+                    statusInput.innerHTML = projCats.items.map(c => `
+                        <option value="${c.id}" ${status === c.id ? 'selected' : ''}>${c.icon || '📌'} ${escapeHtml(c.name)}</option>
+                    `).join('');
+                    statusInput.value = status || projCats.defaultId || projCats.items[0].id;
+                } else if (projectId) {
+                    if (statusGroup) statusGroup.style.display = 'none';
+                    statusInput.value = 'in_progress';
+                } else {
+                    if (statusGroup) statusGroup.style.display = 'block';
+                    statusInput.innerHTML = `
+                        <option value="suggestion" ${status === 'suggestion' ? 'selected' : ''}>💡 Vorschlag (Idee / In Planung)</option>
+                        <option value="in_progress" ${status === 'in_progress' ? 'selected' : ''}>⏳ In Arbeit</option>
+                        <option value="done" ${status === 'done' ? 'selected' : ''}>✅ Fertig</option>
+                    `;
+                    statusInput.value = status || (isPlanned ? 'suggestion' : 'in_progress');
+                }
+            }
             
             if (taskIdInput) taskIdInput.value = taskId || '';
             const taskProjectIdInput = document.getElementById('task-project-id-input');

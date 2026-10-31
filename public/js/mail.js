@@ -37,6 +37,19 @@
 
         window.filterMailByCategory = filterMailByCategory;
 
+        window.toggleMailFilter = function() {
+            window.mailFilterOpen = !window.mailFilterOpen;
+            if (!window.mailFilterOpen) {
+                activeMailAccountFilter = null;
+                activeMailCategoryFilter = null;
+            }
+            const container = document.getElementById('widget-mail') || window.lastMailContainer;
+            if (window.lastMailData && container) {
+                renderMailWidget(window.lastMailData, container);
+            }
+        };
+
+
 
 
         function filterMailBySearch(query) {
@@ -102,6 +115,15 @@
                 return;
             }
 
+            const isMailFilterOpen = Boolean(window.mailFilterOpen);
+            const mailFilterBtn = document.getElementById('header-mail-filter-btn');
+            if (mailFilterBtn) {
+                if (isMailFilterOpen) mailFilterBtn.classList.add('active');
+                else mailFilterBtn.classList.remove('active');
+            }
+
+            html += `<div id="mail-filter-container" class="mail-filter-container" style="display: ${isMailFilterOpen ? 'flex' : 'none'}; flex-direction: column; gap: 8px;">`;
+
             // 2. Postfach-Pills (Konto-Filter)
             html += `<div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 3px; scrollbar-width: none;">`;
             const allActiveStyle = activeMailAccountFilter === null ? 'background: var(--accent); color: #11111b; font-weight: bold; border-color: var(--accent);' : 'background: rgba(255,255,255,0.04); color: var(--text); border-color: rgba(255,255,255,0.1);';
@@ -132,6 +154,7 @@
                 });
                 html += `</div>`;
             }
+            html += `</div>`; // closes mail-filter-container
 
             // 4. Emails List
             if (filteredEmails.length === 0) {
@@ -718,7 +741,7 @@
         let mailOriginView = null;
 
 
-        let isClosingMailReadModal = false;
+        window.isClosingMailReadModal = false;
 
 
 
@@ -780,12 +803,10 @@
             const titleEl = document.getElementById('plugin-view-title');
             if (titleEl) titleEl.textContent = 'E-Mail lesen';
 
-            // Push history state so hardware / browser back button works cleanly
-            try {
-                if (!window.history.state || !window.history.state.isMailReadModalOpen) {
-                    window.history.pushState({ isMailReadModalOpen: true, mailId: id }, '');
-                }
-            } catch (_) {}
+            // Update URL via AppRouter
+            if (window.AppRouter && typeof window.AppRouter.updateUrl === 'function') {
+                window.AppRouter.updateUrl(`/mail/${id}`);
+            }
 
             // Nach oben scrollen
             const topPanel = document.querySelector('.top-panel');
@@ -1861,13 +1882,6 @@
                 const titleEl = document.getElementById('plugin-view-title');
                 if (titleEl) titleEl.textContent = 'E-Mails (Posteingang)';
 
-                // Sync history state if user clicked on-screen back button
-                if (!fromPopState && window.history.state && window.history.state.isMailReadModalOpen) {
-                    try {
-                        window.history.back();
-                    } catch (_) {}
-                }
-
                 // Return to origin view if different from 'mail' (e.g. Arbeitstisch)
                 const targetView = mailOriginView;
                 mailOriginView = null;
@@ -1876,6 +1890,10 @@
                         focusWidget(targetView);
                     } else if (typeof switchMobileView === 'function') {
                         switchMobileView(targetView);
+                    }
+                } else {
+                    if (window.AppRouter && typeof window.AppRouter.updateUrl === 'function') {
+                        window.AppRouter.updateUrl('/mail');
                     }
                 }
             } finally {
@@ -1969,8 +1987,12 @@
                     });
                 }
 
+                const sendBtn = document.getElementById('mail-compose-send-btn');
                 if (initialData) {
                     if (titleEl) titleEl.textContent = '✏️ E-Mail-Entwurf bearbeiten';
+                    if (sendBtn) {
+                        sendBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Speichern';
+                    }
                     if (initialData.accountId && accSelect) accSelect.value = initialData.accountId;
                     if (toInput) toInput.value = initialData.to || '';
                     if (subjectInput) subjectInput.value = initialData.subject || '';
@@ -1985,6 +2007,9 @@
                     if (mRes.ok) {
                         const mail = await mRes.json();
                         if (titleEl) titleEl.textContent = `↩️ Antwort an ${mail.fromName || mail.from}`;
+                        if (sendBtn) {
+                            sendBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg> Senden';
+                        }
                         if (accSelect) accSelect.value = mail.accountId;
                         
                         // Absender-Adresse aus "Name <email>" extrahieren falls vorhanden
@@ -2005,6 +2030,9 @@
                 } else {
                     // Neue E-Mail
                     if (titleEl) titleEl.textContent = '✍️ Neue E-Mail verfassen';
+                    if (sendBtn) {
+                        sendBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg> Senden';
+                    }
                     if (defaultAccountId && accSelect) accSelect.value = defaultAccountId;
                     if (toInput) toInput.value = '';
                     if (subjectInput) subjectInput.value = '';
@@ -2060,6 +2088,92 @@
                     statusEl.style.background = 'rgba(243, 139, 168, 0.15)';
                     statusEl.style.color = 'var(--off)';
                     statusEl.textContent = 'Bitte alle Felder (Empfänger, Betreff, Nachricht) ausfüllen.';
+                }
+                return;
+            }
+
+            if (notificationId) {
+                if (sendBtn) {
+                    sendBtn.disabled = true;
+                    sendBtn.innerHTML = '⏳ Speichern...';
+                }
+                if (statusEl) {
+                    statusEl.style.display = 'block';
+                    statusEl.style.background = 'rgba(137, 180, 250, 0.15)';
+                    statusEl.style.color = 'var(--accent)';
+                    statusEl.textContent = 'Entwurf wird aktualisiert...';
+                }
+                try {
+                    const notifRes = await fetch(getApiUrl(`/api/notifications/${notificationId}`));
+                    let actData = {};
+                    if (notifRes.ok) {
+                        const notif = await notifRes.json();
+                        actData = notif.actionData;
+                        if (typeof actData === 'string') {
+                            try { actData = JSON.parse(actData); } catch (_) {}
+                        }
+                    }
+                    actData = actData || {};
+                    const isReply = actData.actionType === 'send_mail_reply' || Boolean(actData.replyData);
+                    const dataKey = isReply ? 'replyData' : 'mailData';
+
+                    const selectedOpt = accSelect && accSelect.selectedOptions ? accSelect.selectedOptions[0] : null;
+                    const selectedAccountText = selectedOpt ? selectedOpt.textContent : '';
+                    const accMatch = selectedAccountText.match(/^(.+?)\s*\((.+?)\)$/);
+                    const selectedAccountName = accMatch ? accMatch[1].trim() : (selectedOpt ? selectedOpt.textContent : '');
+                    const selectedAccountEmail = accMatch ? accMatch[2].trim() : '';
+                    const selectedFromStr = selectedAccountName && selectedAccountEmail && selectedAccountName !== selectedAccountEmail
+                        ? `${selectedAccountName} <${selectedAccountEmail}>`
+                        : (selectedAccountEmail || selectedAccountName);
+
+                    actData[dataKey] = {
+                        ...(actData[dataKey] || {}),
+                        to,
+                        subject,
+                        body,
+                        attachments: currentComposeAttachments,
+                        accountId: Number(accountId),
+                        accountName: selectedAccountName,
+                        fromEmail: selectedAccountEmail,
+                        from: selectedFromStr
+                    };
+
+                    const updateRes = await fetch(getApiUrl(`/api/notifications/${notificationId}`), {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            title: `✉️ ${subject}`,
+                            actionData: actData
+                        })
+                    });
+
+                    if (updateRes.ok) {
+                        closeMailComposeModal();
+                        if (typeof loadTopWidgets === 'function') loadTopWidgets();
+                        if (typeof currentConversationId !== 'undefined' && currentConversationId && typeof loadConversationNotifications === 'function') {
+                            loadConversationNotifications(currentConversationId);
+                        }
+                    } else {
+                        if (statusEl) {
+                            statusEl.style.display = 'block';
+                            statusEl.style.background = 'rgba(243, 139, 168, 0.15)';
+                            statusEl.style.color = 'var(--off)';
+                            statusEl.textContent = 'Fehler beim Speichern des Entwurfs.';
+                        }
+                    }
+                } catch (err) {
+                    console.error("Fehler beim Speichern des Entwurfs:", err);
+                    if (statusEl) {
+                        statusEl.style.display = 'block';
+                        statusEl.style.background = 'rgba(243, 139, 168, 0.15)';
+                        statusEl.style.color = 'var(--off)';
+                        statusEl.textContent = `Fehler: ${err.message || 'Speichern fehlgeschlagen'}`;
+                    }
+                } finally {
+                    if (sendBtn) {
+                        sendBtn.disabled = false;
+                        sendBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Speichern';
+                    }
                 }
                 return;
             }

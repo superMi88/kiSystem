@@ -535,7 +535,7 @@
             const target = e.target;
 
             // Only ignore when interacting directly with explicit form elements or clickable tags
-            if (target.closest('button, input, select, textarea, a, .clickable-tag, .reply-cancel-btn, .task-checkbox, summary')) {
+            if (target.closest('button, input, select, textarea, a, .clickable-tag, .media-doc-inline-chip, .reply-cancel-btn, .task-checkbox, summary')) {
                 return;
             }
 
@@ -813,7 +813,7 @@
             }
 
             // Direct click handlers for item tap & reply quote tap
-            if (e.target.closest('button, input, select, textarea, a, .pill-close, .task-checkbox, .clickable-tag, .reply-cancel-btn, summary, details, .travel-transit-accordion, .travel-item-extra')) {
+            if (e.target.closest('button, input, select, textarea, a, .pill-close, .task-checkbox, .clickable-tag, .media-doc-inline-chip, .location-person-chip, .reply-cancel-btn, summary, details, .travel-transit-accordion, .travel-item-extra')) {
                 return;
             }
 
@@ -831,7 +831,7 @@
             const item = e.target.closest('.swipe-link-item');
             if (item) {
                 const type = item.dataset.contextType || item.dataset.linkType;
-                const id = item.dataset.linkId || item.dataset.mailId || item.dataset.taskId || item.dataset.eventId || item.dataset.personId || item.dataset.timerId || item.dataset.noteId || item.dataset.projectId || item.dataset.dayDate || item.dataset.date;
+                const id = item.dataset.linkId || item.dataset.mailId || item.dataset.taskId || item.dataset.eventId || item.dataset.personId || item.dataset.timerId || item.dataset.noteId || item.dataset.projectId || item.dataset.mediaId || item.dataset.locationId || item.dataset.dayDate || item.dataset.date;
                 if (!type) return;
 
                 if (type === 'task') {
@@ -846,12 +846,33 @@
                     openTimerDetailModalFromData(item.dataset);
                 } else if (type === 'person') {
                     openPersonProfileModal(Number(item.dataset.personId || id));
+                } else if (type === 'location') {
+                    const locId = Number(item.dataset.locationId || id);
+                    if (typeof openLocationEditModal === 'function') {
+                        openLocationEditModal(locId);
+                    }
                 } else if (type === 'project') {
-                    toggleProjectCollapse(item.dataset.projectId || id);
+                    e.stopPropagation();
+                    if (typeof openProjectDetailPage === 'function') {
+                        openProjectDetailPage(item.dataset.projectId || id);
+                    }
                 } else if (type === 'note') {
                     openNoteModal(Number(item.dataset.noteId || id), item.dataset.noteTitle, item.dataset.noteContent, item.dataset.projectId ? Number(item.dataset.projectId) : null);
                 } else if (type === 'mail') {
                     openMailReadModal(Number(item.dataset.mailId || id));
+                } else if (type === 'media') {
+                    const mediaId = Number(item.dataset.mediaId || id);
+                    if (item.dataset.mediaIsImage === 'true') {
+                        if (item.dataset.mediaLightboxIndex !== undefined && item.dataset.mediaLightboxIndex !== '' && typeof openMediaLightbox === 'function') {
+                            openMediaLightbox(Number(item.dataset.mediaLightboxIndex));
+                        } else if (item.dataset.mediaUrl) {
+                            window.open(item.dataset.mediaUrl, '_blank');
+                        }
+                    } else if (item.dataset.mediaIsText === 'true' && typeof openTextEditorModal === 'function') {
+                        openTextEditorModal(mediaId);
+                    } else if (item.dataset.mediaUrl) {
+                        window.open(item.dataset.mediaUrl, '_blank');
+                    }
                 } else if (type === 'day') {
                     focusWidget('calendar');
                     jumpToTimelineDate(id || item.dataset.dayDate || item.dataset.date || 'today');
@@ -1081,9 +1102,13 @@
                 playPause: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`,
                 reset: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>`,
                 star: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`,
+                edit: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`,
+                download: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`,
                 eventPlus: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><line x1="12" y1="14" x2="12" y2="18"></line><line x1="10" y1="16" x2="14" y2="16"></line></svg>`,
                 taskPlus: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>`,
-                focus: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>`
+                focus: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>`,
+                pin: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg>`,
+                bulb: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"></path></svg>`
             };
 
             const cancelBtnHtml = `
@@ -1105,10 +1130,18 @@
                 ];
             } else if (normType === 'task' || normType === 'tasks') {
                 options = [
+                    `<button type="button" onclick="toggleTasksSuggestionForSelection()" class="plugin-nav-btn sel-action-btn" title="Als Vorschlag / In Arbeit umschalten">${ICONS.bulb}</button>`,
                     `<button type="button" onclick="toggleTasksCompletionForSelection()" class="plugin-nav-btn sel-action-btn" title="Aufgaben als erledigt / offen markieren">${ICONS.check}</button>`,
-                    `<button type="button" onclick="openPersonModalForSelection()" class="plugin-nav-btn sel-action-btn" title="Person zuordnen">${ICONS.person}</button>`,
-                    `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
+                    `<button type="button" onclick="toggleTasksPinForSelection()" class="plugin-nav-btn sel-action-btn" title="Aufgabe(n) anpinnen / entpinnen">${ICONS.pin}</button>`,
+                    `<button type="button" onclick="editSelectedTaskItem()" class="plugin-nav-btn sel-action-btn" title="Aufgabe bearbeiten">${ICONS.edit}</button>`,
                     `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte Aufgaben löschen">${ICONS.trash}</button>`
+                ];
+            } else if (normType === 'project') {
+                options = [
+                    `<button type="button" onclick="toggleProjectsPinForSelection()" class="plugin-nav-btn sel-action-btn" title="Projekt(e) anpinnen / entpinnen">${ICONS.pin}</button>`,
+                    `<button type="button" onclick="editSelectedProjectItem()" class="plugin-nav-btn sel-action-btn" title="Projekt bearbeiten">${ICONS.edit}</button>`,
+                    `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
+                    `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte Projekte löschen">${ICONS.trash}</button>`
                 ];
             } else if (normType === 'event' || normType === 'calendar') {
                 options = [
@@ -1129,6 +1162,20 @@
                     `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
                     `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte Personen löschen">${ICONS.trash}</button>`
                 ];
+            } else if (normType === 'location' || normType === 'locations') {
+                options = [
+                    `<button type="button" onclick="toggleLocationFavoriteForSelection()" class="plugin-nav-btn sel-action-btn" title="Zu Favoriten hinzufügen / entfernen">${ICONS.star}</button>`,
+                    `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
+                    `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte Orte löschen">${ICONS.trash}</button>`
+                ];
+            } else if (normType === 'media') {
+                options = [
+                    `<button type="button" onclick="editSelectedMediaItem()" class="plugin-nav-btn sel-action-btn" title="Metadaten bearbeiten">${ICONS.edit}</button>`,
+                    `<button type="button" onclick="toggleMediaFavoriteForSelection()" class="plugin-nav-btn sel-action-btn" title="Zu Favoriten hinzufügen / entfernen">${ICONS.star}</button>`,
+                    `<button type="button" onclick="downloadSelectedMediaItems()" class="plugin-nav-btn sel-action-btn" title="Herunterladen">${ICONS.download}</button>`,
+                    `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
+                    `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Ausgewählte Dokumente löschen">${ICONS.trash}</button>`
+                ];
             } else if (normType === 'day') {
                 options = [
                     `<button type="button" onclick="openNewEventForSelectedDay()" class="plugin-nav-btn sel-action-btn" title="Neuer Termin an diesem Tag">${ICONS.eventPlus}</button>`,
@@ -1136,7 +1183,7 @@
                     `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Tag(e) im Chat verlinken">${ICONS.link}</button>`,
                     `<button type="button" onclick="jumpToSelectedDay()" class="plugin-nav-btn sel-action-btn" title="Zum Tag in der Timeline scrollen">${ICONS.focus}</button>`
                 ];
-            } else if (normType === 'note' || normType === 'journal' || normType === 'project') {
+            } else if (normType === 'note' || normType === 'journal') {
                 options = [
                     `<button type="button" onclick="linkSelectionIntoChat()" class="plugin-nav-btn sel-action-btn" title="Im Chat verlinken">${ICONS.link}</button>`,
                     `<button type="button" onclick="deleteSelectionItems()" class="plugin-nav-btn sel-action-btn delete-btn" title="Löschen">${ICONS.trash}</button>`
@@ -1275,9 +1322,17 @@
                     const el = document.querySelector(`.swipe-link-item[data-link-id="${id}"], .swipe-link-item[data-task-id="${id}"]`);
                     if (el && el.dataset.taskCompleted !== 'true') anyIncomplete = true;
                 });
-                const newCompleted = anyIncomplete;
+                const newStatus = anyIncomplete ? 'done' : 'in_progress';
 
-                await Promise.all(ids.map(id => callTool('aktualisiere_aufgabe', { id: String(id), completed: newCompleted })));
+                await Promise.all(ids.map(id => {
+                    const rawId = String(id).replace('task-', '');
+                    return fetch(getApiUrl(`/api/tasks/${rawId}/status`), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: newStatus })
+                    });
+                }));
+                if (navigator.vibrate) navigator.vibrate(25);
                 exitSelectionMode();
                 loadTopWidgets();
             } catch (err) {
@@ -1288,6 +1343,119 @@
 
 
         window.toggleTasksCompletionForSelection = toggleTasksCompletionForSelection;
+
+
+        async function toggleTasksSuggestionForSelection() {
+            if (selectedItemIds.size === 0 || currentSelectionType !== 'task') return;
+            const ids = Array.from(selectedItemIds);
+            try {
+                let anyNotSuggestion = false;
+                ids.forEach(id => {
+                    const el = document.querySelector(`.swipe-link-item[data-link-id="${id}"], .swipe-link-item[data-task-id="${id}"]`);
+                    if (el && el.dataset.taskStatus !== 'suggestion' && el.dataset.taskPlanned !== 'true') {
+                        anyNotSuggestion = true;
+                    }
+                });
+                const targetStatus = anyNotSuggestion ? 'suggestion' : 'in_progress';
+
+                await Promise.all(ids.map(id => {
+                    const rawId = String(id).replace('task-', '');
+                    return fetch(getApiUrl(`/api/tasks/${rawId}/status`), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: targetStatus })
+                    });
+                }));
+                if (navigator.vibrate) navigator.vibrate(25);
+                exitSelectionMode();
+                loadTopWidgets();
+            } catch (err) {
+                console.error("Fehler beim Ändern des Aufgabenstatus:", err);
+            }
+        }
+
+
+        window.toggleTasksSuggestionForSelection = toggleTasksSuggestionForSelection;
+
+
+        async function toggleTasksPinForSelection() {
+            if (selectedItemIds.size === 0 || currentSelectionType !== 'task') return;
+            const ids = Array.from(selectedItemIds);
+            try {
+                await Promise.all(ids.map(id => {
+                    const rawId = String(id).replace('task-', '');
+                    return fetch(getApiUrl(`/api/tasks/${rawId}/star`), { method: 'POST' });
+                }));
+                if (navigator.vibrate) navigator.vibrate(25);
+                exitSelectionMode();
+                loadTopWidgets();
+            } catch (err) {
+                console.error("Fehler beim Anpinnen der Aufgaben:", err);
+            }
+        }
+
+
+        window.toggleTasksPinForSelection = toggleTasksPinForSelection;
+
+
+        function editSelectedTaskItem() {
+            if (selectedItemIds.size === 0 || currentSelectionType !== 'task') return;
+            const firstId = Array.from(selectedItemIds)[0];
+            const rawId = String(firstId).replace('task-', '');
+            const el = document.querySelector(`.swipe-link-item[data-link-id="${firstId}"], .swipe-link-item[data-task-id="${rawId}"]`);
+            const ds = el ? el.dataset : (selectedItemMeta.get(firstId)?.extraData || {});
+            const title = ds.taskTitle || ds.linkLabel || '';
+            const notes = ds.taskNotes || '';
+            const due = ds.taskDue || '';
+            const list = ds.taskList || 'Standard';
+            const rec = ds.taskRecurrence || 'none';
+            const projId = ds.taskProjectId ? Number(ds.taskProjectId) : (ds.taskProject && ds.taskProject !== 'unassigned' ? Number(ds.taskProject) : null);
+            const isPlanned = ds.taskPlanned === 'true' || ds.taskStatus === 'suggestion';
+            const status = ds.taskStatus || (ds.taskCompleted === 'true' ? 'done' : 'in_progress');
+            const isStarred = ds.taskStarred === 'true';
+
+            exitSelectionMode();
+            if (typeof openTaskModal === 'function') {
+                openTaskModal(rawId, title, notes, due, list, rec, projId, isPlanned, status, isStarred);
+            }
+        }
+
+
+        window.editSelectedTaskItem = editSelectedTaskItem;
+
+
+        async function toggleProjectsPinForSelection() {
+            if (selectedItemIds.size === 0 || currentSelectionType !== 'project') return;
+            const ids = Array.from(selectedItemIds);
+            try {
+                await Promise.all(ids.map(id => fetch(getApiUrl(`/api/projects/${id}/star`), { method: 'POST' })));
+                if (navigator.vibrate) navigator.vibrate(25);
+                exitSelectionMode();
+                loadTopWidgets();
+            } catch (err) {
+                console.error("Fehler beim Anpinnen des Projekts:", err);
+            }
+        }
+
+
+        window.toggleProjectsPinForSelection = toggleProjectsPinForSelection;
+
+
+        function editSelectedProjectItem() {
+            if (selectedItemIds.size === 0 || currentSelectionType !== 'project') return;
+            const firstId = Array.from(selectedItemIds)[0];
+            const el = document.querySelector(`.swipe-link-item[data-link-id="${firstId}"], .swipe-link-item[data-project-id="${firstId}"]`);
+            const ds = el ? el.dataset : (selectedItemMeta.get(firstId)?.extraData || {});
+            const name = ds.projectName || ds.linkLabel || '';
+            const isStarred = ds.projectStarred === 'true';
+            exitSelectionMode();
+            if (typeof openProjectModal === 'function') {
+                openProjectModal(firstId, name, isStarred);
+            }
+        }
+
+
+        window.editSelectedProjectItem = editSelectedProjectItem;
 
 
 
@@ -1368,10 +1536,119 @@
 
 
 
+        function editSelectedMediaItem() {
+            if (selectedItemIds.size === 0 || currentSelectionType !== 'media') return;
+            const firstId = Number(Array.from(selectedItemIds)[0]);
+            exitSelectionMode();
+            if (typeof openMediaEditModal === 'function') {
+                openMediaEditModal(firstId);
+            }
+        }
+
+
+        window.editSelectedMediaItem = editSelectedMediaItem;
+
+
+
+        async function toggleMediaFavoriteForSelection() {
+            if (selectedItemIds.size === 0 || currentSelectionType !== 'media') return;
+            const ids = Array.from(selectedItemIds).map(Number).filter(n => !isNaN(n));
+            try {
+                let anyNonFavorite = false;
+                ids.forEach(id => {
+                    const el = document.querySelector(`.swipe-link-item[data-link-id="${id}"], .swipe-link-item[data-media-id="${id}"]`);
+                    if (el && el.dataset.mediaIsFavorite !== 'true') anyNonFavorite = true;
+                });
+                const newFavStatus = anyNonFavorite;
+
+                await Promise.all(ids.map(id =>
+                    fetch(getApiUrl(`/api/media/${id}/favorite`), {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ isFavorite: newFavStatus })
+                    })
+                ));
+
+                if (navigator.vibrate) navigator.vibrate(25);
+                exitSelectionMode();
+                if (typeof refreshMediaData === 'function') {
+                    await refreshMediaData();
+                } else {
+                    loadTopWidgets();
+                }
+            } catch (err) {
+                console.error("Fehler beim Umschalten des Favoritenstatus:", err);
+            }
+        }
+
+
+        window.toggleMediaFavoriteForSelection = toggleMediaFavoriteForSelection;
+
+
+
+        function downloadSelectedMediaItems() {
+            if (selectedItemIds.size === 0 || currentSelectionType !== 'media') return;
+            const ids = Array.from(selectedItemIds).map(Number).filter(n => !isNaN(n));
+            ids.forEach(id => {
+                const el = document.querySelector(`.swipe-link-item[data-link-id="${id}"], .swipe-link-item[data-media-id="${id}"]`);
+                const url = el?.dataset?.mediaUrl;
+                const fileName = el?.dataset?.mediaFilename || 'download';
+                if (url) {
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                }
+            });
+            exitSelectionMode();
+        }
+
+
+        window.downloadSelectedMediaItems = downloadSelectedMediaItems;
+
+
+        async function toggleLocationFavoriteForSelection() {
+            if (selectedItemIds.size === 0 || currentSelectionType !== 'location') return;
+            const ids = Array.from(selectedItemIds).map(Number).filter(n => !isNaN(n));
+            try {
+                let anyNonFavorite = false;
+                ids.forEach(id => {
+                    const el = document.querySelector(`.swipe-link-item[data-link-id="${id}"], .swipe-link-item[data-location-id="${id}"]`);
+                    if (el && el.dataset.locationIsFavorite !== 'true') anyNonFavorite = true;
+                });
+                const newFavStatus = anyNonFavorite;
+
+                await Promise.all(ids.map(id =>
+                    fetch(getApiUrl(`/api/locations/${id}/favorite`), {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ isFavorite: newFavStatus })
+                    })
+                ));
+
+                if (navigator.vibrate) navigator.vibrate(25);
+                exitSelectionMode();
+                if (typeof refreshLocationsData === 'function') {
+                    await refreshLocationsData();
+                } else {
+                    loadTopWidgets();
+                }
+            } catch (err) {
+                console.error("Fehler beim Umschalten des Favoritenstatus für Orte:", err);
+            }
+        }
+
+
+        window.toggleLocationFavoriteForSelection = toggleLocationFavoriteForSelection;
+
+
+
         async function deleteSelectionItems() {
             if (selectedItemIds.size === 0) return;
             const count = selectedItemIds.size;
-            const typeName = currentSelectionType === 'mail' ? 'E-Mail(s)' : (currentSelectionType === 'task' ? 'Aufgabe(n)' : (currentSelectionType === 'event' ? 'Termin(e)' : (currentSelectionType === 'timer' ? 'Timer' : (currentSelectionType === 'person' ? 'Person(en)' : 'Element(e)'))));
+            const typeName = currentSelectionType === 'mail' ? 'E-Mail(s)' : (currentSelectionType === 'task' ? 'Aufgabe(n)' : (currentSelectionType === 'event' ? 'Termin(e)' : (currentSelectionType === 'timer' ? 'Timer' : (currentSelectionType === 'person' ? 'Person(en)' : (currentSelectionType === 'media' ? 'Dokument(e)' : (currentSelectionType === 'location' ? 'Ort(e)' : 'Element(e)'))))));
             if (!confirm(`Möchtest du die ${count} ausgewählte(n) ${typeName} wirklich löschen?`)) return;
 
             const ids = Array.from(selectedItemIds);
@@ -1385,7 +1662,12 @@
                         body: JSON.stringify({ ids: ids.map(Number) })
                     });
                 } else if (type === 'task') {
-                    await Promise.all(ids.map(id => callTool('loesche_aufgabe', { id: String(id) })));
+                    await Promise.all(ids.map(id => {
+                        const rawId = String(id).replace('task-', '');
+                        return callTool('loesche_aufgabe', { taskId: rawId, id: rawId });
+                    }));
+                } else if (type === 'project') {
+                    await Promise.all(ids.map(id => callTool('loesche_projekt', { id: Number(id) })));
                 } else if (type === 'note') {
                     await Promise.all(ids.map(id => callTool('loesche_notiz', { id: Number(id) })));
                 } else if (type === 'timer') {
@@ -1409,6 +1691,24 @@
                         const jDate = meta?.extraData?.journalDate || '';
                         return typeof deleteJournalEntry === 'function' ? deleteJournalEntry(id, jDate) : null;
                     }));
+                } else if (type === 'location') {
+                    await Promise.all(ids.map(id => fetch(getApiUrl(`/api/locations/${Number(id)}`), { method: 'DELETE' })));
+                    exitSelectionMode();
+                    if (typeof refreshLocationsData === 'function') {
+                        await refreshLocationsData();
+                    } else {
+                        loadTopWidgets();
+                    }
+                    return;
+                } else if (type === 'media') {
+                    await Promise.all(ids.map(id => fetch(getApiUrl(`/api/media/${Number(id)}`), { method: 'DELETE' })));
+                    exitSelectionMode();
+                    if (typeof refreshMediaData === 'function') {
+                        await refreshMediaData();
+                    } else {
+                        loadTopWidgets();
+                    }
+                    return;
                 }
 
                 exitSelectionMode();

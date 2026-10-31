@@ -32,6 +32,7 @@ export const MUTATING_PLUGIN_TOOLS: Record<string, string[]> = {
 
 export const PROPOSAL_PLUGIN_TOOLS: Record<string, string> = {
   schlage_mail_antwort_vor: "Mail",
+  schlage_mail_vor: "Mail",
   schlage_termin_vor: "Calendar",
   schlage_aufgabe_vor: "Tasks"
 };

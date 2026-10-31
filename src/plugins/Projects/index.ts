@@ -111,6 +111,7 @@ export const projectsPlugin: Plugin = {
           projects: matchedProjects.map(p => ({
             id: p.id,
             name: p.name,
+            categories: (p as any).categories || null,
             isStarred: p.isStarred,
             erstelltAm: p.createdAt.toISOString(),
             personen: p.persons,
@@ -169,13 +170,14 @@ export const projectsPlugin: Plugin = {
     {
       definition: {
         name: "bearbeite_projekt",
-        description: "Bearbeitet den Namen oder Stern-Status eines bestehenden Projekts.",
+        description: "Bearbeitet den Namen, Stern-Status oder Kategorien/Zustände eines bestehenden Projekts.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
             id: { type: SchemaType.INTEGER, description: "Die ID des Projekts" },
             name: { type: SchemaType.STRING, description: "Der neue Name des Projekts (optional)" },
-            isStarred: { type: SchemaType.BOOLEAN, description: "Ob das Projekt mit einem Stern markiert ist (optional)" }
+            isStarred: { type: SchemaType.BOOLEAN, description: "Ob das Projekt mit einem Stern markiert ist (optional)" },
+            categories: { type: SchemaType.STRING, description: "JSON-kodierte Kategorien/Zustände für das Projekt oder null (optional)" }
           },
           required: ["id"]
         } as any
@@ -185,6 +187,13 @@ export const projectsPlugin: Plugin = {
         const data: any = {};
         if (args.name !== undefined) data.name = args.name;
         if (args.isStarred !== undefined) data.isStarred = !!args.isStarred;
+        if (args.categories !== undefined) {
+          try {
+            data.categories = typeof args.categories === "string" ? JSON.parse(args.categories) : args.categories;
+          } catch {
+            data.categories = args.categories;
+          }
+        }
 
         const project = await prisma.project.update({
           where: { id },
@@ -196,7 +205,8 @@ export const projectsPlugin: Plugin = {
           project: {
             id: project.id,
             name: project.name,
-            isStarred: project.isStarred
+            isStarred: project.isStarred,
+            categories: project.categories
           }
         };
       }
@@ -452,6 +462,7 @@ export const projectsPlugin: Plugin = {
           projects: matchedProjects.map(p => ({
             id: p.id,
             name: p.name,
+            categories: (p as any).categories || null,
             isStarred: p.isStarred,
             createdAt: p.createdAt.toISOString(),
             persons: p.persons,

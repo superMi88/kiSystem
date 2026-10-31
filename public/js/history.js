@@ -21,34 +21,98 @@
 
 
 
+        const isProjectDropActive = (e) => {
+            if (!window.activeProjectDetailId || window.activeProjectDetailId === 'unassigned') return false;
+            if (document.body.classList.contains('view-projects')) return true;
+            if (e && e.target && e.target.closest && e.target.closest('.project-detail-container')) return true;
+            const projOverlay = document.getElementById('project-drag-overlay');
+            if (projOverlay) return true;
+            return false;
+        };
+
         const isMediaDropActive = (e) => {
             if (document.body.classList.contains('view-photos') || document.body.classList.contains('view-docs') || document.body.classList.contains('view-media')) {
                 return true;
             }
-            if (e && e.target && e.target.closest && (e.target.closest('#widget-photos') || e.target.closest('#widget-docs') || e.target.closest('.media-dashboard') || e.target.closest('#top-widgets-container'))) {
+            if (e && e.target && e.target.closest && (e.target.closest('#widget-photos') || e.target.closest('#widget-docs') || e.target.closest('.media-dashboard'))) {
                 return true;
             }
             return false;
         };
 
         document.addEventListener('dragenter', (e) => {
-            if (isMediaDropActive(e)) return;
+            if (isProjectDropActive(e)) {
+                handleDrag(e);
+                const projOverlay = document.getElementById('project-drag-overlay');
+                if (projOverlay) projOverlay.classList.add('is-active');
+                return;
+            }
+            if (isMediaDropActive(e)) {
+                handleDrag(e);
+                if (document.body.classList.contains('view-docs')) {
+                    const docOverlay = document.getElementById('docs-drag-overlay');
+                    if (docOverlay) docOverlay.classList.add('is-active');
+                } else {
+                    const photoOverlay = document.getElementById('photos-drag-overlay');
+                    if (photoOverlay) photoOverlay.classList.add('is-active');
+                }
+                return;
+            }
             handleDrag(e);
-            if (typeof dropZone !== 'undefined' && dropZone) {
+            if (typeof isElectron !== 'undefined' && isElectron && typeof dropZone !== 'undefined' && dropZone) {
                 dropZone.classList.add('active');
             }
         });
 
         document.addEventListener('dragover', (e) => {
-            if (isMediaDropActive(e)) return;
+            if (isProjectDropActive(e)) {
+                handleDrag(e);
+                if (e.dataTransfer) {
+                    e.dataTransfer.dropEffect = 'copy';
+                }
+                const projOverlay = document.getElementById('project-drag-overlay');
+                if (projOverlay && !projOverlay.classList.contains('is-active')) projOverlay.classList.add('is-active');
+                return;
+            }
+            if (isMediaDropActive(e)) {
+                handleDrag(e);
+                if (e.dataTransfer) {
+                    e.dataTransfer.dropEffect = 'copy';
+                }
+                if (document.body.classList.contains('view-docs')) {
+                    const docOverlay = document.getElementById('docs-drag-overlay');
+                    if (docOverlay && !docOverlay.classList.contains('is-active')) docOverlay.classList.add('is-active');
+                } else {
+                    const photoOverlay = document.getElementById('photos-drag-overlay');
+                    if (photoOverlay && !photoOverlay.classList.contains('is-active')) photoOverlay.classList.add('is-active');
+                }
+                return;
+            }
             handleDrag(e);
-            if (typeof dropZone !== 'undefined' && dropZone) {
+            if (typeof isElectron !== 'undefined' && isElectron && typeof dropZone !== 'undefined' && dropZone) {
                 dropZone.classList.add('active');
             }
         });
 
         document.addEventListener('dragleave', (e) => {
-            if (isMediaDropActive(e)) return;
+            if (isProjectDropActive(e)) {
+                handleDrag(e);
+                if (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight || !e.relatedTarget) {
+                    const projOverlay = document.getElementById('project-drag-overlay');
+                    if (projOverlay) projOverlay.classList.remove('is-active');
+                }
+                return;
+            }
+            if (isMediaDropActive(e)) {
+                handleDrag(e);
+                if (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight || !e.relatedTarget) {
+                    const photoOverlay = document.getElementById('photos-drag-overlay');
+                    if (photoOverlay) photoOverlay.classList.remove('is-active');
+                    const docOverlay = document.getElementById('docs-drag-overlay');
+                    if (docOverlay) docOverlay.classList.remove('is-active');
+                }
+                return;
+            }
             handleDrag(e);
             if (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
                 if (typeof dropZone !== 'undefined' && dropZone) {
@@ -62,12 +126,30 @@
                 dropZone.classList.remove('active');
             }
 
+            // Wenn ein Projekt geöffnet ist, Dateien direkt dem Projekt zuweisen
+            if (isProjectDropActive(e)) {
+                handleDrag(e);
+                const projOverlay = document.getElementById('project-drag-overlay');
+                if (projOverlay) projOverlay.classList.remove('is-active');
+
+                const files = e.dataTransfer ? e.dataTransfer.files : null;
+                if (files && files.length > 0 && typeof handleMediaFilesSelected === 'function') {
+                    await handleMediaFilesSelected(files, window.activeProjectDetailId);
+                }
+                return;
+            }
+
             // Wenn wir in Fotos oder Dokumenten sind, Drop direkt an die Medien-Verarbeitung weiterleiten
             if (isMediaDropActive(e)) {
                 handleDrag(e);
+                const photoOverlay = document.getElementById('photos-drag-overlay');
+                if (photoOverlay) photoOverlay.classList.remove('is-active');
+                const docOverlay = document.getElementById('docs-drag-overlay');
+                if (docOverlay) docOverlay.classList.remove('is-active');
+
                 const files = e.dataTransfer ? e.dataTransfer.files : null;
                 if (files && files.length > 0) {
-                    if (document.body.classList.contains('view-docs') || Boolean(document.querySelector('.docs-dashboard'))) {
+                    if (document.body.classList.contains('view-docs') || Boolean(e.target && e.target.closest && e.target.closest('.docs-dashboard'))) {
                         if (typeof handleDocsFilesSelected === 'function') {
                             handleDocsFilesSelected(files);
                         }
@@ -256,8 +338,12 @@
         // Navigation
         navNew.onclick = () => {
             currentConversationId = null;
+            window.currentConversationId = null;
             chatBox.innerHTML = '<div class="message ai">Ein neuer Chat wurde gestartet. Wie kann ich dir helfen?</div>';
             showSection('chat');
+            if (window.AppRouter && typeof window.AppRouter.updateUrl === 'function') {
+                window.AppRouter.updateUrl('/chat');
+            }
         };
 
 
@@ -271,7 +357,7 @@
 
         function showSection(name) {
             if (name !== 'login' && (name === 'chat' || name === 'history' || name === 'settings')) {
-                if (typeof isClosingMailReadModal !== 'undefined' && !isClosingMailReadModal && document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
+                if (window.isClosingMailReadModal !== true && document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
                     closeMailReadModal();
                 }
             }
@@ -354,6 +440,10 @@
                     if (document.body.classList.contains('mobile-mode')) {
                         switchMobileView('settings');
                     }
+                }
+
+                if (window.AppRouter && typeof window.AppRouter.onViewChanged === 'function') {
+                    window.AppRouter.onViewChanged(name, { conversationId: window.currentConversationId });
                 }
             }
         }
@@ -585,6 +675,10 @@
             }
             
             currentConversationId = id;
+            window.currentConversationId = id;
+            if (window.AppRouter && typeof window.AppRouter.updateUrl === 'function') {
+                window.AppRouter.updateUrl(`/chat/${id}`);
+            }
             chatBox.innerHTML = '';
 
             // Wenn dies ein Agent Run ist, ein informatives Banner oben anzeigen

@@ -4,6 +4,9 @@
             // Cache current state for instant re-rendering on filter/tab switches
             window.lastBriefingWidgets = widgets;
             window.lastBriefingContainer = container;
+            if (typeof updateBriefingHeaderToggle === "function") {
+                updateBriefingHeaderToggle(window.currentBriefingTab || "active");
+            }
 
             // 1. Agent-Benachrichtigungen / Handlungsbedarf
             const notifWidget = widgets.find(w => w.pluginName === 'Notifications' || w.type === 'agent_notifications');
@@ -79,12 +82,18 @@
 
             // 5. Total count for 'Alle' pill based on current subtab
             const allPillCount = currentTab === 'active' ? allActiveNotifs.length : allHistoryNotifs.length;
+            const isFilterOpen = Boolean(window.briefingFilterOpen);
+            const briefingFilterBtn = document.getElementById('header-briefing-filter-btn');
+            if (briefingFilterBtn) {
+                if (isFilterOpen) briefingFilterBtn.classList.add('active');
+                else briefingFilterBtn.classList.remove('active');
+            }
 
             let html = `
                 <div class="arbeitstisch-dashboard briefing-dashboard">
                     <div style="margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;">
                         <!-- Agent Filter Bar (Nur Profilbilder / Avatare) -->
-                        <div class="briefing-agent-filter-wrapper" style="padding-top: 0;">
+                        <div class="briefing-agent-filter-wrapper" id="briefing-agent-filter-wrapper" style="padding-top: 0; display: ${isFilterOpen ? 'block' : 'none'};">
                             <div class="briefing-agent-filter-bar">
                                 <!-- Alle Pill -->
                                 <button type="button" 
@@ -126,18 +135,7 @@
                             </div>
                         </div>
 
-                        <!-- Filter Tabs: Offen vs Historie -->
-                        <div style="display: flex; gap: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; margin-top: 2px;">
-                            <button id="briefing-tab-active" type="button" onclick="switchBriefingTab('active')" class="nav-btn" style="padding: 4px 12px; font-size: 0.78rem; border-radius: 20px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; border: 1px solid ${currentTab === 'active' ? '#cba6f7' : 'rgba(255,255,255,0.1)'}; background: ${currentTab === 'active' ? 'rgba(203, 166, 247, 0.2)' : 'rgba(255,255,255,0.03)'}; color: ${currentTab === 'active' ? '#cba6f7' : 'rgba(255,255,255,0.7)'};">
-                                ⚡ Handlungsbedarf
-                                <span style="background: ${filteredActiveNotifs.length > 0 ? '#cba6f7' : 'rgba(255,255,255,0.15)'}; color: ${filteredActiveNotifs.length > 0 ? '#11111b' : '#cdd6f4'}; font-size: 0.65rem; padding: 1px 6px; border-radius: 10px; font-weight: 800;">${filteredActiveNotifs.length}</span>
-                            </button>
-                            <button id="briefing-tab-history" type="button" onclick="switchBriefingTab('history')" class="nav-btn" style="padding: 4px 12px; font-size: 0.78rem; border-radius: 20px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; border: 1px solid ${currentTab === 'history' ? '#cba6f7' : 'rgba(255,255,255,0.1)'}; background: ${currentTab === 'history' ? 'rgba(203, 166, 247, 0.2)' : 'rgba(255,255,255,0.03)'}; color: ${currentTab === 'history' ? '#cba6f7' : 'rgba(255,255,255,0.7)'};">
-                                📜 Erledigt / Archiv
-                                <span style="background: rgba(255,255,255,0.15); color: #cdd6f4; font-size: 0.65rem; padding: 1px 6px; border-radius: 10px; font-weight: 700;">${filteredHistoryNotifs.length}</span>
-                            </button>
                         </div>
-                    </div>
 
                     <!-- Aktive Rückfragen Tab -->
                     <div id="briefing-section-active" style="display: ${currentTab === 'active' ? 'flex' : 'none'}; flex-direction: column; gap: 0;">
@@ -238,10 +236,46 @@
 
         window.switchBriefingAgentFilter = switchBriefingAgentFilter;
 
+        window.toggleBriefingFilter = function() {
+            window.briefingFilterOpen = !window.briefingFilterOpen;
+            if (!window.briefingFilterOpen) {
+                window.currentBriefingAgentFilter = 'all';
+            }
+            const container = document.getElementById('widget-briefing') || window.lastBriefingContainer;
+            if (window.lastBriefingWidgets && container) {
+                renderBriefingWidget(window.lastBriefingWidgets, container);
+            }
+        };
 
+
+
+
+        function updateBriefingHeaderToggle(tab) {
+            const btnActive = document.getElementById('briefing-toggle-active');
+            const btnHistory = document.getElementById('briefing-toggle-history');
+            if (btnActive && btnHistory) {
+                if (tab === 'active') {
+                    btnActive.style.background = 'rgba(203, 166, 247, 0.25)';
+                    btnActive.style.borderColor = '#cba6f7';
+                    btnActive.style.opacity = '1';
+                    btnHistory.style.background = 'transparent';
+                    btnHistory.style.borderColor = 'transparent';
+                    btnHistory.style.opacity = '0.55';
+                } else {
+                    btnHistory.style.background = 'rgba(203, 166, 247, 0.25)';
+                    btnHistory.style.borderColor = '#cba6f7';
+                    btnHistory.style.opacity = '1';
+                    btnActive.style.background = 'transparent';
+                    btnActive.style.borderColor = 'transparent';
+                    btnActive.style.opacity = '0.55';
+                }
+            }
+        }
+        window.updateBriefingHeaderToggle = updateBriefingHeaderToggle;
 
         function switchBriefingTab(tab) {
             window.currentBriefingTab = tab;
+            updateBriefingHeaderToggle(tab);
             const container = document.getElementById('widget-briefing') || window.lastBriefingContainer;
             if (window.lastBriefingWidgets && container) {
                 renderBriefingWidget(window.lastBriefingWidgets, container);
@@ -249,32 +283,8 @@
             }
             const activeSec = document.getElementById('briefing-section-active');
             const histSec = document.getElementById('briefing-section-history');
-            const activeBtn = document.getElementById('briefing-tab-active');
-            const histBtn = document.getElementById('briefing-tab-history');
             if (activeSec) activeSec.style.display = tab === 'active' ? 'flex' : 'none';
             if (histSec) histSec.style.display = tab === 'history' ? 'flex' : 'none';
-            if (activeBtn) {
-                if (tab === 'active') {
-                    activeBtn.style.border = '1px solid #cba6f7';
-                    activeBtn.style.background = 'rgba(203, 166, 247, 0.2)';
-                    activeBtn.style.color = '#cba6f7';
-                } else {
-                    activeBtn.style.border = '1px solid rgba(255,255,255,0.1)';
-                    activeBtn.style.background = 'rgba(255,255,255,0.03)';
-                    activeBtn.style.color = 'rgba(255,255,255,0.7)';
-                }
-            }
-            if (histBtn) {
-                if (tab === 'history') {
-                    histBtn.style.border = '1px solid #cba6f7';
-                    histBtn.style.background = 'rgba(203, 166, 247, 0.2)';
-                    histBtn.style.color = '#cba6f7';
-                } else {
-                    histBtn.style.border = '1px solid rgba(255,255,255,0.1)';
-                    histBtn.style.background = 'rgba(255,255,255,0.03)';
-                    histBtn.style.color = 'rgba(255,255,255,0.7)';
-                }
-            }
         }
 
 

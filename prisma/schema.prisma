@@ -220,6 +220,7 @@ model Project {
   id        Int      @id @default(autoincrement()) // Eindeutige ID des Projekts
   name      String   // Name des Projekts
   isStarred Boolean  @default(false) // Stern-Markierung für Arbeitstisch
+  categories Json?   // Konfigurierte Kategorien/Zustände für das Projekt
   createdAt DateTime @default(now()) // Erstellungszeitpunkt
   updatedAt DateTime @updatedAt // Zeitpunkt der letzten Aktualisierung
   isDeleted Boolean  @default(false) // Soft-Delete-Flag

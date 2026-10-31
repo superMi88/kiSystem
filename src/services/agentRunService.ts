@@ -422,7 +422,7 @@ OBERSTE REGELN FÜR DEN AGENTEN:
           } else {
             try {
               let toolArgs = (call.args || {}) as any;
-              if (["erstelle_benachrichtigung", "schlage_termin_vor", "schlage_aufgabe_vor", "schlage_mail_antwort_vor"].includes(call.name)) {
+              if (["erstelle_benachrichtigung", "schlage_termin_vor", "schlage_aufgabe_vor", "schlage_mail_antwort_vor", "schlage_mail_vor"].includes(call.name)) {
                 toolArgs.conversationId = conversation.id;
                 toolArgs.sourceType = "mail";
                 toolArgs.sourceId = String(email.id);

@@ -196,6 +196,8 @@
 }
 
 .swipe-link-item.is-selected,
+.swipe-link-item.is-selected .media-doc-row,
+.media-doc-row.is-selected,
 .mail-item-card.is-selected,
 .task-item.is-selected,
 .timer-item.is-selected,

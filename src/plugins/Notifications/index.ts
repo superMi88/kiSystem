@@ -97,7 +97,7 @@ export const notificationsPlugin: Plugin = {
             },
             sourceType: {
               type: SchemaType.STRING,
-              description: "Quelle: 'mail', 'system', 'task' etc. Standard: 'mail'"
+              description: "Quelle: 'system', 'mail', 'task' etc. Standard: 'system' (nur bei autonom eingehenden E-Mails 'mail')"
             },
             sourceId: {
               type: SchemaType.STRING,
@@ -142,11 +142,12 @@ export const notificationsPlugin: Plugin = {
           }
         }
 
-        const canonical = getCanonicalAgent(args.sourceType, args.agentName);
+        const isMailTriage = args.sourceType === "mail" || (args.agentName && (args.agentName.toLowerCase() === "mail" || args.agentName.toLowerCase() === "e-mail-agent" || args.agentName.toLowerCase() === "e-mail agent" || args.agentName.toLowerCase() === "mail agent"));
+        const canonical = getCanonicalAgent(isMailTriage ? "mail" : (args.sourceType || "system"), isMailTriage ? "mail" : (args.agentName || "default"));
         const agentName = canonical.name;
         const agentAvatar = canonical.avatar;
         const agentColor = canonical.color;
-        const resolvedSourceType = args.sourceType || (canonical.id === "mail" ? "mail" : (canonical.id === "discord" ? "discord" : "system"));
+        const resolvedSourceType = isMailTriage ? "mail" : (args.sourceType || (canonical.id === "discord" ? "discord" : "system"));
 
         // Wenn es sich um einen E-Mail-Entwurf handelt und kein Bearbeitungs-Button existiert:
         const isEmailDraft = (args.titel && args.titel.toLowerCase().includes("mail")) ||
@@ -206,16 +207,17 @@ Gib Datum (YYYY-MM-DD), Startzeit (HH:MM), Titel und Begründung an.`,
             ort: { type: SchemaType.STRING, description: "Ort des Termins (optional)" },
             mailZusammenfassung: { type: SchemaType.STRING, description: "Kurze Zusammenfassung (1-2 Sätze), was grob in der E-Mail stand (z. B. 'Notar Schmidt bittet um Unterzeichnung des Kaufvertrags am Montag')" },
             begruendung: { type: SchemaType.STRING, description: "Gedankengang/Begründung, warum dieser Termin vorgeschlagen wird" },
-            agentName: { type: SchemaType.STRING, description: "Name des vorschlagenden Agenten (optional, default: E-Mail-Agent)" },
+            agentName: { type: SchemaType.STRING, description: "Name des vorschlagenden Agenten (optional, Standard: 'Haupt-Assistent')" },
             conversationId: { type: SchemaType.STRING, description: "ID der Chat-Konversation (optional)" },
-            sourceType: { type: SchemaType.STRING, description: "Quelle z. B. 'mail' (optional)" },
+            sourceType: { type: SchemaType.STRING, description: "Quelle z. B. 'system'. Nur bei autonom eingegangenen E-Mails 'mail' (optional, Standard: 'system')" },
             sourceId: { type: SchemaType.STRING, description: "ID der Quelle (optional)" }
           },
           required: ["titel", "datum", "begruendung"]
         } as any
       },
       handler: async (args, { prisma }) => {
-        const canonical = getCanonicalAgent(args.sourceType || "mail", args.agentName);
+        const isMailTriage = args.sourceType === "mail" || (args.agentName && (args.agentName.toLowerCase() === "mail" || args.agentName.toLowerCase() === "e-mail-agent" || args.agentName.toLowerCase() === "e-mail agent" || args.agentName.toLowerCase() === "mail agent"));
+        const canonical = getCanonicalAgent(isMailTriage ? "mail" : (args.sourceType || "system"), isMailTriage ? "mail" : (args.agentName || "default"));
         const agentAvatar = canonical.avatar;
         const agentColor = canonical.color;
         const agentName = canonical.name;
@@ -253,18 +255,17 @@ Gib Datum (YYYY-MM-DD), Startzeit (HH:MM), Titel und Begründung an.`,
         };
 
         const buttons = [
-          { label: "Ja, Termin anlegen", action: "execute_action", style: "primary" },
-          { label: "Nein, verwerfen", action: "dismiss", style: "secondary" }
+          { label: "Ja, Termin anlegen", action: "execute_action", style: "primary" }
         ];
 
         const mailSummary = args.mailZusammenfassung || args.begruendung || "";
         const messageText = mailSummary
-          ? `**Inhalt der E-Mail:**\n${mailSummary}\n\nSoll dieser Termin in deinen Kalender eingetragen werden?`
+          ? (isMailTriage ? `**Inhalt der E-Mail:**\n${mailSummary}\n\nSoll dieser Termin in deinen Kalender eingetragen werden?` : `**Kontext:**\n${mailSummary}\n\nSoll dieser Termin in deinen Kalender eingetragen werden?`)
           : `Soll folgender Termin in deinen Kalender eingetragen werden?`;
 
         const notif = await prisma.agentNotification.create({
           data: {
-            title: `📅 Terminvorschlag: ${args.titel}`,
+            title: `📅 ${args.titel}`,
             message: messageText,
             reasoning: args.begruendung,
             agentName,
@@ -273,7 +274,7 @@ Gib Datum (YYYY-MM-DD), Startzeit (HH:MM), Titel und Begründung an.`,
             actionData,
             type: "action_required",
             priority: "normal",
-            sourceType: args.sourceType || "mail",
+            sourceType: isMailTriage ? "mail" : (args.sourceType || "system"),
             sourceId: args.sourceId ? String(args.sourceId) : null,
             conversationId: validConversationId,
             buttons
@@ -302,16 +303,17 @@ Erstelle niemals selbst Aufgaben per erstelle_aufgabe, sondern schlage sie immer
             notizen: { type: SchemaType.STRING, description: "Optionale Details oder Notizen zur Aufgabe" },
             mailZusammenfassung: { type: SchemaType.STRING, description: "Kurze Zusammenfassung (1-2 Sätze), was grob in der E-Mail stand (z. B. 'Der Notar hat den Vertragsentwurf zur Prüfung übersandt')" },
             begruendung: { type: SchemaType.STRING, description: "Gedankengang/Begründung des Agenten" },
-            agentName: { type: SchemaType.STRING, description: "Name des Agenten (optional)" },
+            agentName: { type: SchemaType.STRING, description: "Name des Agenten (optional, Standard: 'Haupt-Assistent')" },
             conversationId: { type: SchemaType.STRING, description: "ID der Konversation (optional)" },
-            sourceType: { type: SchemaType.STRING, description: "Quelle (optional)" },
+            sourceType: { type: SchemaType.STRING, description: "Quelle (optional, Standard: 'system', nur 'mail' bei autonomem E-Mail-Eingang)" },
             sourceId: { type: SchemaType.STRING, description: "ID der Quelle (optional)" }
           },
           required: ["titel", "begruendung"]
         } as any
       },
       handler: async (args, { prisma }) => {
-        const canonical = getCanonicalAgent(args.sourceType || "mail", args.agentName);
+        const isMailTriage = args.sourceType === "mail" || (args.agentName && (args.agentName.toLowerCase() === "mail" || args.agentName.toLowerCase() === "e-mail-agent" || args.agentName.toLowerCase() === "e-mail agent" || args.agentName.toLowerCase() === "mail agent"));
+        const canonical = getCanonicalAgent(isMailTriage ? "mail" : (args.sourceType || "system"), isMailTriage ? "mail" : (args.agentName || "default"));
         const agentAvatar = canonical.avatar;
         const agentColor = canonical.color;
         const agentName = canonical.name;
@@ -343,12 +345,12 @@ Erstelle niemals selbst Aufgaben per erstelle_aufgabe, sondern schlage sie immer
 
         const mailSummary = args.mailZusammenfassung || args.begruendung || "";
         const messageText = mailSummary
-          ? `**Inhalt der E-Mail:**\n${mailSummary}\n\nSoll diese Aufgabe für dich angelegt werden?`
+          ? (isMailTriage ? `**Inhalt der E-Mail:**\n${mailSummary}\n\nSoll diese Aufgabe für dich angelegt werden?` : `**Kontext:**\n${mailSummary}\n\nSoll diese Aufgabe für dich angelegt werden?`)
           : `Soll diese Aufgabe für dich angelegt werden?`;
 
         const notif = await prisma.agentNotification.create({
           data: {
-            title: `📋 Aufgabenvorschlag: ${args.titel}`,
+            title: `📋 ${args.titel}`,
             message: messageText,
             reasoning: args.begruendung,
             agentName,
@@ -357,7 +359,7 @@ Erstelle niemals selbst Aufgaben per erstelle_aufgabe, sondern schlage sie immer
             actionData,
             type: "action_required",
             priority: "normal",
-            sourceType: args.sourceType || "mail",
+            sourceType: isMailTriage ? "mail" : (args.sourceType || "system"),
             sourceId: args.sourceId ? String(args.sourceId) : null,
             conversationId: validConversationId,
             buttons
@@ -392,14 +394,16 @@ Formuliere im Parameter 'antwortText' einen vollständigen, professionellen und 
               description: "Optionale Dateinamen oder Pfade von anzuhängenden Dokumenten/Dateien",
               items: { type: SchemaType.STRING }
             },
-            agentName: { type: SchemaType.STRING, description: "Name des Agenten (optional)" },
-            conversationId: { type: SchemaType.STRING, description: "ID der Konversation (optional)" }
+            agentName: { type: SchemaType.STRING, description: "Name des Agenten (optional, Standard: 'Haupt-Assistent')" },
+            conversationId: { type: SchemaType.STRING, description: "ID der Konversation (optional)" },
+            sourceType: { type: SchemaType.STRING, description: "Quelle (optional, Standard: 'system', nur 'mail' bei autonomem E-Mail-Eingang)" }
           },
           required: ["mailId", "empfaenger", "betreff", "antwortText", "begruendung"]
         } as any
       },
       handler: async (args, { prisma }) => {
-        const canonical = getCanonicalAgent("mail", "mail");
+        const isMailTriage = args.sourceType === "mail" || (args.agentName && (args.agentName.toLowerCase() === "mail" || args.agentName.toLowerCase() === "e-mail-agent" || args.agentName.toLowerCase() === "e-mail agent" || args.agentName.toLowerCase() === "mail agent"));
+        const canonical = getCanonicalAgent(isMailTriage ? "mail" : (args.sourceType || "system"), isMailTriage ? "mail" : (args.agentName || "default"));
         const agentAvatar = canonical.avatar;
         const agentColor = canonical.color;
         const agentName = canonical.name;
@@ -452,9 +456,7 @@ Formuliere im Parameter 'antwortText' einen vollständigen, professionellen und 
         };
 
         const buttons = [
-          { label: "Ja, Antwort senden", action: "execute_action", style: "primary" },
-          { label: "Im Editor bearbeiten", action: "open_composer", replyText: String(args.mailId), style: "secondary" },
-          { label: "Nein, nicht antworten", action: "dismiss", style: "secondary" }
+          { label: "Ja, Antwort senden", action: "execute_action", style: "primary" }
         ];
 
         const mailSummary = args.mailZusammenfassung || args.begruendung || "";
@@ -464,7 +466,7 @@ Formuliere im Parameter 'antwortText' einen vollständigen, professionellen und 
 
         const notif = await prisma.agentNotification.create({
           data: {
-            title: "✉️ E-Mail-Antwort",
+            title: args.betreff ? `✉️ ${args.betreff}` : `✉️ Antwort an ${args.empfaenger}`,
             message: messageText,
             reasoning: args.begruendung,
             agentName,
@@ -473,7 +475,7 @@ Formuliere im Parameter 'antwortText' einen vollständigen, professionellen und 
             actionData,
             type: "action_required",
             priority: "normal",
-            sourceType: "mail",
+            sourceType: isMailTriage ? "mail" : "system",
             sourceId: String(args.mailId),
             conversationId: validConversationId,
             buttons
@@ -565,9 +567,7 @@ Gib 'empfaenger', 'betreff' und 'inhalt' an. Wenn Dokumente angehängt werden so
         };
 
         const buttons = [
-          { label: "Ja, abschicken", action: "execute_action", style: "primary" },
-          { label: "Bearbeiten", action: "open_composer", style: "secondary" },
-          { label: "Verwerfen", action: "dismiss", style: "secondary" }
+          { label: "Ja, abschicken", action: "execute_action", style: "primary" }
         ];
 
         const mailSummary = args.begruendung || "";
@@ -577,7 +577,7 @@ Gib 'empfaenger', 'betreff' und 'inhalt' an. Wenn Dokumente angehängt werden so
 
         const notif = await prisma.agentNotification.create({
           data: {
-            title: "✉️ E-Mail-Entwurf",
+            title: args.betreff ? `✉️ ${args.betreff}` : `✉️ E-Mail an ${args.empfaenger}`,
             message: messageText,
             reasoning: args.begruendung || null,
             agentName,

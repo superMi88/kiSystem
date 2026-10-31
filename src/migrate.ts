@@ -67,6 +67,7 @@ export async function runAutomaticMigration(prisma: PrismaClient) {
   try {
     console.log("[Migration] Überprüfe Datenbankspalten für Projekte und Aufgaben (isStarred, status)...");
     await prisma.$executeRawUnsafe(`ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "isStarred" BOOLEAN DEFAULT false;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "categories" JSONB;`);
     await prisma.$executeRawUnsafe(`ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "isStarred" BOOLEAN DEFAULT false;`);
     await prisma.$executeRawUnsafe(`ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'in_progress';`);
     

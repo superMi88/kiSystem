@@ -780,6 +780,7 @@ input:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--acc
     display: flex;
     justify-content: space-between;
     align-items: center;
+    text-align: left;
     gap: 10px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     padding-bottom: 8px;
@@ -787,10 +788,13 @@ input:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--acc
 
 .chat-notification-title-wrap {
     display: flex;
+    flex-direction: row;
     align-items: center;
+    justify-content: flex-start;
+    text-align: left;
     gap: 8px;
     min-width: 0;
-    flex-wrap: wrap;
+    flex: 1;
 }
 
 .chat-notification-badge {
@@ -978,3 +982,62 @@ input:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--acc
 }
 
 /* =========================================================================
+
+/* Mail Proposal Send Icon Button */
+.chat-notification-send-icon-btn {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    min-height: 38px !important;
+    border-radius: 50% !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    border: none !important;
+    padding: 0 !important;
+    line-height: 1 !important;
+    box-sizing: border-box !important;
+    flex-shrink: 0 !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.chat-notification-send-icon-btn:hover {
+    transform: scale(1.12) !important;
+    filter: brightness(1.1) !important;
+}
+
+.chat-notification-send-icon-btn:active {
+    transform: scale(0.95) !important;
+}
+
+
+/* Subtle Edit Icon Button in Header */
+.briefing-circle-btn.edit-circle-btn {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: #cdd6f4 !important;
+}
+
+.briefing-circle-btn.edit-circle-btn:hover {
+    background: rgba(137, 180, 250, 0.22) !important;
+    border-color: #89b4fa !important;
+    color: #89b4fa !important;
+    transform: scale(1.12) !important;
+    box-shadow: 0 0 10px rgba(137, 180, 250, 0.35) !important;
+}
+
+/* Subtle Dismiss/Cancel Icon Button in Proposal Box */
+.briefing-circle-btn.dismiss-circle-btn {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: #cdd6f4 !important;
+}
+
+.briefing-circle-btn.dismiss-circle-btn:hover {
+    background: rgba(243, 139, 168, 0.22) !important;
+    border-color: #f38ba8 !important;
+    color: #f38ba8 !important;
+    transform: scale(1.12) !important;
+    box-shadow: 0 0 10px rgba(243, 139, 168, 0.35) !important;
+}

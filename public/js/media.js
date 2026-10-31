@@ -13,6 +13,8 @@
     window.photosFilterTab = 'all'; // 'all'
     window.photosProjectFilter = '';
     window.photosPersonFilter = '';
+    window.photosDateFilter = '';
+    window.photosExactDateFilter = '';
     window.photosSearchQuery = '';
 
     // Dedicated Docs Page State
@@ -59,40 +61,41 @@
         return { icon: '📁', label: 'DATEI', cls: 'doc' };
     }
 
-    // Google Fotos Quadrat-Kachel
+    // Google Fotos Quadrat-Kachel (mit Long-Press Optionen & Swipe-to-Link)
     function renderPhotoTile(m, imgIdx) {
         const isFav = !!m.isFavorite;
         const encodedUrl = encodeURI(m.filePath);
-        return `
-            <div class="media-photo-tile" id="media-card-${m.id}" onclick="openMediaLightbox(${imgIdx})" title="${escapeHtml(m.title)}">
-                <img src="${encodedUrl}" class="media-photo-img" alt="${escapeHtml(m.title)}" loading="lazy">
-                <button type="button" class="media-photo-fav-btn ${isFav ? 'active' : ''}" onclick="event.stopPropagation(); toggleMediaFavorite(${m.id}, ${!isFav})" title="${isFav ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen'}">
-                    ${isFav ? '⭐' : '☆'}
-                </button>
-                <div class="media-photo-scrim">
-                    <div class="media-photo-title">${escapeHtml(m.title)}</div>
-                    <div class="media-photo-actions" onclick="event.stopPropagation()">
-                        <button type="button" class="media-photo-action-btn" onclick="linkMediaToChat(${m.id}, '${escapeHtml(m.title).replace(/'/g, "\\'")}')" title="In Chat verlinken">🔗</button>
-                        <button type="button" class="media-photo-action-btn" onclick="openMediaEditModal(${m.id})" title="Bearbeiten">✏️</button>
-                        <a href="${encodedUrl}" download="${escapeHtml(m.fileName)}" class="media-photo-action-btn" title="Herunterladen">💾</a>
-                        <button type="button" class="media-photo-action-btn" onclick="deleteMediaItem(${m.id})" style="color: #f38ba8;" title="Löschen">🗑️</button>
-                    </div>
-                </div>
+        const escTitle = escapeHtml(m.title || '').replace(/"/g, '&quot;');
+        const escFileName = escapeHtml(m.fileName || '').replace(/"/g, '&quot;');
+        const hasLightboxIdx = typeof imgIdx === 'number' && !isNaN(imgIdx);
+
+        const tileContent = `
+            <div class="media-photo-tile" id="media-card-${m.id}" title="${escapeHtml(m.title)}">
+                <img src="${encodedUrl}" class="media-photo-img" alt="${escapeHtml(m.title)}" loading="lazy" draggable="false">
+                ${isFav ? `<span class="media-photo-fav-badge" title="Favorit">⭐</span>` : ''}
             </div>
         `;
+
+        const extraDataAttrs = `data-media-id="${m.id}" data-media-title="${escTitle}" data-media-url="${encodedUrl}" data-media-filename="${escFileName}" data-media-is-image="true" ${hasLightboxIdx ? `data-media-lightbox-index="${imgIdx}"` : ''} data-media-is-favorite="${isFav}"`;
+
+        if (typeof renderSwipeLinkWrapper === 'function') {
+            return renderSwipeLinkWrapper(tileContent, m.title, 'media', m.id, 'photo-tile-swipe-item', '', 'margin-bottom: 0; border-radius: 0; aspect-ratio: 1 / 1;', extraDataAttrs);
+        }
+        return tileContent;
     }
 
-    // Kompakte Dokumenten-Zeile
+    // Kompakte Dokumenten-Zeile (mit Swipe-nach-rechts zum Verlinken & Long-Press Optionen)
     function renderDocumentRow(m) {
         const isFav = !!m.isFavorite;
         const encodedUrl = encodeURI(m.filePath);
         const typeInfo = getDocTypeInfo(m.fileType, m.fileName);
         const dateStr = m.createdAt ? new Date(m.createdAt).toLocaleDateString('de-DE') : '';
         const isText = isTextMedia(m);
-        const clickAction = isText ? `openTextEditorModal(${m.id})` : `window.open('${encodedUrl}', '_blank')`;
+        const escTitle = escapeHtml(m.title || '').replace(/"/g, '&quot;');
+        const escFileName = escapeHtml(m.fileName || '').replace(/"/g, '&quot;');
 
-        return `
-            <div class="media-doc-row" id="media-card-${m.id}" onclick="${clickAction}" title="${isText ? 'Klicken zum Öffnen & Bearbeiten: ' + escapeHtml(m.title) : escapeHtml(m.title)}">
+        const docContent = `
+            <div class="media-doc-row" id="media-card-${m.id}" title="${isText ? 'Tippen zum Öffnen & Bearbeiten • Gedrückt halten für Optionen • Nach rechts wischen zum Verlinken' : escapeHtml(m.title)}">
                 <div class="media-doc-left">
                     <div class="media-doc-badge-icon ${typeInfo.cls}">
                         <span>${typeInfo.icon}</span>
@@ -101,6 +104,7 @@
                         <div class="media-doc-title-line">
                             <span class="media-doc-title">${escapeHtml(m.title)}</span>
                             <span class="media-doc-type-pill">${typeInfo.label}</span>
+                            ${isFav ? '<span style="color: #f9e2af; font-size: 0.78rem; flex-shrink: 0;" title="Favorit">⭐</span>' : ''}
                         </div>
                         <div class="media-doc-meta-line">
                             <span>${m.fileSizeFormatted || ''}</span>
@@ -131,22 +135,15 @@
                         ` : ''}
                     </div>
                 </div>
-                <div class="media-doc-actions" onclick="event.stopPropagation()">
-                    ${isText ? `
-                        <button type="button" class="media-doc-action-btn edit-text" onclick="openTextEditorModal(${m.id})" title="Text anzeigen & bearbeiten" style="color: #89dceb;">
-                            📝
-                        </button>
-                    ` : ''}
-                    <button type="button" class="media-doc-action-btn fav ${isFav ? 'active' : ''}" onclick="toggleMediaFavorite(${m.id}, ${!isFav})" title="${isFav ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen'}">
-                        ${isFav ? '⭐' : '☆'}
-                    </button>
-                    <button type="button" class="media-doc-action-btn" onclick="linkMediaToChat(${m.id}, '${escapeHtml(m.title).replace(/'/g, "\\'")}')" title="In Chat verlinken">🔗</button>
-                    <button type="button" class="media-doc-action-btn" onclick="openMediaEditModal(${m.id})" title="Metadaten bearbeiten">✏️</button>
-                    <a href="${encodedUrl}" download="${escapeHtml(m.fileName)}" class="media-doc-action-btn" title="Herunterladen">💾</a>
-                    <button type="button" class="media-doc-action-btn delete" onclick="deleteMediaItem(${m.id})" title="Löschen">🗑️</button>
-                </div>
             </div>
         `;
+
+        const extraDataAttrs = `data-media-id="${m.id}" data-media-title="${escTitle}" data-media-url="${encodedUrl}" data-media-filename="${escFileName}" data-media-is-text="${isText}" data-media-is-favorite="${isFav}"`;
+
+        if (typeof renderSwipeLinkWrapper === 'function') {
+            return renderSwipeLinkWrapper(docContent, m.title, 'media', m.id, '', '', 'margin-bottom: 0;', extraDataAttrs);
+        }
+        return docContent;
     }
 
     // ==========================================================================
@@ -164,14 +161,16 @@
 
         const projectFilter = window.photosProjectFilter || '';
         const personFilter = window.photosPersonFilter || '';
+        const sortOrder = window.photosSortOrder || 'desc';
         const query = (window.photosSearchQuery || '').toLowerCase().trim();
 
         // Zähler für Fotos
         const totalCount = photos.length;
 
-        // Projekte & Personen für Dropdowns
+        // Projekte & Personen für Dropdowns sammeln
         const allProjectsMap = new Map();
         const allPersonsMap = new Map();
+
         photos.forEach(m => {
             (m.projects || []).forEach(p => allProjectsMap.set(p.id, p.name));
             (m.persons || []).forEach(p => allPersonsMap.set(p.id, p.name));
@@ -198,32 +197,53 @@
             return true;
         });
 
-        // Favoriten immer zuerst sortieren, danach chronologisch
-        filtered.sort((a, b) => ((b.isFavorite ? 1 : 0) - (a.isFavorite ? 1 : 0)) || (new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()));
+        // Sortieren nach Upload-Datum (absteigend oder aufsteigend)
+        filtered.sort((a, b) => {
+            const timeA = new Date(a.createdAt || 0).getTime();
+            const timeB = new Date(b.createdAt || 0).getTime();
+            if (sortOrder === 'asc') {
+                return (timeA - timeB) || ((a.id || 0) - (b.id || 0));
+            }
+            return (timeB - timeA) || ((b.id || 0) - (a.id || 0));
+        });
 
         // Speichere gefilterte Bilder für Lightbox
         window.currentLightboxImages = filtered;
+
+        const hasActiveFilter = Boolean(projectFilter || personFilter || query);
+        const isPhotosFilterOpen = Boolean(window.photosFilterOpen);
+        const photosFilterBtn = document.getElementById('header-photos-filter-btn');
+        if (photosFilterBtn) {
+            if (isPhotosFilterOpen) photosFilterBtn.classList.add('active');
+            else photosFilterBtn.classList.remove('active');
+        }
 
         let html = `
             <div class="media-dashboard photos-dashboard" ondragenter="handlePhotosDragEnter(event)" ondragover="handlePhotosDragOver(event)" ondragleave="handlePhotosDragLeave(event)" ondrop="handlePhotosDrop(event)">
                 <!-- Unsichtbarer Input für Header-Upload-Button -->
                 <input type="file" id="photos-global-file-input" style="display: none;" accept="image/*" multiple onchange="handlePhotosFilesSelected(this.files)">
 
-                <!-- Drag & Drop Full-Surface Overlay (erscheint nur beim Hineinziehen) -->
+                <!-- Drag & Drop Full-Surface Overlay (erscheint beim Hineinziehen) -->
                 <div class="media-drag-overlay photos" id="photos-drag-overlay">
                     <div class="media-drag-overlay-box">
                         <span class="media-drag-overlay-icon">📸</span>
                         <div class="media-drag-overlay-title">Fotos hier ablegen</div>
-                        <div class="media-drag-overlay-sub">Bilder werden automatisch in deine Galerie hochgeladen</div>
+                        <div class="media-drag-overlay-sub">Bilder werden automatisch per Drag & Drop in deine Galerie hochgeladen</div>
                     </div>
                 </div>
 
                 <!-- Filterleiste für Fotos -->
-                <div class="media-filter-bar photos-filter-bar">
-                    <span class="media-filter-pill active" style="cursor: default;">
+                <div class="media-filter-bar photos-filter-bar" id="photos-filter-bar" style="display: ${isPhotosFilterOpen ? 'flex' : 'none'};">
+                    <span class="media-filter-pill ${!hasActiveFilter ? 'active' : ''}" onclick="resetAllPhotosFilters()" title="Alle Filter zurücksetzen">
                         <span>✨ Alle Fotos</span>
-                        <span class="media-filter-count">${totalCount}</span>
+                        <span class="media-filter-count">${hasActiveFilter ? `${filtered.length}/${totalCount}` : totalCount}</span>
                     </span>
+
+                    <!-- Sortier-Reihenfolge nach Upload Dropdown -->
+                    <select class="media-filter-select" onchange="sortPhotosByUpload(this.value)" title="Sortierreihenfolge auswählen">
+                        <option value="desc" ${sortOrder === 'desc' ? 'selected' : ''}>⬇️ Nach Upload absteigend</option>
+                        <option value="asc" ${sortOrder === 'asc' ? 'selected' : ''}>⬆️ Nach Upload aufsteigend</option>
+                    </select>
 
                     <!-- Projekt-Filter Dropdown -->
                     <select class="media-filter-select ${projectFilter ? 'is-active' : ''}" onchange="filterPhotosByProject(this.value)">
@@ -240,16 +260,20 @@
                             <option value="${pid}" ${String(personFilter) === String(pid) ? 'selected' : ''}>👤 ${escapeHtml(pname)}</option>
                         `).join('')}
                     </select>
+
+                    ${hasActiveFilter ? `
+                        <button type="button" class="media-filter-reset-btn" onclick="resetAllPhotosFilters()" title="Filter zurücksetzen">✕ Filter löschen</button>
+                    ` : ''}
                 </div>
         `;
 
         if (filtered.length === 0) {
             html += `
-                <div style="text-align: center; padding: 45px 20px; background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px dashed rgba(249,226,175,0.2); margin-top: 6px;">
+                <div onclick="triggerPhotosUpload()" style="cursor: pointer; text-align: center; padding: 45px 20px; background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px dashed rgba(249,226,175,0.25); margin: 6px 10px 0 10px;">
                     <span style="font-size: 2.6rem;">🖼️</span>
                     <h4 style="margin: 8px 0 4px 0; color: #ffffff;">Keine Fotos gefunden</h4>
                     <p style="margin: 0; font-size: 0.8rem; color: rgba(255,255,255,0.5);">
-                        ${query || projectFilter || personFilter ? 'Kein Foto entspricht den ausgewählten Filtern.' : 'Lade Bilder hoch, um deine Galerie wie bei Google Fotos zu genießen.'}
+                        ${hasActiveFilter ? 'Kein Foto entspricht den ausgewählten Filtern.' : 'Ziehe Bilder per Drag & Drop hierher oder klicke hier zum Hochladen.'}
                     </p>
                 </div>
             `;
@@ -263,13 +287,36 @@
 
         html += `</div>`;
         container.innerHTML = html;
-        container.ondragenter = window.handlePhotosDragEnter;
-        container.ondragover = window.handlePhotosDragOver;
-        container.ondragleave = window.handlePhotosDragLeave;
-        container.ondrop = window.handlePhotosDrop;
     }
 
     window.renderPhotosWidget = renderPhotosWidget;
+
+    window.togglePhotosFilter = function() {
+        window.photosFilterOpen = !window.photosFilterOpen;
+        if (!window.photosFilterOpen) {
+            window.photosFilterTab = 'all';
+            window.photosProjectFilter = '';
+            window.photosPersonFilter = '';
+            window.photosDateFilter = '';
+            window.photosExactDateFilter = '';
+        }
+        if (window.lastPhotosContainer) {
+            renderPhotosWidget(window.lastPhotosData, window.lastPhotosContainer);
+        }
+    };
+
+    window.toggleDocsFilter = function() {
+        window.docsFilterOpen = !window.docsFilterOpen;
+        if (!window.docsFilterOpen) {
+            window.docsFilterTab = 'all';
+            window.docsProjectFilter = '';
+            window.docsPersonFilter = '';
+        }
+        if (window.lastDocsContainer) {
+            renderDocsWidget(window.lastDocsData, window.lastDocsContainer);
+        }
+    };
+
 
     // Filter-Aktionen für Fotos
     window.switchPhotosFilterTab = function(t) {
@@ -288,6 +335,24 @@
 
     window.filterPhotosByPerson = function(pid) {
         window.photosPersonFilter = pid;
+        if (window.lastPhotosContainer) {
+            renderPhotosWidget(window.lastPhotosData, window.lastPhotosContainer);
+        }
+    };
+
+    window.sortPhotosByUpload = function(order) {
+        window.photosSortOrder = order === 'asc' ? 'asc' : 'desc';
+        if (window.lastPhotosContainer) {
+            renderPhotosWidget(window.lastPhotosData, window.lastPhotosContainer);
+        }
+    };
+
+    window.resetAllPhotosFilters = function() {
+        window.photosProjectFilter = '';
+        window.photosPersonFilter = '';
+        window.photosSearchQuery = '';
+        const inp = document.getElementById('header-photos-search-input');
+        if (inp) inp.value = '';
         if (window.lastPhotosContainer) {
             renderPhotosWidget(window.lastPhotosData, window.lastPhotosContainer);
         }
@@ -467,7 +532,7 @@
                 </div>
 
                 <!-- Filterleiste für Dokumente: Dokumenttypen, Projekte, Personen als Dropdowns -->
-                <div class="media-filter-bar docs-filter-bar">
+                <div class="media-filter-bar docs-filter-bar" id="docs-filter-bar" style="display: ${isDocsFilterOpen ? 'flex' : 'none'};">
                     <!-- Aufklappbares Dropdown für Dokument-Typen -->
                     <select class="media-filter-select ${tab !== 'all' ? 'is-active' : ''}" onchange="switchDocsFilterTab(this.value)">
                         <option value="all" ${tab === 'all' ? 'selected' : ''}>📄 Alle Dokumente (${totalCount})</option>
@@ -771,6 +836,13 @@
             });
             if (res.ok) {
                 await refreshMediaData();
+                const targetProjectId = projectId || (window.activeProjectDetailId && window.activeProjectDetailId !== 'unassigned' ? window.activeProjectDetailId : null);
+                if (targetProjectId) {
+                    const mCont = document.getElementById(`project-media-container-${targetProjectId}`);
+                    if (mCont && typeof window.loadProjectMediaSection === 'function') {
+                        await window.loadProjectMediaSection(targetProjectId, mCont);
+                    }
+                }
             } else {
                 const err = await res.json();
                 alert(`Upload fehlgeschlagen: ${err.error || 'Serverfehler'}`);
@@ -1334,8 +1406,8 @@
                 <div class="project-media-section">
                     <div class="project-media-header">
                         <span class="arbeitstisch-section-badge">📎 Dateien & Dokumente (${items.length})</span>
-                        <button type="button" class="nav-btn" onclick="document.getElementById('project-upload-file-input-${projectId}').click()" style="font-size: 0.72rem; padding: 4px 8px; border-radius: 6px;">
-                            ➕ Datei hochladen
+                        <button type="button" class="nav-btn" onclick="document.getElementById('project-upload-file-input-${projectId}').click()" title="Datei oder Bild hochladen" aria-label="Datei oder Bild hochladen" style="flex: 0 0 auto; width: 32px; height: 32px; padding: 0; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                         </button>
                         <input type="file" id="project-upload-file-input-${projectId}" style="display: none;" multiple onchange="handleMediaFilesSelected(this.files, ${projectId})">
                     </div>
@@ -1355,14 +1427,7 @@
                     html += `
                         <div style="font-size: 0.74rem; font-weight: 700; color: rgba(255,255,255,0.7); margin: 8px 0 6px 0;">🖼️ Fotos (${projectImages.length})</div>
                         <div class="media-photos-grid" style="grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); margin-bottom: 10px;">
-                            ${projectImages.map(m => {
-                                const enc = encodeURI(m.filePath);
-                                return `
-                                    <div class="media-photo-tile" onclick="window.open('${enc}', '_blank')" title="${escapeHtml(m.title)}">
-                                        <img src="${enc}" class="media-photo-img" alt="${escapeHtml(m.title)}" loading="lazy">
-                                    </div>
-                                `;
-                            }).join('')}
+                            ${projectImages.map(m => renderPhotoTile(m)).join('')}
                         </div>
                     `;
                 }
@@ -1418,14 +1483,7 @@
             if (personImages.length > 0) {
                 html += `
                     <div class="media-photos-grid" style="grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); gap: 5px; margin-bottom: 8px;">
-                        ${personImages.map(m => {
-                            const encodedUrl = encodeURI(m.filePath);
-                            return `
-                                <div class="media-photo-tile" onclick="window.open('${encodedUrl}', '_blank')" title="${escapeHtml(m.title)}">
-                                    <img src="${encodedUrl}" class="media-photo-img" loading="lazy">
-                                </div>
-                            `;
-                        }).join('')}
+                        ${personImages.map(m => renderPhotoTile(m)).join('')}
                     </div>
                 `;
             }

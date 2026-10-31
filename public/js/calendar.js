@@ -106,6 +106,15 @@
             const inPageDateInput = document.getElementById('calendar-active-date-picker');
             if (inPageDateInput) inPageDateInput.value = dateStr;
 
+            const todayStr = typeof getLocalDateString === 'function' ? getLocalDateString() : '';
+            if (window.AppRouter && typeof window.AppRouter.updateUrl === 'function') {
+                if (dateStr && dateStr !== todayStr) {
+                    window.AppRouter.updateUrl(`/kalender/${dateStr}`);
+                } else {
+                    window.AppRouter.updateUrl('/kalender');
+                }
+            }
+
             if (document.body.classList.contains('mobile-mode') && !document.body.classList.contains('view-calendar')) {
                 if (typeof switchMobileView === 'function') {
                     switchMobileView('calendar');
@@ -252,37 +261,6 @@
 
             let html = `
                 <div class="calendar-day-timeline-wrapper">
-                    <!-- Day Navigation Bar -->
-                    <div class="calendar-day-nav-bar glass-card">
-                        <div class="calendar-nav-controls">
-                            <button type="button" class="calendar-nav-btn" onclick="navigateCalendarDay(-1)" title="Vorheriger Tag">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                            </button>
-                            <button type="button" class="calendar-nav-btn today-btn ${isToday ? 'active' : ''}" onclick="jumpToTimelineDate('today')" title="Zu Heute springen">
-                                Heute
-                            </button>
-                            <button type="button" class="calendar-nav-btn" onclick="navigateCalendarDay(1)" title="Nächster Tag">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                            </button>
-                        </div>
-                        <div class="calendar-nav-date-box" onclick="document.getElementById('calendar-active-date-picker').showPicker ? document.getElementById('calendar-active-date-picker').showPicker() : document.getElementById('calendar-active-date-picker').focus()">
-                            <input type="date" id="calendar-active-date-picker" value="${dateStr}" onchange="jumpToTimelineDate(this.value)" class="calendar-native-date-input">
-                            <div class="calendar-date-text">
-                                <span class="calendar-weekday">${weekdayLong},</span>
-                                <span class="calendar-date-number">${dayMonthLong}</span>
-                                ${dayBadgeHtml}
-                            </div>
-                        </div>
-                        <div class="calendar-nav-actions">
-                            <button type="button" class="calendar-action-btn diary-btn" onclick="openDiaryModal('${dateStr}')" title="Tagebucheintrag verfassen">
-                                <span>📝</span> <span class="btn-text">+ Tagebuch</span>
-                            </button>
-                            <button type="button" class="calendar-action-btn event-btn" onclick="openEventEditModal(null, '', '${dateStr}T10:00:00', '${dateStr}T11:00:00', false, '', '', false, '${dateStr}')" title="Neuen Termin an diesem Tag erstellen">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                                <span class="btn-text">+ Termin</span>
-                            </button>
-                        </div>
-                    </div>
             `;
 
             // Overdue tasks (for today)
@@ -322,8 +300,9 @@
                                     ${isDone ? googleIcon('check', '12px', 'fill: #11111b;') : ''}
                                 </button>
                                 <div style="flex: 1; min-width: 0; ${textStyle}">
-                                    <div style="font-weight: 600; font-size: 0.82rem; color: var(--text); word-break: break-word;">
-                                        ${escTitle} ${repeatBadge}
+                                    <div style="font-weight: 600; font-size: 0.82rem; color: var(--text); word-break: break-word; display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+                                        <span>${escTitle} ${repeatBadge}</span>
+                                        ${t.isStarred ? `<span class="pinned-task-indicator" title="Angepinnt">📌</span>` : ''}
                                     </div>
                                     <div style="font-size: 0.68rem; color: ${isDone ? '#a6e3a1' : 'var(--off)'}; margin-top: 2px;">
                                         ${isDone ? '✓ Erledigt' : '⚠ Fällig seit ' + dueText}
@@ -332,7 +311,7 @@
                             </div>
                         </div>
                     `;
-                    const extraData = `data-task-id="${rawTaskId}" data-task-title="${escTitle}" data-task-notes="${escapeHtml(t.notes || '')}" data-task-due="${t.due || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}" data-task-completed="${isDone}"`;
+                    const extraData = `data-task-id="${rawTaskId}" data-task-title="${escTitle}" data-task-notes="${escapeHtml(t.notes || '')}" data-task-due="${t.due || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}" data-task-completed="${isDone}" data-task-starred="${!!t.isStarred}" data-task-status="${t.status || 'in_progress'}"`;
                     html += renderSwipeLinkWrapper(itemHtml, t.title, 'task', rawTaskId, '', '', '', extraData);
                 });
                 html += `
@@ -354,7 +333,7 @@
                 let prevEventEndMs = null;
                 let prevEventLocation = null;
 
-                html += `<div class="today-vertical-timeline" style="margin-top: 10px;">`;
+                html += `<div class="today-vertical-timeline">`;
 
                 sortedEvents.forEach(ev => {
                     let evIsPast = isPast;
@@ -599,6 +578,7 @@
                                             ${timeBadge}
                                             <strong style="color: ${isDone ? '#a6e3a1' : (isExpiredTask ? 'var(--off)' : 'inherit')}; font-size: 0.8rem;">[Aufgabe]</strong>
                                             <span style="font-weight: 600; font-size: 0.82rem; ${isDone ? 'text-decoration: line-through; opacity: 0.6;' : ''}">${escTitle}</span>
+                                            ${ev.isStarred ? `<span class="pinned-task-indicator" title="Angepinnt">📌</span>` : ''}
                                             ${repeatBadge}
                                             ${personsHtml}
                                         </div>
@@ -609,7 +589,7 @@
                             </div>
                         `;
 
-                        const extraData = `data-task-id="${rawTaskId}" data-task-title="${escTitle}" data-task-notes="${escNotes}" data-task-due="${ev.time || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}" data-task-completed="${isDone}"`;
+                        const extraData = `data-task-id="${rawTaskId}" data-task-title="${escTitle}" data-task-notes="${escNotes}" data-task-due="${ev.time || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}" data-task-completed="${isDone}" data-task-starred="${!!ev.isStarred}" data-task-status="${ev.status || 'in_progress'}"`;
 
                         html += `
                             <div class="${stepClass}">

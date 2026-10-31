@@ -435,7 +435,12 @@
                 return getConf('discord');
             }
 
-            // 2. E-Mail Agent (strictly incoming emails, mail responses, or mail triage)
+            // 2. Haupt-Assistent (Web / App) Priority
+            if (sourceType === 'system' || rawName.includes('haupt') || rawName.includes('main') || rawName.includes('assistent') || notif.agentAvatar === '🤖') {
+                return getConf('default');
+            }
+
+            // 3. E-Mail Agent (strictly incoming emails, mail responses, or mail triage)
             let actionData = notif.actionData;
             if (typeof actionData === 'string') {
                 try { actionData = JSON.parse(actionData); } catch (e) {}
@@ -511,38 +516,12 @@
             const agentInfo = getNotifAgentInfo(notif);
             const agentColor = agentInfo.color;
             const agentAvatar = agentInfo.avatar;
-            const originInfo = getNotifOriginInfo(notif, agentInfo.id);
 
-            let typeBadgeText = 'ℹ️ Information';
-            let badgeBg = hexToRgba(agentColor, 0.15);
-            let badgeColor = agentColor;
-
-            if (notifType === 'question') {
-                typeBadgeText = '❓ Frage & Bestätigung';
-            } else if (notifType === 'action_required') {
-                typeBadgeText = '⚡ Handlungsbedarf';
-            }
-
-            const agentLabel = agentInfo.name;
-            const agentBadgeHtml = `
-                <span class="chat-agent-badge" title="Zuständiger Agent: ${escapeHtml(agentLabel)}" style="font-size: 0.72rem; background: ${hexToRgba(agentColor, 0.18)}; color: #ffffff; padding: 2px 8px; border-radius: 6px; font-weight: 700; border: 1px solid ${hexToRgba(agentColor, 0.45)}; display: inline-flex; align-items: center; gap: 4px;">
-                    <span style="font-size: 0.85rem;">${agentAvatar}</span>
-                    <span>${escapeHtml(agentLabel)}</span>
-                </span>
-            `;
-
-            const originBadgeHtml = `
-                <span class="chat-origin-badge" title="Ausgelöst durch: ${escapeHtml(originInfo.label)}" style="font-size: 0.68rem; background: rgba(255, 255, 255, 0.08); color: #cdd6f4; padding: 2px 7px; border-radius: 6px; font-weight: 600; border: 1px solid rgba(255, 255, 255, 0.14); display: inline-flex; align-items: center; gap: 4px;">
-                    <span>${escapeHtml(originInfo.badge)}</span>
-                </span>
-            `;
-
-            const badgesHtml = `
-                <div class="chat-notification-badges-row" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 2px;">
-                    ${agentBadgeHtml}
-                    ${originBadgeHtml}
-                </div>
-            `;
+            // Profilbild / Avatar oben links
+            const isImgAvatar = typeof agentAvatar === 'string' && (agentAvatar.startsWith('/') || agentAvatar.startsWith('http') || agentAvatar.startsWith('data:') || /\.(png|jpe?g|webp|svg)$/i.test(agentAvatar));
+            const avatarElHtml = isImgAvatar
+                ? `<img src="${agentAvatar}" alt="${escapeHtml(agentInfo.name)}" class="chat-notification-avatar" style="width: 24px; height: 24px; min-width: 24px; border-radius: 50%; object-fit: cover; display: block; border: 1.5px solid ${hexToRgba(agentColor, 0.5)}; flex-shrink: 0;" title="${escapeHtml(agentInfo.name)}">`
+                : `<span class="chat-notification-avatar" style="width: 24px; height: 24px; min-width: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: ${hexToRgba(agentColor, 0.18)}; border: 1.5px solid ${hexToRgba(agentColor, 0.5)}; font-size: 0.82rem; line-height: 1; flex-shrink: 0;" title="${escapeHtml(agentInfo.name)}">${agentAvatar}</span>`;
 
             let timeStr = '';
             if (notif.createdAt) {
@@ -571,16 +550,47 @@
                 try { actionData = JSON.parse(actionData); } catch (e) {}
             }
 
+            // Quick Links - Kreis-Buttons mit Icon (Mail & Agent-Chat)
+            const mailId = notif.sourceId || (actionData && (actionData.mailId || actionData.emailId || (actionData.replyData && actionData.replyData.mailId)));
+            const mailLinkBtn = mailId
+                ? `<button type="button" onclick="event.stopPropagation(); openMailReadModal(${JSON.stringify(mailId)}, 'dashboard')" class="briefing-circle-btn mail-circle-btn" title="Verknüpfte E-Mail öffnen">${googleIcon('mail', '14px', 'fill: #89b4fa;')}</button>`
+                : '';
+
+            const conversationRunId = notif.conversationId || targetConvId || (actionData && actionData.conversationId);
+            const chatLinkBtn = conversationRunId
+                ? `<button type="button" onclick="event.stopPropagation(); loadAgentRun('${conversationRunId}')" class="briefing-circle-btn chat-circle-btn" title="Agent-Chatverlauf öffnen">${googleIcon('chat', '14px', 'fill: #cba6f7;')}</button>`
+                : (mailId ? `<button type="button" onclick="event.stopPropagation(); openAgentChatForMail(event, ${JSON.stringify(mailId)})" class="briefing-circle-btn chat-circle-btn" title="Agent-Chatverlauf öffnen">${googleIcon('chat', '14px', 'fill: #cba6f7;')}</button>` : '');
+
+            // Erkennung für Aktionen (Mail, Kalender, Aufgabe)
+            const isEventAction = Boolean(actionData && actionData.actionType === 'create_event');
+            const isTaskAction = Boolean(actionData && actionData.actionType === 'create_task');
+            const isMailAction = Boolean(actionData && (actionData.actionType === 'send_mail' || actionData.actionType === 'send_mail_reply'));
+
+            const isMailSendProposal = Boolean(
+                !isEventAction && !isTaskAction && (
+                    isMailAction
+                    || (actionData && (actionData.mailData || actionData.replyData))
+                    || ((notif.title && (notif.title.toLowerCase().includes('mail') || notif.title.toLowerCase().includes('entwurf')))
+                        && Array.isArray(buttonsList) && buttonsList.some(b => b.action === 'execute_action' || (b.label && (b.label.toLowerCase().includes('abschicken') || b.label.toLowerCase().includes('senden')))))
+                )
+            );
+
+            // Erkennung für Kalendereintrags-Vorschlag
+            const isEventProposal = Boolean(
+                isEventAction
+                || (actionData && actionData.eventData)
+                || (notif.title && (notif.title.toLowerCase().includes('terminvorschlag') || notif.title.toLowerCase().includes('termin')) && Array.isArray(buttonsList) && buttonsList.some(b => b.action === 'execute_action'))
+            );
+
+            const isProposalCard = isMailSendProposal || isEventProposal;
+
             let messageBodyHtml = '';
             const rawMsg = (notif.message || '').trim();
 
-            const isMailAction = actionData && (actionData.actionType === 'send_mail' || actionData.actionType === 'send_mail_reply');
-
-            if (isMailAction) {
-                // Beim Entwurf soll der Text "um was es geht" NICHT in der Karte stehen (er steht in der Chat-Nachricht oben)
+            if (isProposalCard) {
+                // Bei Vorschlägen (Mail, Kalender) soll KEIN doppelter Einleitungstext oder Frage oben stehen
                 messageBodyHtml = '';
             } else if (actionData && actionData.actionType) {
-                // If message contains redundant bullet points (Termin, Aufgabe, Datum, Uhrzeit, etc.) or embedded codeblocks:
                 const hasDuplicateBullets = /•\s*\*\*(Termin|Aufgabe|Datum|Uhrzeit|Fälligkeit|Ort|Notiz|Beschreibung)\*\*/i.test(rawMsg);
                 const hasCodeBlockReply = /```/.test(rawMsg) || /_CODEBLOCK/i.test(rawMsg);
 
@@ -615,37 +625,183 @@
                 messageBodyHtml = renderMarkdown(rawMsg);
             }
 
+            // Subtle Edit-Icon Button für Aktionen
+            const editMailBtn = (isMailSendProposal && !notif.isDismissed)
+                ? `<button type="button" onclick="event.stopPropagation(); openComposeFromNotification('${notifId}', this.closest('.chat-notification-card'))" class="briefing-circle-btn edit-circle-btn" title="E-Mail im Editor bearbeiten">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 20h9"></path>
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                    </svg>
+                </button>`
+                : '';
+
+            const editEventBtn = (isEventProposal && !notif.isDismissed)
+                ? `<button type="button" onclick="event.stopPropagation(); openEventEditFromNotification('${notifId}', this.closest('.chat-notification-card'))" class="briefing-circle-btn edit-circle-btn" title="Termin im Kalender bearbeiten">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 20h9"></path>
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                    </svg>
+                </button>`
+                : '';
+
+            // Subtle Dismiss/Cancel Button innerhalb des Vorschlags
+            const dismissProposalBtn = (!notif.isDismissed && notif.id)
+                ? `<button type="button" onclick="dismissNotification(event, ${notif.id})" class="briefing-circle-btn dismiss-circle-btn" title="Vorschlag abbrechen / verwerfen">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>`
+                : '';
+
+            // Senden-Icon Button für Mail-Vorschlag
+            let mailSendBtnHtml = '';
+            if (isMailSendProposal && !notif.isDismissed && Array.isArray(buttonsList) && buttonsList.length > 0) {
+                const sendBtn = buttonsList.find(b => b.action === 'execute_action' || (b.label && (b.label.toLowerCase().includes('abschicken') || b.label.toLowerCase().includes('senden')))) || buttonsList[0];
+                if (sendBtn) {
+                    const escSendLabel = escapeHtml(sendBtn.label || 'Abschicken');
+                    const btnAction = sendBtn.action || 'execute_action';
+                    const rawReply = sendBtn.replyText || sendBtn.label || '';
+                    const clickAttr = `onclick="handleChatNotificationClick(this, ${notif.id || 'null'}, '${escSendLabel}', '${btnAction}', decodeURIComponent('${encodeURIComponent(rawReply)}'), '${targetConvId}')"`;
+                    mailSendBtnHtml = `
+                        <button type="button" class="chat-notification-btn chat-notification-send-icon-btn" ${clickAttr} title="${escSendLabel}" style="width: 36px; height: 36px; min-width: 36px; min-height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: ${agentColor} !important; color: #11111b !important; border: none !important; cursor: pointer; box-shadow: 0 4px 14px ${hexToRgba(agentColor, 0.45)}; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="margin-left: -1px; margin-top: 1px;">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2" fill="currentColor"></polygon>
+                            </svg>
+                        </button>
+                    `;
+                }
+            }
+
+            // Anlegen-Icon Button für Kalender-Vorschlag
+            let eventConfirmBtnHtml = '';
+            if (isEventProposal && !notif.isDismissed && Array.isArray(buttonsList) && buttonsList.length > 0) {
+                const confirmBtn = buttonsList.find(b => b.action === 'execute_action' || (b.label && (b.label.toLowerCase().includes('anlegen') || b.label.toLowerCase().includes('bestätigen') || b.label.toLowerCase().includes('eintragen')))) || buttonsList[0];
+                if (confirmBtn) {
+                    const escConfirmLabel = escapeHtml(confirmBtn.label || 'Termin anlegen');
+                    const btnAction = confirmBtn.action || 'execute_action';
+                    const rawReply = confirmBtn.replyText || confirmBtn.label || '';
+                    const clickAttr = `onclick="handleChatNotificationClick(this, ${notif.id || 'null'}, '${escConfirmLabel}', '${btnAction}', decodeURIComponent('${encodeURIComponent(rawReply)}'), '${targetConvId}')"`;
+                    eventConfirmBtnHtml = `
+                        <button type="button" class="chat-notification-btn chat-notification-send-icon-btn" ${clickAttr} title="${escConfirmLabel}" style="width: 36px; height: 36px; min-width: 36px; min-height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: ${agentColor} !important; color: #11111b !important; border: none !important; cursor: pointer; box-shadow: 0 4px 14px ${hexToRgba(agentColor, 0.45)}; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);">
+                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                                <path d="M9 16l2 2 4-4"></path>
+                            </svg>
+                        </button>
+                    `;
+                }
+            }
+
+            // Status-Badge / Close-Button
+            let statusHtml = '';
+            if (notif.isDismissed) {
+                if (notif.selectedButton) {
+                    statusHtml = '<span class="chat-notification-status" style="background: rgba(166, 227, 161, 0.15); color: #a6e3a1; border: 1px solid rgba(166, 227, 161, 0.3);">✅ Ausgeführt: "' + escapeHtml(notif.selectedButton) + '"</span>';
+                } else {
+                    statusHtml = '<span class="chat-notification-status" style="background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.6);">✕ Geschlossen</span>';
+                }
+            } else if (!isProposalCard && notif.id) {
+                statusHtml = '<button type="button" onclick="dismissNotification(event, ' + notif.id + ')" title="Benachrichtigung schließen / verwerfen" style="background: none; border: none; color: rgba(255,255,255,0.4); cursor: pointer; padding: 2px 6px; font-size: 0.85rem; line-height: 1; border-radius: 4px; transition: color 0.2s;" onmouseover="this.style.color=\'#f38ba8\'" onmouseout="this.style.color=\'rgba(255,255,255,0.4)\'">✕</button>';
+            }
+
+            // Anhänge erkennen und Vorschau-Chips rendern
+            const attachmentsList = (actionData && (actionData.mailData?.attachments || actionData.replyData?.attachments || actionData.attachments)) || [];
+            if (attachmentsList.length === 0 && rawMsg) {
+                const matches = rawMsg.match(/[a-zA-Z0-9_\-\u00C0-\u017F]+\.(?:txt|pdf|docx?|xlsx?|png|jpe?g|svg)/gi);
+                if (matches) {
+                    matches.forEach(f => {
+                        if (!attachmentsList.includes(f)) attachmentsList.push(f);
+                    });
+                }
+            }
+            let attChipsHtml = '';
+            if (attachmentsList && attachmentsList.length > 0) {
+                const chips = attachmentsList.map(a => {
+                    const name = typeof a === 'string' ? a : (a.filename || a.name || 'Anhang');
+                    return `<span style="background: rgba(137, 180, 250, 0.16); color: #89b4fa; border: 1px solid rgba(137, 180, 250, 0.35); border-radius: 6px; padding: 2px 8px; font-size: 0.73rem; display: inline-flex; align-items: center; gap: 5px; font-weight: 600;"><span style="font-size: 0.85rem;">📎</span><span>${escapeHtml(name)}</span></span>`;
+                }).join(' ');
+                attChipsHtml = `
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <span style="font-size: 0.74rem; color: #a6adc8; font-weight: 700;">Anhang:</span>
+                        ${chips}
+                    </div>
+                `;
+            }
+
             if (actionData && actionData.actionType) {
                 if (actionData.actionType === 'create_event' && actionData.eventData) {
                     const ev = actionData.eventData;
                     const timeText = ev.isAllDay ? 'Ganztägig' : (ev.startTime ? (ev.endTime ? `${ev.startTime} – ${ev.endTime} Uhr` : `ab ${ev.startTime} Uhr`) : 'Uhrzeit offen');
+                    const eventTopActions = `
+                        <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 8px;">
+                            ${chatLinkBtn}
+                            ${mailLinkBtn}
+                            ${editEventBtn}
+                            ${dismissProposalBtn}
+                            <div class="chat-notification-status-container">${notif.isDismissed ? statusHtml : ''}</div>
+                        </div>
+                    `;
                     actionPreviewHtml = `
-                        <div class="action-preview-box" style="margin-top: 8px; background: rgba(0,0,0,0.35); border: 1px solid ${hexToRgba(agentColor, 0.4)}; border-left: 4px solid ${agentColor}; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px;">
-                            <div style="font-size: 0.72rem; font-weight: 700; color: ${agentColor}; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px;">
-                                <span>📅 Kalendereintrag (Wird erst nach "Ja" fest angelegt)</span>
+                        <div class="action-preview-box" style="display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 8px; width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
+                                    <div style="flex-shrink: 0;" title="${escapeHtml(agentInfo.name)}">
+                                        ${avatarElHtml}
+                                    </div>
+                                    <div style="font-size: 0.74rem; font-weight: 700; color: ${agentColor}; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px;">
+                                        <span>📅 Kalendereintrag (Vorschlag)</span>
+                                    </div>
+                                </div>
+                                ${eventTopActions}
                             </div>
-                            <div style="font-weight: 700; font-size: 0.9rem; color: #ffffff;">${escapeHtml(ev.title)}</div>
-                            <div style="font-size: 0.76rem; color: #cdd6f4; display: flex; gap: 12px; flex-wrap: wrap;">
+                            <div style="font-weight: 700; font-size: 0.95rem; color: #ffffff; text-align: left; margin-top: 2px;">${escapeHtml(ev.title)}</div>
+                            <div style="font-size: 0.78rem; color: #cdd6f4; display: flex; gap: 12px; flex-wrap: wrap; text-align: left; justify-content: flex-start;">
                                 <span>📆 <strong>${escapeHtml(ev.date)}</strong></span>
                                 <span>⏰ <strong>${escapeHtml(timeText)}</strong></span>
                                 ${ev.location ? `<span>📍 ${escapeHtml(ev.location)}</span>` : ''}
                             </div>
-                            ${ev.description ? `<div style="font-size: 0.72rem; color: #a6adc8; margin-top: 2px;">${escapeHtml(ev.description)}</div>` : ''}
+                            ${ev.description ? `<div style="font-size: 0.74rem; color: #a6adc8; margin-top: 2px; text-align: left; line-height: 1.45;">${escapeHtml(ev.description)}</div>` : ''}
+                            ${eventConfirmBtnHtml ? `
+                                <div style="display: flex; justify-content: flex-end; width: 100%; margin-top: 4px;">
+                                    ${eventConfirmBtnHtml}
+                                </div>
+                            ` : ''}
                         </div>
                     `;
                 } else if (actionData.actionType === 'create_task' && actionData.taskData) {
                     const td = actionData.taskData;
+                    const taskTopActions = `
+                        <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 8px;">
+                            ${chatLinkBtn}
+                            ${mailLinkBtn}
+                            ${dismissProposalBtn}
+                            <div class="chat-notification-status-container">${notif.isDismissed ? statusHtml : ''}</div>
+                        </div>
+                    `;
                     actionPreviewHtml = `
-                        <div class="action-preview-box" style="margin-top: 8px; background: rgba(0,0,0,0.35); border: 1px solid ${hexToRgba(agentColor, 0.4)}; border-left: 4px solid ${agentColor}; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px;">
-                            <div style="font-size: 0.72rem; font-weight: 700; color: ${agentColor}; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px;">
-                                <span>📝 Aufgabe / To-Do (Wird erst nach "Ja" angelegt)</span>
+                        <div class="action-preview-box" style="display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 8px; width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
+                                    <div style="flex-shrink: 0;" title="${escapeHtml(agentInfo.name)}">
+                                        ${avatarElHtml}
+                                    </div>
+                                    <div style="font-size: 0.74rem; font-weight: 700; color: ${agentColor}; text-transform: uppercase; letter-spacing: 0.5px;">
+                                        <span>📝 Aufgabe / To-Do</span>
+                                    </div>
+                                </div>
+                                ${taskTopActions}
                             </div>
-                            <div style="font-weight: 700; font-size: 0.9rem; color: #ffffff;">${escapeHtml(td.title)}</div>
+                            <div style="font-weight: 700; font-size: 0.95rem; color: #ffffff;">${escapeHtml(td.title)}</div>
                             ${td.dueDate ? `<div style="font-size: 0.76rem; color: #cdd6f4;">⏰ Fällig am: <strong>${escapeHtml(td.dueDate)}</strong></div>` : ''}
                             ${td.notes ? `<div style="font-size: 0.72rem; color: #a6adc8; margin-top: 2px;">${escapeHtml(td.notes)}</div>` : ''}
                         </div>
                     `;
-                } else if ((actionData.actionType === 'send_mail_reply' || actionData.actionType === 'send_mail') && (actionData.replyData || actionData.mailData)) {
+                } else if ((actionData.actionType === 'send_mail_reply' || actionData.actionType === 'send_mail' || isMailSendProposal) && (actionData.replyData || actionData.mailData)) {
                     const rd = actionData.mailData || actionData.replyData;
                     let fromDisplay = rd.from || '';
                     if (!fromDisplay && (rd.accountName || rd.fromEmail)) {
@@ -659,68 +815,65 @@
                             fromDisplay = acc.name && acc.name !== acc.email ? `${acc.name} <${acc.email}>` : acc.email;
                         }
                     }
-                    actionPreviewHtml = `
-                        <div class="mail-draft-preview" style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
-                            <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.82rem; padding: 4px 0 8px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
-                                ${fromDisplay
-                                    ? `<div class="mail-draft-von-row" data-account-id="${rd.accountId || ''}" style="color: #cdd6f4;"><strong style="color: #89b4fa;">Von:</strong> <span style="color: #ffffff;">${escapeHtml(fromDisplay)}</span></div>`
-                                    : `<div class="mail-draft-von-row" data-account-id="${rd.accountId || ''}" data-empty="true" style="display: none; color: #cdd6f4;"></div>`
-                                }
-                                ${rd.to ? `<div style="color: #cdd6f4;"><strong style="color: #89b4fa;">An:</strong> <span style="color: #ffffff;">${escapeHtml(rd.to)}</span></div>` : ''}
-                                ${rd.subject ? `<div style="color: #cdd6f4;"><strong style="color: #89b4fa;">Betreff:</strong> <span style="color: #ffffff; font-weight: 600;">${escapeHtml(rd.subject)}</span></div>` : ''}
+
+                    const mailTopActions = `
+                        <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 8px;">
+                            ${chatLinkBtn}
+                            ${mailLinkBtn}
+                            ${editMailBtn}
+                            ${dismissProposalBtn}
+                            <div class="chat-notification-status-container">${notif.isDismissed ? statusHtml : ''}</div>
+                        </div>
+                    `;
+
+                    const hasBottomBar = Boolean(attChipsHtml || mailSendBtnHtml);
+                    const mailBottomRow = hasBottomBar
+                        ? `<div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 10px; width: 100%; padding-top: 2px;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; flex: 1;">
+                                ${attChipsHtml || ''}
                             </div>
-                            ${rd.body ? `<div style="font-size: 0.84rem; line-height: 1.6; color: #ffffff; white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; padding: 6px 0 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.08);">${escapeHtml(rd.body)}</div>` : ''}
+                            ${mailSendBtnHtml ? `<div style="flex-shrink: 0; margin-left: auto;">${mailSendBtnHtml}</div>` : ''}
+                           </div>`
+                        : '';
+
+                    actionPreviewHtml = `
+                        <div class="mail-draft-preview" style="display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 8px; margin-top: 2px; width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; width: 100%; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding: 2px 0 8px 0;">
+                                <div style="display: flex; align-items: flex-start; gap: 10px; min-width: 0; flex: 1;">
+                                    <div style="padding-top: 1px; flex-shrink: 0;" title="${escapeHtml(agentInfo.name)}">
+                                        ${avatarElHtml}
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 4px; font-size: 0.82rem; min-width: 0; flex: 1;">
+                                        ${fromDisplay
+                                            ? `<div class="mail-draft-von-row" data-account-id="${rd.accountId || ''}" style="color: #cdd6f4;"><strong style="color: #89b4fa;">Von:</strong> <span style="color: #ffffff;">${escapeHtml(fromDisplay)}</span></div>`
+                                            : `<div class="mail-draft-von-row" data-account-id="${rd.accountId || ''}" data-empty="true" style="display: none; color: #cdd6f4;"></div>`
+                                        }
+                                        ${rd.to ? `<div><strong style="color: #89b4fa;">An:</strong> <span style="color: #ffffff;">${escapeHtml(rd.to)}</span></div>` : ''}
+                                        ${rd.subject ? `<div><strong style="color: #89b4fa;">Betreff:</strong> <span style="color: #ffffff; font-weight: 600;">${escapeHtml(rd.subject)}</span></div>` : ''}
+                                    </div>
+                                </div>
+                                ${mailTopActions}
+                            </div>
+                            ${rd.body ? `<div style="font-size: 0.84rem; line-height: 1.6; color: #ffffff; white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; padding: 6px 0 10px 0; ${hasBottomBar ? 'border-bottom: 1px solid rgba(255, 255, 255, 0.08);' : ''} width: 100%;">${escapeHtml(rd.body)}</div>` : ''}
+                            ${mailBottomRow}
                         </div>
                     `;
                 }
             }
 
-            // Anhänge erkennen und Vorschau-Chips rendern
-            const attachmentsList = (actionData && (actionData.mailData?.attachments || actionData.replyData?.attachments || actionData.attachments)) || [];
-            if (attachmentsList.length === 0 && rawMsg) {
-                const matches = rawMsg.match(/[a-zA-Z0-9_\-\u00C0-\u017F]+\.(?:txt|pdf|docx?|xlsx?|png|jpe?g|svg)/gi);
-                if (matches) {
-                    matches.forEach(f => {
-                        if (!attachmentsList.includes(f)) attachmentsList.push(f);
-                    });
-                }
-            }
-            if (attachmentsList && attachmentsList.length > 0) {
-                const chips = attachmentsList.map(a => {
-                    const name = typeof a === 'string' ? a : (a.filename || a.name || 'Anhang');
-                    return `<span style="background: rgba(137, 180, 250, 0.16); color: #89b4fa; border: 1px solid rgba(137, 180, 250, 0.35); border-radius: 6px; padding: 2px 8px; font-size: 0.73rem; display: inline-flex; align-items: center; gap: 5px; font-weight: 600;"><span style="font-size: 0.85rem;">📎</span><span>${escapeHtml(name)}</span></span>`;
-                }).join(' ');
-                const attChipsHtml = `
-                    <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                        <span style="font-size: 0.74rem; color: #a6adc8; font-weight: 700;">Anhang:</span>
-                        ${chips}
-                    </div>
-                `;
+            if (attChipsHtml && !actionPreviewHtml.includes('📎')) {
                 if (actionPreviewHtml) {
-                    actionPreviewHtml += attChipsHtml;
+                    actionPreviewHtml += `<div style="margin-top: 8px;">${attChipsHtml}</div>`;
                 } else {
-                    messageBodyHtml += attChipsHtml;
-                }
-            }
-
-            // Automatischer "Bearbeiten"-Button für E-Mail-Entwürfe
-            const isEmailDraft = (actionData && (actionData.actionType === 'send_mail' || actionData.actionType === 'send_mail_reply'))
-                || (notif.title && (notif.title.toLowerCase().includes('mail') || notif.title.toLowerCase().includes('entwurf')))
-                || (notif.sourceType === 'mail');
-
-            if (isEmailDraft && !notif.isDismissed && Array.isArray(buttonsList)) {
-                const hasEdit = buttonsList.some(b => b.action === 'open_composer' || b.action === 'edit_mail' || (b.label && b.label.toLowerCase().includes('bearbeit')));
-                if (!hasEdit) {
-                    buttonsList.splice(1, 0, {
-                        label: '✏️ Bearbeiten',
-                        action: 'open_composer',
-                        style: 'secondary'
-                    });
+                    messageBodyHtml += `<div style="margin-top: 8px;">${attChipsHtml}</div>`;
                 }
             }
 
             let buttonsHtml = '';
-            if (Array.isArray(buttonsList) && buttonsList.length > 0) {
+            if (isProposalCard) {
+                // Bei Vorschlägen (Mail, Kalender) befinden sich alle Aktionen direkt im Kasten!
+                buttonsHtml = '';
+            } else if (Array.isArray(buttonsList) && buttonsList.length > 0) {
                 buttonsList.forEach((btn, idx) => {
                     const escLabel = escapeHtml(btn.label || 'Auswählen');
                     const btnAction = btn.action || 'reply';
@@ -745,28 +898,6 @@
                 });
             }
 
-            let statusHtml = '';
-            if (notif.isDismissed) {
-                if (notif.selectedButton) {
-                    statusHtml = '<span class="chat-notification-status" style="background: rgba(166, 227, 161, 0.15); color: #a6e3a1; border: 1px solid rgba(166, 227, 161, 0.3);">✅ Ausgeführt: "' + escapeHtml(notif.selectedButton) + '"</span>';
-                } else {
-                    statusHtml = '<span class="chat-notification-status" style="background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.6);">✕ Geschlossen</span>';
-                }
-            } else if (notif.id) {
-                statusHtml = '<button type="button" onclick="dismissNotification(event, ' + notif.id + ')" title="Benachrichtigung schließen" style="background: none; border: none; color: rgba(255,255,255,0.4); cursor: pointer; padding: 2px 6px; font-size: 0.85rem; line-height: 1; border-radius: 4px; transition: color 0.2s;" onmouseover="this.style.color=\'#f38ba8\'" onmouseout="this.style.color=\'rgba(255,255,255,0.4)\'">✕</button>';
-            }
-
-            // Quick Links - Kreis-Buttons mit Icon (Mail & Agent-Chat)
-            const mailId = notif.sourceId || (actionData && (actionData.mailId || actionData.emailId || (actionData.replyData && actionData.replyData.mailId)));
-            const mailLinkBtn = mailId
-                ? `<button type="button" onclick="event.stopPropagation(); openMailReadModal(${JSON.stringify(mailId)}, 'dashboard')" class="briefing-circle-btn mail-circle-btn" title="Verknüpfte E-Mail öffnen">${googleIcon('mail', '14px', 'fill: #89b4fa;')}</button>`
-                : '';
-
-            const conversationRunId = notif.conversationId || targetConvId || (actionData && actionData.conversationId);
-            const chatLinkBtn = conversationRunId
-                ? `<button type="button" onclick="event.stopPropagation(); loadAgentRun('${conversationRunId}')" class="briefing-circle-btn chat-circle-btn" title="Agent-Chatverlauf öffnen">${googleIcon('chat', '14px', 'fill: #cba6f7;')}</button>`
-                : (mailId ? `<button type="button" onclick="event.stopPropagation(); openAgentChatForMail(event, ${JSON.stringify(mailId)})" class="briefing-circle-btn chat-circle-btn" title="Agent-Chatverlauf öffnen">${googleIcon('chat', '14px', 'fill: #cba6f7;')}</button>` : '');
-
             const briefingCardStyle = `
                 border-left: none !important;
                 border-right: none !important;
@@ -777,34 +908,58 @@
                 background: transparent !important;
                 padding: 16px 4px !important;
                 margin: 0 !important;
+                text-align: left !important;
             `;
 
             const defaultCardStyle = notif.isDismissed
-                ? `border-left: 5px solid ${agentColor}88 !important;`
-                : `border-left: 5px solid ${agentColor} !important; border-color: ${hexToRgba(agentColor, 0.45)} !important; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 18px ${hexToRgba(agentColor, 0.22)} !important;`;
+                ? `border-left: 5px solid ${agentColor}88 !important; text-align: left !important;`
+                : `border-left: 5px solid ${agentColor} !important; border-color: ${hexToRgba(agentColor, 0.45)} !important; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 18px ${hexToRgba(agentColor, 0.22)} !important; text-align: left !important;`;
 
             const cardStyle = isBriefing ? briefingCardStyle : defaultCardStyle;
             const cardClass = `chat-notification-card type-${notifType}${dismissedClass} ${isBriefing ? 'is-briefing-view' : ''}`;
 
-            const cardDisplayTitle = isMailAction
-                ? (actionData.actionType === 'send_mail_reply' ? '✉️ E-Mail-Antwort' : '✉️ E-Mail-Entwurf')
-                : escTitle;
+            // Dynamischer, sauberer Titel ohne "Entwurf" oder "Terminvorschlag"
+            let cardDisplayTitle = escTitle;
+            if (isMailAction) {
+                const md = actionData?.mailData || actionData?.replyData;
+                if (md?.subject) {
+                    cardDisplayTitle = '✉️ ' + escapeHtml(md.subject);
+                } else if (md?.to) {
+                    cardDisplayTitle = '✉️ E-Mail an ' + escapeHtml(md.to);
+                } else {
+                    cardDisplayTitle = actionData?.actionType === 'send_mail_reply' ? '✉️ Antwort' : '✉️ E-Mail';
+                }
+            } else if (isEventAction && actionData?.eventData?.title) {
+                cardDisplayTitle = '📅 ' + escapeHtml(actionData.eventData.title);
+            } else if (isTaskAction && actionData?.taskData?.title) {
+                cardDisplayTitle = '📋 ' + escapeHtml(actionData.taskData.title);
+            } else {
+                cardDisplayTitle = cardDisplayTitle
+                    .replace(/\s*-\s*entwurf/gi, '')
+                    .replace(/^✉️\s*E-Mail-Entwurf/gi, '✉️ E-Mail')
+                    .replace(/\s*entwurf/gi, '')
+                    .replace(/^📅\s*Terminvorschlag:\s*/gi, '📅 ')
+                    .replace(/^📋\s*Aufgabenvorschlag:\s*/gi, '📋 ')
+                    .trim();
+            }
 
             return `
                 <div class="${cardClass}" style="${cardStyle}" ${notifId ? `data-notification-id="${notifId}"` : ''}>
-                    <div class="chat-notification-header" style="${isBriefing ? 'border-bottom: none; padding-bottom: 4px;' : ''}">
-                        <div class="chat-notification-title-wrap" style="display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1;">
-                            ${badgesHtml}
-                            <span class="chat-notification-title" style="font-weight: 700; font-size: 0.95rem; color: #ffffff; line-height: 1.35;">${cardDisplayTitle}</span>
+                    ${!isProposalCard ? `
+                        <div class="chat-notification-header" style="${isBriefing ? 'border-bottom: none; padding-bottom: 4px;' : ''} display: flex; justify-content: space-between; align-items: center; text-align: left; width: 100%;">
+                            <div class="chat-notification-title-wrap" style="display: flex; flex-direction: row; align-items: center; justify-content: flex-start; text-align: left; gap: 8px; min-width: 0; flex: 1;">
+                                ${avatarElHtml}
+                                <span class="chat-notification-title" style="font-weight: 700; font-size: 0.95rem; color: #ffffff; line-height: 1.35; text-align: left; min-width: 0; word-break: break-word;">${cardDisplayTitle}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 8px;">
+                                ${chatLinkBtn}
+                                ${mailLinkBtn}
+                                ${timeStr ? `<span class="chat-notification-meta" style="font-size: 0.72rem; opacity: 0.65; white-space: nowrap;">${timeStr}</span>` : ''}
+                                <div class="chat-notification-status-container">${statusHtml}</div>
+                            </div>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-                            ${chatLinkBtn}
-                            ${mailLinkBtn}
-                            ${timeStr ? `<span class="chat-notification-meta" style="font-size: 0.72rem; opacity: 0.65; white-space: nowrap;">${timeStr}</span>` : ''}
-                            <div class="chat-notification-status-container">${statusHtml}</div>
-                        </div>
-                    </div>
-                    <div class="chat-notification-body">
+                    ` : ''}
+                    <div class="chat-notification-body" style="text-align: left; width: 100%;">
                         ${messageBodyHtml}
                         ${actionPreviewHtml}
                     </div>
@@ -812,7 +967,6 @@
                 </div>
             `;
         }
-
 
         window.getNotificationCardHtml = getNotificationCardHtml;
 
@@ -918,12 +1072,67 @@
             }
         }
         window.openComposeFromNotification = openComposeFromNotification;
+        async function openEventEditFromNotification(notifId, cardEl) {
+            let notif = null;
+            if (typeof currentConversationNotifications !== 'undefined') {
+                notif = currentConversationNotifications.find(n => String(n.id) === String(notifId));
+            }
+            if (!notif && notifId) {
+                try {
+                    const r = await fetch(getApiUrl(`/api/notifications/${notifId}`));
+                    if (r.ok) notif = await r.json();
+                } catch (_) {}
+            }
+
+            let actionData = notif?.actionData;
+            if (typeof actionData === 'string') {
+                try { actionData = JSON.parse(actionData); } catch (_) {}
+            }
+
+            const ev = actionData?.eventData || {};
+            const title = ev.title || (cardEl ? cardEl.querySelector('.action-preview-box div[style*="font-weight: 700; font-size: 0.95rem"]')?.innerText : '') || '';
+            const dateVal = ev.date || getLocalDateString();
+            const startTime = ev.startTime || '10:00';
+            const endTime = ev.endTime || '11:00';
+            const isAllDay = !!ev.isAllDay;
+            const desc = ev.description || '';
+            const location = ev.location || '';
+
+            const startIso = isAllDay ? `${dateVal}T00:00:00` : `${dateVal}T${startTime}:00`;
+            const endIso = isAllDay ? `${dateVal}T23:59:59` : `${dateVal}T${endTime}:00`;
+
+            window.editingEventProposalNotifId = notifId;
+            window.pendingEventNotificationDismiss = null;
+
+            if (typeof window.openEventEditModal === 'function') {
+                window.openEventEditModal(null, title, startIso, endIso, isAllDay, '', desc, false, dateVal, false, location);
+            } else if (typeof openEventEditModal === 'function') {
+                openEventEditModal(null, title, startIso, endIso, isAllDay, '', desc, false, dateVal, false, location);
+            }
+
+            const dateInput = document.getElementById('event-edit-date-input');
+            if (dateInput && dateVal) dateInput.value = dateVal;
+            const sTimeInput = document.getElementById('event-edit-start-time');
+            if (sTimeInput && startTime) sTimeInput.value = startTime;
+            const eTimeInput = document.getElementById('event-edit-end-time');
+            if (eTimeInput && endTime) eTimeInput.value = endTime;
+            const modalTitle = document.getElementById("event-edit-modal-title");
+            if (modalTitle) modalTitle.textContent = "Termin-Vorschlag bearbeiten";
+            const locInput = document.getElementById("event-edit-location-input");
+            if (locInput) locInput.value = location;
+        }
+        window.openEventEditFromNotification = openEventEditFromNotification;
+        
 
 
 
         async function handleChatNotificationClick(btnEl, notifId, label, action, replyText, conversationId) {
             const cardEl = btnEl.closest('.chat-notification-card');
-            if (action === 'open_composer' || action === 'edit_mail') {
+                        if (action === 'edit_event' || action === 'open_event_editor') {
+                openEventEditFromNotification(notifId, cardEl);
+                return;
+            }
+if (action === 'open_composer' || action === 'edit_mail') {
                 openComposeFromNotification(notifId, cardEl, replyText);
                 return;
             }
@@ -931,8 +1140,9 @@
             if (cardEl) {
                 cardEl.querySelectorAll('.chat-notification-btn').forEach(b => b.disabled = true);
             }
+            const isSendIconBtn = btnEl.classList.contains('chat-notification-send-icon-btn');
             const originalText = btnEl.innerHTML;
-            btnEl.innerHTML = '⏳ Wird ausgeführt...';
+            btnEl.innerHTML = isSendIconBtn ? '<span style="font-size: 1rem; line-height: 1;">⏳</span>' : '⏳ Wird ausgeführt...';
 
             const targetConvId = conversationId || currentConversationId;
 
@@ -961,7 +1171,13 @@
                 }
 
                 btnEl.classList.add('selected');
-                btnEl.innerHTML = '🔘 ' + label + ' (Ausgewählt)';
+                if (isSendIconBtn) {
+                    btnEl.innerHTML = '<span style="font-size: 1.1rem; line-height: 1; color: #11111b; font-weight: bold;">✓</span>';
+                    btnEl.style.background = '#a6e3a1 !important';
+                    btnEl.style.boxShadow = '0 4px 14px rgba(166, 227, 161, 0.4) !important';
+                } else {
+                    btnEl.innerHTML = '🔘 ' + label + ' (Ausgewählt)';
+                }
 
                 if (cardEl) {
                     cardEl.classList.add('dismissed');

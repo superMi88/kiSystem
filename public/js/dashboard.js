@@ -931,12 +931,13 @@
                                 </div>
                                 ${projectTag ? `<div style="display: flex; align-items: center; gap: 4px; margin-top: 2px;">${projectTag}</div>` : ''}
                             </div>
-                            <button type="button" class="pin-btn is-pinned" onclick="toggleTaskStar('${rawId}', event)" title="Aufgabe entpinnen" style="margin-left: auto; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer;">
+                            <span class="pinned-task-indicator" title="Angepinnt" style="margin-left: auto; display: inline-flex; align-items: center; justify-content: center;">
                                 ${googleIcon('keep', '16px', 'fill: #fab387;')}
-                            </button>
+                            </span>
                         </div>
                     `;
-                    html += renderSwipeLinkWrapper(taskItemHtml, t.title || 'Aufgabe', 'task', rawId);
+                    const extraTaskData = `data-task-id="${rawId}" data-task-title="${escTitle.replace(/"/g, '&quot;')}" data-task-notes="${escapeHtml(t.notes || '').replace(/"/g, '&quot;')}" data-task-due="${t.due || ''}" data-task-list="${listTitle}" data-task-recurrence="${t.recurrence || 'none'}" data-task-project-id="${t.projectId || ''}" data-task-status="${t.status || 'in_progress'}" data-task-completed="${!!t.completed}" data-task-starred="true" data-task-planned="${!!(t.isPlanned || t.status === 'suggestion')}"`;
+                    html += renderSwipeLinkWrapper(taskItemHtml, t.title || 'Aufgabe', 'task', rawId, '', '', '', extraTaskData);
                 });
 
                 html += `
