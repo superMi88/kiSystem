@@ -429,10 +429,7 @@ export const mailPlugin: Plugin = {
       }
     });
 
-    const customCategories = await prisma.mailCategory.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, icon: true }
-    });
+    const customCategories = await MailService.getCategories(prisma);
 
     const recentResult = await MailService.getUnifiedEmails(prisma, { limit: 50 });
 

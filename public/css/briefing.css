@@ -265,24 +265,22 @@
     border: 1px solid rgba(249, 226, 175, 0.4);
 }
 
-/* --- Briefing Action Cards: Striche oben/unten statt Box-Umrandung --- */
+/* --- Briefing Action Cards: Ohne störende Trennstriche & kompaktere Abstände --- */
 .briefing-dashboard .chat-notification-card,
 .chat-notification-card.is-briefing-view {
-    border-left: none !important;
-    border-right: none !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     background: transparent !important;
-    padding: 16px 4px !important;
+    padding: 4px 0 !important;
     margin: 0 !important;
+    gap: 6px !important;
     animation: none !important;
 }
 
 .briefing-dashboard .chat-notification-card + .chat-notification-card,
 .chat-notification-card.is-briefing-view + .chat-notification-card.is-briefing-view {
-    border-top: none !important;
+    border: none !important;
 }
 
 .briefing-dashboard .chat-notification-card:hover,
@@ -292,7 +290,7 @@
 
 .chat-notification-card.is-briefing-view .chat-notification-header {
     border-bottom: none !important;
-    padding-bottom: 4px !important;
+    padding-bottom: 2px !important;
 }
 
 /* --- Kreis-Buttons mit Icon für Mail & Agent-Chat --- */

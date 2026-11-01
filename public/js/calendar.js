@@ -792,63 +792,31 @@
                 html += `</div>`;
             }
 
-            // Tagebucheinträge (Diary Entries) for this day!
-            html += `
-                <div class="calendar-diary-section glass-card" style="margin-top: 12px; padding: 12px; border-radius: 12px; border: 1px solid rgba(250, 179, 135, 0.25);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <div style="font-size: 0.76rem; font-weight: 700; color: #fab387; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 5px;">
-                            <span>📝</span> Tagebucheinträge (${diaryEntries.length})
-                        </div>
-                        <button type="button" class="calendar-action-btn diary-btn" onclick="openDiaryModal('${dateStr}')" style="padding: 4px 8px; font-size: 0.72rem;">
-                            + Eintrag
-                        </button>
-                    </div>
-            `;
-
+            // Vereinfachte Tagebucheinträge (werden nur angezeigt, wenn Einträge vorhanden sind)
             if (diaryEntries.length > 0) {
-                html += `<div style="display: flex; flex-direction: column; gap: 8px;">`;
+                html += `<div class="calendar-diary-entries-simple" style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">`;
                 diaryEntries.forEach(e => {
-                    const timeStr = e.createdAt ? new Date(e.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
                     const escTitle = escapeHtml(e.title || "Tagebucheintrag");
                     const diaryContentHtml = `
-                        <div class="diary-entry-card" style="background: rgba(250, 179, 135, 0.06); border: 1px solid rgba(250, 179, 135, 0.2); padding: 9px 12px; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; width: 100%;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <strong style="color: #fab387; font-size: 0.82rem;">${escTitle}</strong>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-size: 0.68rem; opacity: 0.5;">${timeStr ? timeStr + ' Uhr' : ''}</span>
-                                    <button type="button" onclick="event.stopPropagation(); deleteJournalEntry(${e.id}, '${dateStr}')" style="background: none; border: none; color: var(--off); opacity: 0.6; cursor: pointer; padding: 2px 4px; font-size: 0.75rem;" title="Löschen">🗑️</button>
-                                </div>
+                        <div class="diary-entry-card" onclick="openDiaryModalById(${e.id}, '${dateStr}')" style="background: rgba(250, 179, 135, 0.06); border: 1px solid rgba(250, 179, 135, 0.22); padding: 10px 14px; border-radius: 10px; cursor: pointer; transition: background 0.15s, border-color 0.15s; width: 100%; box-sizing: border-box;" title="Klicken zum Bearbeiten">
+                            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                                <span style="font-size: 0.95rem;">📝</span>
+                                <strong style="color: #fab387; font-size: 0.84rem;">${escTitle}</strong>
                             </div>
-                            <div style="white-space: pre-wrap; word-break: break-word; line-height: 1.35; font-size: 0.78rem; opacity: 0.9; color: var(--text);">${escapeHtml(e.content)}</div>
+                            <div style="white-space: pre-wrap; word-break: break-word; line-height: 1.4; font-size: 0.8rem; opacity: 0.9; color: var(--text);">${escapeHtml(e.content)}</div>
                         </div>
                     `;
                     const extraData = `data-journal-id="${e.id}" data-journal-title="${escTitle}" data-journal-date="${dateStr}"`;
-                    html += renderSwipeLinkWrapper(diaryContentHtml, escTitle, 'journal', e.id, '', '', '', extraData);
+                    html += typeof renderSwipeLinkWrapper === 'function' ? renderSwipeLinkWrapper(diaryContentHtml, escTitle, 'journal', e.id, '', '', '', extraData) : diaryContentHtml;
                 });
                 html += `</div>`;
-            } else {
-                html += `
-                    <div style="padding: 10px; text-align: center; color: rgba(255, 255, 255, 0.45); font-size: 0.75rem; border: 1px dashed rgba(250, 179, 135, 0.15); border-radius: 8px;">
-                        Noch keine Tagebucheinträge für ${isToday ? 'heute' : (isPast ? 'diesen Tag' : 'diesen Tag')} eingetragen.
-                    </div>
-                `;
             }
 
-            html += `</div>`;
-
-            // Empty state if completely no events and no entries
+            // Leerer Zustand nur wenn weder Termine, noch Aufgaben, noch Tagebucheinträge vorhanden sind
             if (rawEvents.length === 0 && overdueTasks.length === 0 && diaryEntries.length === 0) {
                 html += `
-                    <div class="calendar-empty-day glass-card" style="margin-top: 10px; padding: 22px 15px; text-align: center; border-radius: 12px; border: 1px dashed rgba(255, 255, 255, 0.12); color: rgba(255, 255, 255, 0.6); font-size: 0.82rem; display: flex; flex-direction: column; align-items: center; gap: 10px;">
-                        <div>✨ Keine Termine oder Aufgaben für diesen Tag vorhanden.</div>
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
-                            <button type="button" class="nav-btn" onclick="openEventEditModal(null, '', '${dateStr}T10:00:00', '${dateStr}T11:00:00', false, '', '', false, '${dateStr}')" style="padding: 6px 12px; font-size: 0.75rem;">
-                                + Termin erstellen
-                            </button>
-                            <button type="button" class="nav-btn" onclick="openDiaryModal('${dateStr}')" style="padding: 6px 12px; font-size: 0.75rem; color: #fab387; border-color: rgba(250, 179, 135, 0.3);">
-                                + Tagebuch schreiben
-                            </button>
-                        </div>
+                    <div class="calendar-empty-day glass-card" style="margin-top: 10px; padding: 22px 15px; text-align: center; border-radius: 12px; border: 1px dashed rgba(255, 255, 255, 0.12); color: rgba(255, 255, 255, 0.6); font-size: 0.82rem;">
+                        ✨ Keine Termine oder Aufgaben für diesen Tag vorhanden.
                     </div>
                 `;
             }

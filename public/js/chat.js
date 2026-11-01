@@ -113,7 +113,10 @@
             if (!text) return "";
 
             const codeBlocks = [];
-            // 1. Extract triple-backtick code blocks using safe tokens without underscores
+            const inlineCodes = [];
+            const actionBlocks = [];
+
+            // 1. Triple-backtick Code-Blöcke vorab schützen
             let processed = text.replace(/```([a-zA-Z0-9_\-#+.]*)\r?\n?([\s\S]*?)```/g, (match, lang, code) => {
                 const placeholder = `@@@CODEBLOCK${codeBlocks.length}@@@`;
                 codeBlocks.push({ lang: (lang || '').trim() || 'text', code: code.replace(/^\n+|\n+$/g, '') });
@@ -124,9 +127,37 @@
             processed = processed.replace(/_CODEBLOCK\d+_/g, '');
             processed = processed.replace(/___CODE_BLOCK_\d+___/g, '');
 
+            // 2. Ausgeführte Aktionen (Spoiler-Accordion) vorab erfassen, bevor andere Markdown-Regeln greifen
+            const actionsRegex = /(?:^|\n)(?:>|&gt;)\s*⚙️\s*\*{0,2}Ausgeführte Aktionen \((\d+)\)\*{0,2}[^\n]*\r?\n*\|\|\r?\n*([\s\S]*?)\r?\n*\|\|/gi;
+            processed = processed.replace(actionsRegex, (m, count, inner) => {
+                const placeholder = `@@@ACTIONSDETAILS${actionBlocks.length}@@@`;
+                actionBlocks.push({ count, inner: inner.trim() });
+                return `\n${placeholder}\n`;
+            });
+
+            // 3. Inline Code-Blöcke (`code`) schützen, damit Underscores/Asterisks darin nicht als Markdown interpretiert werden
+            processed = processed.replace(/`([^`\r\n]+)`/g, (match, code) => {
+                const placeholder = `@@@INLINECODE${inlineCodes.length}@@@`;
+                inlineCodes.push(code);
+                return placeholder;
+            });
+
+            // 4. Listen-Punkte am Zeilenanfang (`* ` oder `- `) zu echtem Aufzählungszeichen '• ' machen,
+            // damit führende Asterisks nicht fälschlicherweise als kursiv geparst werden
+            processed = processed.replace(/^[*-]\s+(.+)$/gm, '• $1');
+
+            // 5. HTML Escaping
             let html = escapeHtml(processed);
+
+            // 6. Überschriften (###, ##, #)
+            html = html.replace(/^### (.*$)/gim, '<h4 style="margin: 10px 0 4px 0; font-size: 0.98rem; font-weight: 700; color: #cdd6f4;">$1</h4>');
+            html = html.replace(/^## (.*$)/gim, '<h3 style="margin: 12px 0 6px 0; font-size: 1.05rem; font-weight: 700; color: #ffffff;">$1</h3>');
+            html = html.replace(/^# (.*$)/gim, '<h2 style="margin: 14px 0 6px 0; font-size: 1.15rem; font-weight: 800; color: #ffffff;">$1</h2>');
+
+            // 7. Horizontale Trennlinie (--- oder ***)
+            html = html.replace(/^(\s*[-*_]{3,}\s*)$/gim, '<hr style="border: none; border-top: 1px solid rgba(255, 255, 255, 0.12); margin: 12px 0;">');
             
-            // Entity-Links: [Label](app://type/id)
+            // 8. Entity-Links: [Label](app://type/id)
             const linkRegex = /\[([^\]]+)\]\((app:\/\/([a-zA-Z0-9_\-]+)\/([a-zA-Z0-9_\-:]+))\)/g;
             const fallbackLinkConfigs = {
                 day: { icon: '📅', color: 'rgba(137, 180, 250, 0.15)', borderColor: '#89b4fa' },
@@ -136,39 +167,65 @@
                 file: { icon: '📁', color: 'rgba(249, 226, 175, 0.15)', borderColor: '#f9e2af' }
             };
             html = html.replace(linkRegex, (match, label, url, type, id) => {
-                const config = entityConfigs[type] || fallbackLinkConfigs[type] || { icon: '🔗', color: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' };
+                const config = (typeof entityConfigs !== 'undefined' && entityConfigs[type]) || fallbackLinkConfigs[type] || { icon: '🔗', color: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' };
                 return `<span class="entity-link entity-${type}" data-type="${type}" data-id="${id}" style="background: ${config.color}; border: 1px solid ${config.borderColor}; color: ${config.borderColor}; cursor: pointer;" onclick="handleEntityClick(event, '${type}', '${id}')"><span>${config.icon}</span>${label}</span>`;
             });
 
-            // Bold (**text**) -> Render slightly larger and bold for a premium look
+            // 9. Markdown Web-Links: [Label](https://... oder http://...)
+            const webLinkRegex = /\[([^\]]+)\]\(((?:https?:\/\/)[^\s\)]+)\)/g;
+            html = html.replace(webLinkRegex, (match, label, url) => {
+                return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="chat-web-link">${label}</a>`;
+            });
+
+            // 10. Freistehende URLs (sofern nicht bereits in einem Link oder Attribut)
+            html = html.replace(/(^|[^"'>=\/])(https?:\/\/[^\s<)]+)/g, (match, prefix, url) => {
+                return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer" class="chat-web-link">${url}</a>`;
+            });
+
+            // 11. Fett (**text**) -> Render slightly larger and bold for a premium look
             html = html.replace(/\*\*([\s\S]+?)\*\*/g, '<strong style="font-weight: 800; font-size: 1.05em; color: #ffffff;">$1</strong>');
-            // Italic (*text* or _text_)
+
+            // 12. Kursiv (*text* oder freistehende _text_)
             html = html.replace(/\*([\s\S]+?)\*/g, '<em>$1</em>');
-            html = html.replace(/_([\s\S]+?)_/g, '<em>$1</em>');
-            // Inline Code (`code`)
-            html = html.replace(/`([^`]+)`/g, '<code style="background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.9em; color: var(--accent);">$1</code>');
-            // Newlines to <br>
+            // Nur isolierte Underscores _text_ matchen, NIEMALS mitten in Wörtern (wie google_suche) oder URLs!
+            html = html.replace(/(^|[\s(>])_([^_]+)_(?=[\s).,:;!?<]|$)/g, '$1<em>$2</em>');
+
+            // 13. Allgemeine Spoilers || ... || unterstützen
+            html = html.replace(/\|\|([\s\S]+?)\|\|/g, '<span class="chat-spoiler" onclick="this.classList.toggle(\'revealed\')" title="Klicken zum Aufklappen">$1</span>');
+
+            // 14. Newlines to <br>
             html = html.replace(/\n/g, '<br>');
 
-            // ⚙️ Ausgeführte Aktionen Spoiler in interaktives HTML-Accordion verwandeln
-            const actionsSpoilerRegex = /&gt;\s*⚙️\s*<strong[^>]*>Ausgeführte Aktionen \((\d+)\)<\/strong>\s*<em>\(Klicken zum Aufklappen\)<\/em><br>\|\|<br>([\s\S]*?)<br>\|\|/g;
-            html = html.replace(actionsSpoilerRegex, (m, count, inner) => {
-                return `
+            // 15. Actions Accordion wieder einsetzen
+            actionBlocks.forEach((ab, idx) => {
+                const placeholder = `@@@ACTIONSDETAILS${idx}@@@`;
+                const innerLines = ab.inner.split('\n').map(l => {
+                    const escaped = escapeHtml(l.trim());
+                    return escaped.replace(/`([^`]+)`/g, '<code style="background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.9em; color: var(--accent);">$1</code>');
+                }).filter(Boolean).join('<br>');
+
+                const detailsHtml = `
                     <details class="chat-actions-details">
                         <summary class="chat-actions-summary">
                             <span class="chat-actions-icon">⚙️</span>
-                            <span class="chat-actions-title">Ausgeführte Aktionen (${count})</span>
+                            <span class="chat-actions-title">Ausgeführte Aktionen (${ab.count})</span>
                             <span class="chat-actions-hint">Klicken zum Aufklappen</span>
                         </summary>
-                        <div class="chat-actions-body">${inner}</div>
+                        <div class="chat-actions-body">${innerLines}</div>
                     </details>
                 `;
+                html = html.split(placeholder).join(detailsHtml);
             });
 
-            // Allgemeine Spoilers || ... || unterstützen
-            html = html.replace(/\|\|([\s\S]+?)\|\|/g, '<span class="chat-spoiler" onclick="this.classList.toggle(\'revealed\')" title="Klicken zum Aufklappen">$1</span>');
+            // 16. Inline Code (`code`) wieder einsetzen
+            inlineCodes.forEach((code, idx) => {
+                const placeholder = `@@@INLINECODE${idx}@@@`;
+                const cleanCode = escapeHtml(code);
+                const codeHtml = `<code style="background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.9em; color: var(--accent);">${cleanCode}</code>`;
+                html = html.split(placeholder).join(codeHtml);
+            });
 
-            // Re-insert code blocks with syntax wrapper and copy button
+            // 17. Re-insert code blocks with syntax wrapper and copy button
             codeBlocks.forEach((cb, idx) => {
                 const placeholder = `@@@CODEBLOCK${idx}@@@`;
                 const cleanLang = escapeHtml(cb.lang || 'code');
@@ -848,13 +905,13 @@
                                             ? `<div class="mail-draft-von-row" data-account-id="${rd.accountId || ''}" style="color: #cdd6f4;"><strong style="color: #89b4fa;">Von:</strong> <span style="color: #ffffff;">${escapeHtml(fromDisplay)}</span></div>`
                                             : `<div class="mail-draft-von-row" data-account-id="${rd.accountId || ''}" data-empty="true" style="display: none; color: #cdd6f4;"></div>`
                                         }
-                                        ${rd.to ? `<div><strong style="color: #89b4fa;">An:</strong> <span style="color: #ffffff;">${escapeHtml(rd.to)}</span></div>` : ''}
-                                        ${rd.subject ? `<div><strong style="color: #89b4fa;">Betreff:</strong> <span style="color: #ffffff; font-weight: 600;">${escapeHtml(rd.subject)}</span></div>` : ''}
+                                        ${rd.to ? `<div class="mail-draft-to-row"><strong style="color: #89b4fa;">An:</strong> <span class="mail-draft-to-val" style="color: #ffffff;">${escapeHtml(rd.to)}</span></div>` : `<div class="mail-draft-to-row" style="display: none;"><strong style="color: #89b4fa;">An:</strong> <span class="mail-draft-to-val" style="color: #ffffff;"></span></div>`}
+                                        ${rd.subject ? `<div class="mail-draft-subject-row"><strong style="color: #89b4fa;">Betreff:</strong> <span class="mail-draft-subject-val" style="color: #ffffff; font-weight: 600;">${escapeHtml(rd.subject)}</span></div>` : `<div class="mail-draft-subject-row" style="display: none;"><strong style="color: #89b4fa;">Betreff:</strong> <span class="mail-draft-subject-val" style="color: #ffffff; font-weight: 600;"></span></div>`}
                                     </div>
                                 </div>
                                 ${mailTopActions}
                             </div>
-                            ${rd.body ? `<div style="font-size: 0.84rem; line-height: 1.6; color: #ffffff; white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; padding: 6px 0 10px 0; ${hasBottomBar ? 'border-bottom: 1px solid rgba(255, 255, 255, 0.08);' : ''} width: 100%;">${escapeHtml(rd.body)}</div>` : ''}
+                            <div class="mail-draft-body-val" style="font-size: 0.84rem; line-height: 1.6; color: #ffffff; white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; padding: 6px 0 10px 0; ${hasBottomBar ? 'border-bottom: 1px solid rgba(255, 255, 255, 0.08);' : ''} width: 100%;">${escapeHtml(rd.body || '')}</div>
                             ${mailBottomRow}
                         </div>
                     `;
@@ -899,15 +956,13 @@
             }
 
             const briefingCardStyle = `
-                border-left: none !important;
-                border-right: none !important;
-                border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+                border: none !important;
                 border-radius: 0 !important;
                 box-shadow: none !important;
                 background: transparent !important;
-                padding: 16px 4px !important;
+                padding: 4px 0 !important;
                 margin: 0 !important;
+                gap: 6px !important;
                 text-align: left !important;
             `;
 
@@ -1029,6 +1084,20 @@
                     body = previewBody.innerText.trim();
                 }
             }
+            // Erst aus den strukturierten Card-Elementen lesen
+            if (!to && cardEl) {
+                const toEl = cardEl.querySelector('.mail-draft-to-val');
+                if (toEl && toEl.innerText.trim()) to = toEl.innerText.trim();
+            }
+            if (!subject && cardEl) {
+                const subEl = cardEl.querySelector('.mail-draft-subject-val');
+                if (subEl && subEl.innerText.trim()) subject = subEl.innerText.trim();
+            }
+            if (!body && cardEl) {
+                const bodyEl = cardEl.querySelector('.mail-draft-body-val') || cardEl.querySelector('.action-preview-box div[style*="white-space: pre-wrap"]');
+                if (bodyEl && bodyEl.innerText.trim()) body = bodyEl.innerText.trim();
+            }
+
             if (!body && rawMsg) {
                 if (rawMsg.includes('--------------------------------------------------')) {
                     const parts = rawMsg.split('--------------------------------------------------');
@@ -1036,7 +1105,12 @@
                         body = parts[1].replace(/\*\*Absender[^\n]+\n/g, '').replace(/\*\*Empf[^\n]+\n/g, '').replace(/\*\*Betreff[^\n]+\n/g, '').trim();
                     }
                 }
-                if (!body) body = rawMsg;
+                if (!body) {
+                    // Filter out meta header lines from raw text
+                    body = rawMsg
+                        .replace(/^(?:Von|An|Betreff|Empfänger|🤖)[^\n]*\n?/gim, '')
+                        .trim();
+                }
             }
 
             if (attachments.length === 0 && rawMsg) {
@@ -1060,6 +1134,7 @@
                 accountId = window.systemMailAccounts[0].id;
             }
 
+            window.currentEditCardElement = cardEl;
             if (typeof openMailComposeModal === 'function') {
                 openMailComposeModal(replyToId, accountId, {
                     to,
@@ -1067,7 +1142,9 @@
                     body,
                     attachments,
                     accountId,
-                    notificationId: notifId
+                    notificationId: notifId,
+                    conversationId: notif?.conversationId || (typeof currentConversationId !== 'undefined' ? currentConversationId : null),
+                    cardEl: cardEl
                 });
             }
         }
@@ -1245,9 +1322,11 @@ if (action === 'open_composer' || action === 'edit_mail') {
             msg.setAttribute('data-msg-text', text || '');
 
             // Swipe indicator for replying
+            // Swipe indicator for replying / linking
             const swipeIndicator = document.createElement('div');
             swipeIndicator.className = 'message-swipe-reply-indicator';
             swipeIndicator.textContent = '↩️';
+            swipeIndicator.textContent = '🔗';
             msg.appendChild(swipeIndicator);
 
             // Render reply quote if replying to a message
@@ -1604,6 +1683,14 @@ if (action === 'open_composer' || action === 'edit_mail') {
              addMessage(userDisplayMessage, true, null, attachmentsToSend, replyToSend);
              userInput.value = '';
              autoResizeInput();
+             if (userInput) {
+                 userInput.focus();
+                 setTimeout(() => {
+                     if (userInput && document.activeElement !== userInput) {
+                         userInput.focus();
+                     }
+                 }, 20);
+             }
 
              // Construct exact text to send to the backend
              let textToSend = text;
@@ -1639,6 +1726,7 @@ if (action === 'open_composer' || action === 'edit_mail') {
             const thinkingToolsList = thinkingDiv.querySelector('.thinking-tools-list');
 
             const toolFriendlyNames = {
+                'google_suche': 'Google Suche',
                 'suche_im_gedaechtnis': 'Semantische Suche im Gedächtnis',
                 'hole_person_info': 'Profil & Fakten abrufen',
                 'aktualisiere_person_biografie': 'Biografie aktualisieren',
@@ -1869,6 +1957,10 @@ if (action === 'open_composer' || action === 'edit_mail') {
 
 // Chat Send Button & Input Listeners
 if (sendBtn) {
+    sendBtn.addEventListener('mousedown', (e) => {
+        // Verhindert, dass der Klick auf Absenden das Textfeld defokussiert
+        e.preventDefault();
+    });
     sendBtn.onclick = sendMessage;
 }
 if (userInput) {

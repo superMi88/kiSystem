@@ -91,7 +91,7 @@
 
             let html = `
                 <div class="arbeitstisch-dashboard briefing-dashboard">
-                    <div style="margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="margin-bottom: 6px; display: flex; flex-direction: column; gap: 6px;">
                         <!-- Agent Filter Bar (Nur Profilbilder / Avatare) -->
                         <div class="briefing-agent-filter-wrapper" id="briefing-agent-filter-wrapper" style="padding-top: 0; display: ${isFilterOpen ? 'block' : 'none'};">
                             <div class="briefing-agent-filter-bar">
@@ -138,7 +138,7 @@
                         </div>
 
                     <!-- Aktive Rückfragen Tab -->
-                    <div id="briefing-section-active" style="display: ${currentTab === 'active' ? 'flex' : 'none'}; flex-direction: column; gap: 0;">
+                    <div id="briefing-section-active" style="display: ${currentTab === 'active' ? 'flex' : 'none'}; flex-direction: column; gap: 4px;">
             `;
 
             if (filteredActiveNotifs.length > 0) {
@@ -185,7 +185,7 @@
                     </div>
 
                     <!-- Historie / Erledigt Tab -->
-                    <div id="briefing-section-history" style="display: ${currentTab === 'history' ? 'flex' : 'none'}; flex-direction: column; gap: 0;">
+                    <div id="briefing-section-history" style="display: ${currentTab === 'history' ? 'flex' : 'none'}; flex-direction: column; gap: 4px;">
             `;
 
             if (filteredHistoryNotifs.length > 0) {

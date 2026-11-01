@@ -283,6 +283,34 @@ app.get("/api/notifications/:id", async (req, res) => {
   }
 });
 
+app.post("/api/notifications", async (req, res) => {
+  try {
+    const { title, message, reasoning, actionData, type, priority, buttons, conversationId, sourceType, sourceId, agentName, agentAvatar, agentColor } = req.body;
+    const notif = await prisma.agentNotification.create({
+      data: {
+        title: title || "Benachrichtigung",
+        message: message || "",
+        reasoning: reasoning || null,
+        agentName: agentName || "Haupt-Assistent",
+        agentAvatar: agentAvatar || "🤖",
+        agentColor: agentColor || "#cba6f7",
+        actionData: actionData || null,
+        type: type || "action_required",
+        priority: priority || "normal",
+        buttons: buttons || [
+          { label: "Ja, Antwort senden", action: "execute_action", style: "primary" }
+        ],
+        conversationId: conversationId || null,
+        sourceType: sourceType || "mail",
+        sourceId: sourceId ? String(sourceId) : null
+      }
+    });
+    res.json(notif);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.patch("/api/notifications/:id", async (req, res) => {
   try {
     const notifId = Number(req.params.id);
@@ -994,6 +1022,23 @@ const handleProjectPin = async (req: any, res: any) => {
 app.post("/api/projects/:id/star", handleProjectPin);
 app.post("/api/projects/:id/pin", handleProjectPin);
 
+app.get("/api/projects/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const project = await prisma.project.findUnique({
+      where: { id },
+      include: {
+        tasks: { where: { isDeleted: false }, orderBy: [{ isStarred: "desc" }, { createdAt: "desc" }] },
+        notes: { where: { isDeleted: false }, orderBy: { updatedAt: "desc" } }
+      }
+    });
+    if (!project) return res.status(404).json({ error: "Projekt nicht gefunden." });
+    res.json(project);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post("/api/projects/:id/categories", async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -1164,6 +1209,51 @@ app.delete("/api/journal/entries/:id", async (req, res) => {
     res.json({ success: true, message: "Tagebucheintrag gelöscht." });
   } catch (e: any) {
     console.error("Fehler beim Löschen des Tagebucheintrags:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/api/journal/entries/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { title, content, date } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: "content ist erforderlich." });
+    }
+    const updateData: any = {
+      title: title || null,
+      content: content.trim()
+    };
+    if (date) {
+      updateData.date = parseLocalDate(date);
+    }
+
+    const embeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" }, { apiVersion: "v1beta" });
+    try {
+      const result = await embeddingModel.embedContent(content.trim());
+      const embedding = result.embedding.values;
+      if (embedding && embedding.length > 0) {
+        await prisma.$queryRawUnsafe(
+          `UPDATE "DiaryEntry" SET title = $1, content = $2, embedding = $3::vector, "updatedAt" = NOW() WHERE id = $4`,
+          updateData.title,
+          updateData.content,
+          `[${embedding.join(",")}]`,
+          id
+        );
+        const updated = await prisma.diaryEntry.findUnique({ where: { id } });
+        return res.json({ success: true, entry: updated });
+      }
+    } catch (embErr) {
+      console.warn("Embedding-Update fehlgeschlagen:", embErr);
+    }
+
+    const entry = await prisma.diaryEntry.update({
+      where: { id },
+      data: updateData
+    });
+    res.json({ success: true, entry });
+  } catch (e: any) {
+    console.error("Fehler beim Bearbeiten des Tagebucheintrags:", e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -2903,13 +2993,14 @@ app.get("/settings", (req, res) => {
 });
 
 app.post("/settings", (req, res) => {
-  const { hotkey, disabledPlugins, autostart, aiModel, agentSettings } = req.body;
+  const { hotkey, disabledPlugins, autostart, aiModel, googleSearchGrounding, agentSettings } = req.body;
   const current = getSettings();
   const updated = {
     hotkey: hotkey !== undefined ? hotkey : current.hotkey,
     disabledPlugins: [], // Plugins sind immer aktiv
     autostart: autostart !== undefined ? autostart : current.autostart,
     aiModel: aiModel !== undefined ? aiModel : current.aiModel,
+    googleSearchGrounding: googleSearchGrounding !== undefined ? Boolean(googleSearchGrounding) : (current.googleSearchGrounding !== false),
     agentSettings: agentSettings !== undefined ? agentSettings : current.agentSettings
   };
   saveSettings(updated);
@@ -3092,15 +3183,22 @@ app.post("/chat", async (req, res) => {
     const tzName = timeCtx.tzName;
 
     const userModel = getSettings().aiModel;
-    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-3.8-flash";
+    const groundingEnabled = getSettings().googleSearchGrounding !== false;
+    const chatTools: any[] = [{ functionDeclarations: pluginManager.getGeminiTools() }];
+    if (groundingEnabled) {
+      chatTools.push({ googleSearch: {} });
+    }
+
     const model = genAI.getGenerativeModel({
       model: modelName,
-      tools: [{ functionDeclarations: pluginManager.getGeminiTools() } as any],
+      tools: chatTools as any,
       toolConfig: {
         functionCallingConfig: {
           mode: FunctionCallingMode.AUTO
-        }
-      },
+        },
+        includeServerSideToolInvocations: true
+      } as any,
       generationConfig: {
         thinkingConfig: {
           thinkingBudget: 0
@@ -3123,6 +3221,11 @@ ZEITZONEN- & UHRZEIT-REGEL (STRENGSTE PFLICHT):
     - Entweder als reine Uhrzeit: z. B. '16:00' bzw. '16:08'
     - Oder als lokales ISO-Datum OHNE 'Z': z. B. '${todayIso}T16:00:00' (oder mit deutschem Offset '${todayIso}T16:00:00${offsetStr}').
 - Beziehe dich in deinen Antworten immer auf diese genauen deutschen Uhrzeiten.
+
+INTERNET- & LIVE-SUCHE (GOOGLE SEARCH GROUNDING):
+- Du hast Zugriff auf die integrierte Live-Google-Suche (Google Search Grounding).
+- Wenn der Benutzer nach aktuellen Informationen, Wetter, Nachrichten, Sportergebnissen, Öffnungszeiten, Ereignissen, Recherchen oder externem Wissen fragt, führe automatisch eine Google-Suche durch.
+- Nutze die Suchergebnisse, um präzise, aktuelle und verlässliche Antworten zu liefern.
 
 WERKZEUGAUFRUFE (TOOLS) - OBERSTE REGEL:
 - Wenn der Benutzer eine Aktion wünscht (z.B. Aufgabe erstellen, Mails anzeigen/holen, Timer/Wecker stellen, Projekt erstellen, Termin eintragen, Notiz speichern usw.), rufe das passende Werkzeug SOFORT als Function Call auf. Antworte NICHT nur mit Text oder leeren Floskeln, sondern führe die Aktion direkt aus!
@@ -3531,25 +3634,38 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
       try {
         nextStep = await chat.sendMessage(functionResponses);
       } catch (chatSendErr: any) {
-        console.warn(`Fehler beim Senden der Function-Responses mit Modell '${modelName}':`, chatSendErr.message);
-        if (modelName !== "gemini-2.5-flash") {
-          console.log("Führe automatischen Fallback auf 'gemini-2.5-flash' aus...");
-          try {
-            const fallbackModel = genAI.getGenerativeModel({
-              model: "gemini-2.5-flash",
-              tools: [{ functionDeclarations: pluginManager.getGeminiTools() } as any],
-              toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.AUTO } },
-              generationConfig: { thinkingConfig: { thinkingBudget: 0 } } as any
-            });
-            const fallbackChat = fallbackModel.startChat({ history: chatHistory });
-            await fallbackChat.sendMessage(promptParts);
-            nextStep = await fallbackChat.sendMessage(functionResponses);
-          } catch (fallbackErr: any) {
-            console.error("Fallback ebenfalls fehlgeschlagen:", fallbackErr.message);
-            throw chatSendErr;
+        if (chatSendErr.message && chatSendErr.message.includes("Role 'function' is not supported")) {
+          (chat as any)._history.push({
+            role: "user",
+            parts: functionResponses
+          });
+          nextStep = await model.generateContent({
+            contents: (chat as any)._history
+          });
+          if (nextStep.response && nextStep.response.candidates && nextStep.response.candidates[0] && nextStep.response.candidates[0].content) {
+            (chat as any)._history.push(nextStep.response.candidates[0].content);
           }
         } else {
-          throw chatSendErr;
+          console.warn(`Fehler beim Senden der Function-Responses mit Modell '${modelName}':`, chatSendErr.message);
+          if (modelName !== "gemini-3.8-flash") {
+            console.log("Führe automatischen Fallback auf 'gemini-3.8-flash' aus...");
+            try {
+              const fallbackModel = genAI.getGenerativeModel({
+                model: "gemini-3.8-flash",
+                tools: chatTools as any,
+                toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.AUTO }, includeServerSideToolInvocations: true } as any,
+                generationConfig: { thinkingConfig: { thinkingBudget: 0 } } as any
+              });
+              const fallbackChat = fallbackModel.startChat({ history: chatHistory });
+              await fallbackChat.sendMessage(promptParts);
+              nextStep = await fallbackChat.sendMessage(functionResponses);
+            } catch (fallbackErr: any) {
+              console.error("Fallback ebenfalls fehlgeschlagen:", fallbackErr.message);
+              throw chatSendErr;
+            }
+          } else {
+            throw chatSendErr;
+          }
         }
       }
       currentResponse = nextStep.response;
@@ -3588,6 +3704,37 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
     );
     if (hasMailDraft && aiText) {
       aiText = aiText.replace(/\*{0,2}E-Mail-Inhalt:?\*{0,2}\s*(?:\r?\n\s*>[^\n]*)+/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+    }
+
+    // Google Search Grounding Metadaten erfassen (Quellen & Suchanfragen)
+    const groundingMeta = currentResponse?.candidates?.[0]?.groundingMetadata;
+    if (groundingMeta) {
+      if (groundingMeta.webSearchQueries?.length) {
+        for (const query of groundingMeta.webSearchQueries) {
+          activeTools.push({ name: "google_suche", args: { anfrage: query } });
+          executedTools.push({
+            name: "google_suche",
+            args: { anfrage: query },
+            status: "success",
+            message: `Web-Suche nach: "${query}"`
+          });
+        }
+      }
+      if (groundingMeta.groundingChunks?.length) {
+        const sources: string[] = [];
+        const seenUrls = new Set<string>();
+        for (const chunk of groundingMeta.groundingChunks) {
+          const web = (chunk as any).web;
+          if (web?.uri && !seenUrls.has(web.uri)) {
+            seenUrls.add(web.uri);
+            const title = web.title || "Quelle";
+            sources.push(`[${title}](${web.uri})`);
+          }
+        }
+        if (sources.length > 0 && !aiText.includes("🔍 **Quellen:**")) {
+          aiText = `${aiText.trim()}\n\n🔍 **Quellen:** ${sources.slice(0, 5).join(' • ')}`;
+        }
+      }
     }
 
     if (executedTools.length > 0) {

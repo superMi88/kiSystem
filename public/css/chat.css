@@ -429,6 +429,7 @@ input:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--acc
 .message-swipe-reply-indicator {
     position: absolute;
     right: -45px;
+    left: -45px;
     top: 50%;
     transform: translateY(-50%) scale(0.8);
     width: 34px;
@@ -979,6 +980,18 @@ input:not([type="checkbox"]):not([type="radio"]):focus { border-color: var(--acc
     background: rgba(255, 255, 255, 0.08);
     color: inherit;
     user-select: text;
+}
+
+.chat-web-link {
+    color: #89b4fa;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    word-break: break-all;
+    transition: color 0.15s ease, opacity 0.15s ease;
+}
+.chat-web-link:hover {
+    color: #b4befe;
+    opacity: 0.9;
 }
 
 /* =========================================================================

@@ -2931,7 +2931,10 @@
             const autostart = autostartCheckbox ? autostartCheckbox.checked : false;
 
             const modelSelect = document.getElementById('settings-ai-model');
-            const aiModel = modelSelect ? modelSelect.value : 'gemini-2.5-flash';
+            const aiModel = modelSelect ? modelSelect.value : 'gemini-3.8-flash';
+
+            const googleSearchCb = document.getElementById('settings-google-search');
+            const googleSearchGrounding = googleSearchCb ? googleSearchCb.checked : true;
             
             try {
                 const res = await fetch(getApiUrl('/settings'), {
@@ -2942,6 +2945,7 @@
                         disabledPlugins: disabledPlugins,
                         autostart: autostart,
                         aiModel: aiModel,
+                        googleSearchGrounding: googleSearchGrounding,
                         agentSettings: collectAgentSettingsFromUI()
                     })
                 });
@@ -3682,34 +3686,75 @@
         });
 
         // Diary Modal Management
-        window.openDiaryModal = function(dateStr = '', title = '', content = '') {
+        window.openDiaryModal = function(dateStr = '', title = '', content = '', id = null) {
             const modal = document.getElementById('diary-modal');
             if (!modal) return;
             const dateInput = document.getElementById('diary-date-input');
+            const idInput = document.getElementById('diary-id-input');
             const titleInput = document.getElementById('diary-title-input');
             const contentInput = document.getElementById('diary-content-input');
+            const modalTitle = document.getElementById('diary-modal-title');
+            const deleteBtn = document.getElementById('diary-delete-btn');
+
             const targetDate = dateStr || window.currentCalendarDate || (typeof getLocalDateString === 'function' ? getLocalDateString() : new Date().toISOString().split('T')[0]);
             if (dateInput) dateInput.value = targetDate;
+            if (idInput) idInput.value = id || '';
             if (titleInput) titleInput.value = title || '';
             if (contentInput) {
                 contentInput.value = content || '';
                 setTimeout(() => contentInput.focus(), 60);
             }
+            if (modalTitle) {
+                modalTitle.textContent = id ? '📝 Tagebucheintrag bearbeiten' : '📝 Tagebucheintrag';
+            }
+            if (deleteBtn) {
+                deleteBtn.style.display = id ? 'inline-block' : 'none';
+            }
             modal.style.display = 'block';
             document.body.classList.add('modal-active');
+        };
+
+        window.openDiaryModalById = async function(id, dateStr) {
+            const targetDate = dateStr || window.currentCalendarDate || (typeof getLocalDateString === 'function' ? getLocalDateString() : new Date().toISOString().split('T')[0]);
+            let entry = null;
+            if (window.calendarTimelineCache && window.calendarTimelineCache[targetDate] && Array.isArray(window.calendarTimelineCache[targetDate].diaryEntries)) {
+                entry = window.calendarTimelineCache[targetDate].diaryEntries.find(d => Number(d.id) === Number(id));
+            }
+            if (!entry) {
+                try {
+                    const res = await fetch(getApiUrl(`/api/journal/day-summary?date=${targetDate}`));
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && Array.isArray(data.diaryEntries)) {
+                            entry = data.diaryEntries.find(d => Number(d.id) === Number(id));
+                        }
+                    }
+                } catch (e) {
+                    console.error('Fehler beim Laden des Tagebucheintrags:', e);
+                }
+            }
+            if (entry) {
+                openDiaryModal(targetDate, entry.title, entry.content, entry.id);
+            } else {
+                openDiaryModal(targetDate, '', '', id);
+            }
         };
 
         window.closeDiaryModal = function() {
             const modal = document.getElementById('diary-modal');
             if (modal) modal.style.display = 'none';
+            const idInput = document.getElementById('diary-id-input');
+            if (idInput) idInput.value = '';
             document.body.classList.remove('modal-active');
         };
 
         window.saveDiaryEntry = async function() {
             const dateInput = document.getElementById('diary-date-input');
+            const idInput = document.getElementById('diary-id-input');
             const titleInput = document.getElementById('diary-title-input');
             const contentInput = document.getElementById('diary-content-input');
             const date = dateInput ? dateInput.value : (window.currentCalendarDate || (typeof getLocalDateString === 'function' ? getLocalDateString() : new Date().toISOString().split('T')[0]));
+            const id = idInput && idInput.value ? Number(idInput.value) : null;
             const title = titleInput ? titleInput.value.trim() : '';
             const content = contentInput ? contentInput.value.trim() : '';
             if (!content) {
@@ -3717,8 +3762,10 @@
                 return;
             }
             try {
-                const res = await fetch(getApiUrl('/api/journal/entries'), {
-                    method: 'POST',
+                const url = id ? getApiUrl(`/api/journal/entries/${id}`) : getApiUrl('/api/journal/entries');
+                const method = id ? 'PUT' : 'POST';
+                const res = await fetch(url, {
+                    method,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ date, title, content })
                 });
@@ -3742,3 +3789,157 @@
                 alert('Verbindungsfehler beim Speichern des Tagebucheintrags.');
             }
         };
+
+        window.deleteCurrentDiaryEntry = async function() {
+            const idInput = document.getElementById('diary-id-input');
+            const dateInput = document.getElementById('diary-date-input');
+            const id = idInput && idInput.value ? Number(idInput.value) : null;
+            const date = dateInput ? dateInput.value : (window.currentCalendarDate || '');
+            if (!id) return;
+            if (!confirm('Möchtest du diesen Tagebucheintrag wirklich löschen?')) return;
+            try {
+                const res = await fetch(getApiUrl(`/api/journal/entries/${id}`), { method: 'DELETE' });
+                if (res.ok) {
+                    closeDiaryModal();
+                    if (window.calendarTimelineCache && window.calendarTimelineCache[date]) {
+                        delete window.calendarTimelineCache[date];
+                    }
+                    if (typeof jumpToTimelineDate === 'function') {
+                        await jumpToTimelineDate(date);
+                    }
+                    if (typeof loadTopWidgets === 'function') {
+                        loadTopWidgets();
+                    }
+                } else {
+                    alert('Fehler beim Löschen des Eintrags.');
+                }
+            } catch (e) {
+                console.error('Fehler beim Löschen des Tagebucheintrags:', e);
+            }
+        };
+
+        window.closeDiaryPickerModal = function() {
+            const modal = document.getElementById('diary-picker-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.classList.remove('modal-active');
+        };
+
+        window.openDiaryPickerModal = function(entries, targetDate) {
+            const modal = document.getElementById('diary-picker-modal');
+            const listEl = document.getElementById('diary-picker-list');
+            if (!modal || !listEl) return;
+            listEl.innerHTML = '';
+            entries.forEach(e => {
+                const timeStr = e.createdAt ? new Date(e.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+                const title = e.title || 'Tagebucheintrag';
+                const snippet = (e.content || '').substring(0, 100);
+                const item = document.createElement('div');
+                item.style.cssText = 'padding: 10px 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(250, 179, 135, 0.2); border-radius: 8px; cursor: pointer; transition: background 0.15s;';
+                item.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <strong style="color: #fab387; font-size: 0.85rem;">${escapeHtml(title)}</strong>
+                        <span style="font-size: 0.7rem; opacity: 0.5;">${timeStr ? timeStr + ' Uhr' : ''}</span>
+                    </div>
+                    <div style="font-size: 0.78rem; opacity: 0.8; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(snippet)}</div>
+                `;
+                item.onmouseenter = () => item.style.background = 'rgba(250, 179, 135, 0.12)';
+                item.onmouseleave = () => item.style.background = 'rgba(255,255,255,0.04)';
+                item.onclick = () => {
+                    closeDiaryPickerModal();
+                    openDiaryModal(targetDate, e.title, e.content, e.id);
+                };
+                listEl.appendChild(item);
+            });
+            modal.style.display = 'block';
+            document.body.classList.add('modal-active');
+        };
+
+        window.handleDiaryButtonLongPress = async function() {
+            const targetDate = window.currentCalendarDate || (typeof getLocalDateString === 'function' ? getLocalDateString() : new Date().toISOString().split('T')[0]);
+            
+            let entries = [];
+            if (window.calendarTimelineCache && window.calendarTimelineCache[targetDate] && Array.isArray(window.calendarTimelineCache[targetDate].diaryEntries)) {
+                entries = window.calendarTimelineCache[targetDate].diaryEntries;
+            }
+
+            if (entries.length === 0) {
+                try {
+                    const res = await fetch(getApiUrl(`/api/journal/day-summary?date=${targetDate}`));
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && Array.isArray(data.diaryEntries)) {
+                            entries = data.diaryEntries;
+                        }
+                    }
+                } catch (err) {
+                    console.error('Fehler beim Laden der Tagebucheinträge:', err);
+                }
+            }
+
+            if (entries.length === 0) {
+                alert('Für diesen Tag (' + targetDate + ') ist noch kein Tagebucheintrag vorhanden. Es wird das Formular für einen neuen Eintrag geöffnet.');
+                openDiaryModal(targetDate);
+                return;
+            }
+
+            if (entries.length === 1) {
+                const e = entries[0];
+                openDiaryModal(targetDate, e.title, e.content, e.id);
+                return;
+            }
+
+            openDiaryPickerModal(entries, targetDate);
+        };
+
+        function initHeaderDiaryButtonLongPress() {
+            const btn = document.getElementById('header-calendar-diary-btn');
+            if (!btn) return;
+            if (btn._hasDiaryLongPressInitialized) return;
+            btn._hasDiaryLongPressInitialized = true;
+
+            let pressTimer = null;
+            let isLongPress = false;
+
+            const startPress = (e) => {
+                isLongPress = false;
+                if (pressTimer) clearTimeout(pressTimer);
+                pressTimer = setTimeout(() => {
+                    isLongPress = true;
+                    if (navigator.vibrate) {
+                        try { navigator.vibrate(40); } catch (_) {}
+                    }
+                    window.handleDiaryButtonLongPress();
+                }, 450);
+            };
+
+            const cancelPress = () => {
+                if (pressTimer) {
+                    clearTimeout(pressTimer);
+                    pressTimer = null;
+                }
+            };
+
+            btn.addEventListener('mousedown', startPress);
+            btn.addEventListener('mouseup', cancelPress);
+            btn.addEventListener('mouseleave', cancelPress);
+            btn.addEventListener('touchstart', startPress, { passive: true });
+            btn.addEventListener('touchend', cancelPress);
+            btn.addEventListener('touchcancel', cancelPress);
+
+            btn.addEventListener('click', (e) => {
+                if (isLongPress) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    isLongPress = false;
+                    return;
+                }
+                openDiaryModal(window.currentCalendarDate);
+            });
+        }
+
+        window.initHeaderDiaryButtonLongPress = initHeaderDiaryButtonLongPress;
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initHeaderDiaryButtonLongPress);
+        } else {
+            initHeaderDiaryButtonLongPress();
+        }

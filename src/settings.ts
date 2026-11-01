@@ -115,6 +115,7 @@ export interface Settings {
   disabledTools?: string[];
   autostart?: boolean;
   aiModel?: string;
+  googleSearchGrounding?: boolean;
   agentSettings?: Record<string, AgentPermissionConfig>;
 }
 
@@ -322,6 +323,10 @@ export function getSettings(): Settings {
           parsed.disabledTools = [];
           changed = true;
         }
+        if (parsed.googleSearchGrounding === undefined) {
+          parsed.googleSearchGrounding = true;
+          changed = true;
+        }
         // Plugins sind immer aktiv
         if (parsed.disabledPlugins && parsed.disabledPlugins.length > 0) {
           parsed.disabledPlugins = [];
@@ -343,7 +348,8 @@ export function getSettings(): Settings {
     disabledPlugins: [],
     disabledTools: [],
     autostart: false,
-    aiModel: "gemini-2.5-flash",
+    aiModel: "gemini-3.8-flash",
+    googleSearchGrounding: true,
     agentSettings: { ...DEFAULT_AGENT_SETTINGS }
   };
   

@@ -55,8 +55,8 @@
         }
 
         let html = `
-            < div class="locations-dashboard" >
-                < !--Filter Pills-- >
+            <div class="locations-dashboard">
+                <!-- Filter Pills -->
                 <div class="locations-filter-bar" id="locations-filter-bar" style="display: ${isFilterOpen ? 'flex' : 'none'};">
                     <button type="button" onclick="switchLocationsFilter('all')" class="locations-filter-pill ${filter === 'all' ? 'active' : ''}">
                         <span>✨ Alle</span>
@@ -80,7 +80,7 @@
                     </button>
                 </div>
 
-                <!--Liste der Orte-- >
+                <!-- Liste der Orte -->
             <div class="locations-grid">
                 `;
 
@@ -204,7 +204,7 @@
 
                 html += `
             </div>
-            </div >
+            </div>
             `;
 
         container.innerHTML = html;
@@ -283,11 +283,11 @@
      */
     window.toggleLocationFavorite = async function(id, isFav) {
         try {
-            const res = await fetch(getApiUrl(`/ api / locations / ${ id }/favorite`), {
-            method: 'PUT',
+            const res = await fetch(getApiUrl(`/api/locations/${id}/favorite`), {
+                method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ isFavorite: isFav })
-        });
+                body: JSON.stringify({ isFavorite: isFav })
+            });
         if (res.ok) {
             await refreshLocationsData();
         }

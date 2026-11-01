@@ -608,7 +608,7 @@
                         activeSwipeMessage = null;
                         window.removeEventListener('touchmove', handleSwipeMove);
                         return;
-                    } else if (deltaX < -28 && Math.abs(deltaX) > Math.abs(deltaY) * 2.5) {
+                    } else if (deltaX > 28 && deltaX > Math.abs(deltaY) * 2.0) {
                         isMsgSwipeActive = true;
                         activeSwipeMessage.classList.add('swiping');
                     }
@@ -616,12 +616,13 @@
 
                 if (isMsgSwipeActive) {
                     if (e.cancelable) e.preventDefault();
-                    const clampedOffset = Math.min(0, Math.max(-80, deltaX));
+                    const clampedOffset = Math.max(0, Math.min(80, deltaX));
                     activeSwipeMessage.style.transform = `translateX(${clampedOffset}px)`;
 
                     const indicator = activeSwipeMessage.querySelector('.message-swipe-reply-indicator');
                     if (indicator) {
-                        if (Math.abs(clampedOffset) >= 50) {
+                        indicator.style.opacity = Math.min(1, Math.max(0.15, clampedOffset / 40)).toFixed(2);
+                        if (clampedOffset >= 50) {
                             if (!msgSwipeThresholdCrossed) {
                                 msgSwipeThresholdCrossed = true;
                                 if (navigator.vibrate) navigator.vibrate(20);
@@ -718,7 +719,10 @@
                 msg.style.transform = '';
 
                 const indicator = msg.querySelector('.message-swipe-reply-indicator');
-                if (indicator) indicator.classList.remove('active');
+                if (indicator) {
+                    indicator.classList.remove('active');
+                    indicator.style.opacity = '';
+                }
 
                 if (wasMsgSwiping) {
                     lastSwipeTime = Date.now();

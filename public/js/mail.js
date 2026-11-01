@@ -31,7 +31,11 @@
 
         function filterMailByCategory(category) {
             activeMailCategoryFilter = category && category !== 'all' && category !== 'Alle' ? category : null;
-            loadTopWidgets();
+            if (typeof loadTopWidgets === 'function') {
+                loadTopWidgets();
+            } else if (window.lastMailData && window.lastMailContainer) {
+                renderMailWidget(window.lastMailData, window.lastMailContainer);
+            }
         }
 
 
@@ -43,9 +47,21 @@
                 activeMailAccountFilter = null;
                 activeMailCategoryFilter = null;
             }
-            const container = document.getElementById('widget-mail') || window.lastMailContainer;
-            if (window.lastMailData && container) {
-                renderMailWidget(window.lastMailData, container);
+            const btn = document.getElementById('header-mail-filter-btn');
+            if (btn) {
+                if (window.mailFilterOpen) btn.classList.add('active');
+                else btn.classList.remove('active');
+            }
+            const filterContainer = document.getElementById('mail-filter-container');
+            if (filterContainer) {
+                filterContainer.style.display = window.mailFilterOpen ? 'flex' : 'none';
+            }
+            if (!window.mailFilterOpen) {
+                if (typeof loadTopWidgets === 'function') {
+                    loadTopWidgets();
+                } else if (window.lastMailData && window.lastMailContainer) {
+                    renderMailWidget(window.lastMailData, window.lastMailContainer);
+                }
             }
         };
 
@@ -63,6 +79,9 @@
 
 
         function renderMailWidget(data, container) {
+            window.lastMailData = data;
+            window.lastMailContainer = container;
+
             const accounts = data.accounts || [];
             const rawEmails = data.emails || [];
             const categories = data.categories || [];
@@ -138,17 +157,37 @@
             });
             html += `</div>`;
 
-            // 3. Kategorie-Pills (nur anzeigen wenn benutzerdefinierte Kategorien existieren)
-            if (categories && categories.length > 0) {
+            // 3. Kategorie-Pills
+            // Alle Kategorien aus data.categories und aus den aktuellen E-Mails zusammenfassen
+            const catMap = new Map();
+            (categories || []).forEach(cat => {
+                const name = typeof cat === 'object' ? cat.name : cat;
+                const icon = (typeof cat === 'object' && cat.icon) ? cat.icon : '🏷️';
+                if (name) catMap.set(name.toLowerCase().trim(), { name, icon });
+            });
+            rawEmails.forEach(e => {
+                if (e.category) {
+                    e.category.split(',').forEach(c => {
+                        const trimmed = c.trim();
+                        if (trimmed && !catMap.has(trimmed.toLowerCase())) {
+                            const icon = trimmed.toLowerCase().includes('wichtig') ? '⭐' : (trimmed.toLowerCase().includes('persönlich') || trimmed.toLowerCase().includes('privat') ? '👤' : (trimmed.toLowerCase().includes('termin') ? '📅' : (trimmed.toLowerCase().includes('rechnung') ? '🧾' : (trimmed.toLowerCase().includes('finanz') ? '💰' : (trimmed.toLowerCase().includes('arbeit') ? '💼' : (trimmed.toLowerCase().includes('newsletter') ? '📰' : (trimmed.toLowerCase().includes('spam') ? '🚫' : '🏷️')))))));
+                            catMap.set(trimmed.toLowerCase(), { name: trimmed, icon });
+                        }
+                    });
+                }
+            });
+            const allAvailableCategories = Array.from(catMap.values());
+
+            if (allAvailableCategories.length > 0) {
                 html += `<div style="display: flex; gap: 5px; overflow-x: auto; padding-bottom: 3px; scrollbar-width: none;">`;
                 const isAllCatSelected = activeMailCategoryFilter === null;
                 const allCatStyle = isAllCatSelected ? 'background: rgba(137, 180, 250, 0.25); color: var(--accent); font-weight: bold; border: 1px solid var(--accent);' : 'background: rgba(255,255,255,0.03); color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.06);';
                 html += `<button onclick="filterMailByCategory(null)" class="nav-btn" style="flex: 0 0 auto; height: 26px; font-size: 0.74rem; padding: 0 9px; border-radius: 8px; ${allCatStyle}">🏷️ Alle</button>`;
                 
-                categories.forEach(cat => {
-                    const catName = typeof cat === 'object' ? cat.name : cat;
-                    const catIcon = (typeof cat === 'object' && cat.icon) ? cat.icon : '🏷️';
-                    const isCatSelected = activeMailCategoryFilter === catName;
+                allAvailableCategories.forEach(cat => {
+                    const catName = cat.name;
+                    const catIcon = cat.icon || '🏷️';
+                    const isCatSelected = activeMailCategoryFilter && activeMailCategoryFilter.toLowerCase().trim() === catName.toLowerCase().trim();
                     const catStyle = isCatSelected ? 'background: rgba(137, 180, 250, 0.25); color: var(--accent); font-weight: bold; border: 1px solid var(--accent);' : 'background: rgba(255,255,255,0.03); color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.06);';
                     html += `<button onclick="filterMailByCategory('${escapeHtml(catName)}')" class="nav-btn" style="flex: 0 0 auto; height: 26px; font-size: 0.74rem; padding: 0 9px; border-radius: 8px; ${catStyle}">${catIcon} ${escapeHtml(catName)}</button>`;
                 });
@@ -218,39 +257,22 @@
                         catHtml += `</div>`;
                     }
 
-                    let agentBadgeHtml = '';
+                    // Agent Chat Icon-Button oben rechts (falls Agent Run vorhanden)
+                    let agentChatBtnHtml = '';
                     if (e.agentRunId) {
-                        const runStatus = e.agentRunStatus || 'completed';
-                        const runIcon = runStatus === 'running' ? '⏳' : '💬';
-                        const runText = runStatus === 'running' ? 'Agent aktiv...' : 'Agent-Chat';
-                        agentBadgeHtml = `
-                            <button type="button" class="mail-agent-chat-btn" onclick="openAgentChatForMail(event, ${e.id}, '${e.agentRunId}')" style="padding: 2px 8px; font-size: 0.71rem; font-weight: 600; color: #cba6f7; background: rgba(203, 166, 247, 0.15); border: 1px solid rgba(203, 166, 247, 0.4); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;" title="Agenten-Chatverlauf zu dieser Mail öffnen">
-                                ${runIcon} ${runText}
-                            </button>
-                        `;
-                    } else {
-                        agentBadgeHtml = `
-                            <button type="button" class="mail-agent-chat-btn" onclick="startAgentRunForMailItem(event, ${e.id})" style="padding: 2px 8px; font-size: 0.71rem; font-weight: 600; color: var(--accent); background: rgba(137, 180, 250, 0.1); border: 1px dashed rgba(137, 180, 250, 0.35); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;" title="Agenten-Analyse für diese E-Mail starten">
-                                🤖 KI-Analyse
+                        agentChatBtnHtml = `
+                            <button type="button" class="nav-btn" onclick="openAgentChatForMail(event, ${e.id}, '${e.agentRunId}')" style="width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: rgba(203, 166, 247, 0.15); color: #cba6f7; border: 1px solid rgba(203, 166, 247, 0.4); border-radius: 6px; cursor: pointer; transition: all 0.15s; flex-shrink: 0;" onmouseover="this.style.background='rgba(203, 166, 247, 0.3)'" onmouseout="this.style.background='rgba(203, 166, 247, 0.15)'" title="Agent-Chat öffnen">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                </svg>
                             </button>
                         `;
                     }
 
-                    let agentThoughtHtml = '';
-                    if (e.agentRunSummary) {
-                        const cleanSummary = escapeHtml(e.agentRunSummary.slice(0, 190)) + (e.agentRunSummary.length > 190 ? '...' : '');
-                        agentThoughtHtml = `
-                            <div class="mail-agent-thought-preview" onclick="openAgentChatForMail(event, ${e.id}, '${e.agentRunId || ''}')" style="margin-top: 2px; padding: 5px 8px; background: rgba(203, 166, 247, 0.08); border-radius: 5px; border-left: 2px solid #cba6f7; font-size: 0.74rem; color: #cba6f7; line-height: 1.35; cursor: pointer;" title="Klicken, um den kompletten Chatverlauf anzuzeigen">
-                                🧠 <strong>Gedankengang:</strong> ${cleanSummary} <span style="text-decoration: underline; opacity: 0.85;">(Chat ➔)</span>
-                            </div>
-                        `;
-                    }
-
-                    const metaTagsHtml = (personHtml || catHtml || agentBadgeHtml) ? `
+                    const metaTagsHtml = (personHtml || catHtml) ? `
                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                             ${personHtml}
                             ${catHtml}
-                            ${agentBadgeHtml}
                         </div>
                     ` : '';
 
@@ -268,7 +290,8 @@
                                     <span style="font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 10px; background: rgba(255,255,255,0.05); color: ${accColor}; border: 1px solid ${accColor};" title="Empfangen auf: ${escapeHtml(e.accountEmail)}">
                                         ${accIcon} ${escapeHtml(e.accountEmail)}
                                     </span>
-                                    <span style="font-size: 0.74rem; opacity: 0.6; margin-left: 4px;">${dateStr}</span>
+                                    ${agentChatBtnHtml}
+                                    <span style="font-size: 0.74rem; opacity: 0.6; margin-left: 2px;">${dateStr}</span>
                                 </div>
                             </div>
 
@@ -276,10 +299,8 @@
                                 ${escapeHtml(e.subject || '(Kein Betreff)')}
                             </div>
 
-                            <!-- Person & Kategorie Meta Tags (nur wenn zugewiesen) -->
+                            <!-- Person & Kategorie Meta Tags (nur wenn vorhanden) -->
                             ${metaTagsHtml}
-
-                            ${agentThoughtHtml}
 
                             ${e.snippet ? `<div style="font-size: 0.80rem; opacity: 0.72; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(e.snippet)}</div>` : ''}
                         </div>
@@ -829,9 +850,7 @@
                 const contentEl = document.getElementById('mail-read-content') || bodyEl;
 
                 if (badgeEl) {
-                    badgeEl.innerHTML = `✉️ Empfangen auf: <strong>test@kisystem.app</strong>`;
-                    badgeEl.style.color = '#89b4fa';
-                    badgeEl.style.borderColor = '#89b4fa';
+                    badgeEl.style.display = 'none';
                 }
                 if (personBadgeEl) personBadgeEl.innerHTML = '';
                 if (catContainer) catContainer.innerHTML = '<span style="font-size: 0.68rem; color: var(--accent); background: rgba(137, 180, 250, 0.12); border: 1px solid rgba(137, 180, 250, 0.25); padding: 1px 6px; border-radius: 6px;">🔔 Push Test</span>';
@@ -904,25 +923,10 @@
                     btn.onclick = () => openAgentRunForCurrentMail();
                 });
 
-                // Agent Run Badge im Mail-Header
+                // Agent Run Badge im Mail-Header (oben ausgeblendet, da unten detailliert im Agent-Panel sichtbar)
                 const agentBadgeEl = document.getElementById('mail-read-agent-run-badge');
                 if (agentBadgeEl) {
-                    agentBadgeEl.style.display = 'inline-flex';
-                    if (mail.agentRunId || mail.agentRun) {
-                        const runStatus = mail.agentRun?.status || 'completed';
-                        const statusLabel = runStatus === 'running' ? '⏳ Läuft...' : (runStatus === 'error' ? '❌ Fehler' : '✅ Erledigt');
-                        agentBadgeEl.innerHTML = `
-                            <button type="button" onclick="openAgentRunForCurrentMail()" class="nav-btn" style="padding: 2px 9px; font-size: 0.72rem; background: rgba(203, 166, 247, 0.15); color: #cba6f7; border: 1px solid rgba(203, 166, 247, 0.4); border-radius: 10px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='rgba(203, 166, 247, 0.3)'" onmouseout="this.style.background='rgba(203, 166, 247, 0.15)'" title="Agent Run Chatverlauf öffnen">
-                                🤖 Agent Run (${statusLabel})
-                            </button>
-                        `;
-                    } else {
-                        agentBadgeEl.innerHTML = `
-                            <button type="button" onclick="startAgentRunForCurrentMail()" class="nav-btn" style="padding: 2px 9px; font-size: 0.72rem; background: rgba(137, 180, 250, 0.12); color: var(--accent); border: 1px dashed rgba(137, 180, 250, 0.4); border-radius: 10px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;" onmouseover="this.style.background='rgba(137, 180, 250, 0.25)'" onmouseout="this.style.background='rgba(137, 180, 250, 0.12)'" title="Agent Run für diese E-Mail starten">
-                                🤖 Agent Run starten
-                            </button>
-                        `;
-                    }
+                    agentBadgeEl.style.display = 'none';
                 }
 
                 // Agent-Analyse & Gedankengang Panel
@@ -940,7 +944,12 @@
                         }
                         if (agentChatLink) {
                             agentChatLink.style.display = 'inline-flex';
-                            agentChatLink.innerHTML = '💬 Zum Chatverlauf wechseln ➔';
+                            agentChatLink.title = 'Zum Chatverlauf wechseln';
+                            agentChatLink.innerHTML = `
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                </svg>
+                            `;
                             agentChatLink.onclick = () => openAgentRunForCurrentMail();
                         }
                     } else {
@@ -948,7 +957,12 @@
                         agentReasoningText.innerHTML = `<span style="opacity: 0.75;">Diese E-Mail wurde noch nicht von einem Agenten analysiert.</span>`;
                         if (agentChatLink) {
                             agentChatLink.style.display = 'inline-flex';
-                            agentChatLink.innerHTML = '🤖 Jetzt analysieren lassen';
+                            agentChatLink.title = 'Jetzt von Agent analysieren lassen';
+                            agentChatLink.innerHTML = `
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                </svg>
+                            `;
                             agentChatLink.onclick = () => startAgentRunForCurrentMail();
                         }
                     }
@@ -959,9 +973,7 @@
                 const accIcon = (acc.email || '').toLowerCase().includes('web.de') ? '🟠' : ((acc.email || '').toLowerCase().includes('gmail') ? '🔴' : '✉️');
 
                 if (badgeEl) {
-                    badgeEl.innerHTML = `${accIcon} Empfangen auf: <strong>${escapeHtml(acc.email || '')}</strong>`;
-                    badgeEl.style.color = accColor;
-                    badgeEl.style.borderColor = accColor;
+                    badgeEl.style.display = 'none';
                 }
 
                 // Person Badge
@@ -998,7 +1010,7 @@
                                 const matchedCat = customCats.find(c => c.name.toLowerCase() === catName.toLowerCase());
                                 const icon = (matchedCat && matchedCat.icon) ? matchedCat.icon : '🏷️';
                                 return `
-                                    <span style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.68rem; color: var(--accent); background: rgba(137, 180, 250, 0.12); border: 1px solid rgba(137, 180, 250, 0.25); padding: 1px 6px; border-radius: 6px;">
+                                    <span onclick="filterMailByCategory('${escapeHtml(catName)}'); closeMailReadModal();" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.72rem; color: var(--accent); background: rgba(137, 180, 250, 0.12); border: 1px solid rgba(137, 180, 250, 0.25); padding: 2px 7px; border-radius: 6px; cursor: pointer; transition: all 0.15s;" onmouseover="this.style.background='rgba(137, 180, 250, 0.25)'" onmouseout="this.style.background='rgba(137, 180, 250, 0.12)'" title="Nach '${escapeHtml(catName)}' filtern">
                                         ${icon} ${escapeHtml(catName)}
                                     </span>
                                 ` ;
@@ -1950,6 +1962,10 @@
         };
 
         async function openMailComposeModal(replyToId = null, defaultAccountId = null, initialData = null) {
+            window.mailComposeIsEditMode = Boolean(initialData);
+            window.currentEditCardData = initialData || null;
+            if (initialData?.cardEl) window.currentEditCardElement = initialData.cardEl;
+
             const modal = document.getElementById('mail-compose-modal');
             const titleEl = document.getElementById('mail-compose-title');
             const accSelect = document.getElementById('mail-compose-account-select');
@@ -2058,6 +2074,9 @@
             const modal = document.getElementById('mail-compose-modal');
             if (modal) modal.style.display = 'none';
             document.body.classList.remove('modal-active');
+            window.mailComposeIsEditMode = false;
+            window.currentEditCardElement = null;
+            window.currentEditCardData = null;
         }
 
 
@@ -2074,6 +2093,14 @@
             const statusEl = document.getElementById('mail-compose-status');
             const sendBtn = document.getElementById('mail-compose-send-btn');
             const notifIdInput = document.getElementById('mail-compose-notification-id');
+            const titleEl = document.getElementById('mail-compose-title');
+
+            const isEditMode = Boolean(
+                window.mailComposeIsEditMode || 
+                (titleEl && titleEl.textContent.includes('bearbeiten')) ||
+                Boolean(notifIdInput && notifIdInput.value.trim()) ||
+                Boolean(window.currentEditCardElement)
+            );
 
             const accountId = accSelect ? accSelect.value : null;
             const to = toInput ? toInput.value.trim() : '';
@@ -2092,7 +2119,11 @@
                 return;
             }
 
-            if (notificationId) {
+            // ==========================================
+            // BEARBEITUNG EINES ENTWURFS (NUR SPEICHERN!)
+            // Senden ist in der Bearbeitungsmaske nicht möglich, erst danach auf der Karte!
+            // ==========================================
+            if (isEditMode) {
                 if (sendBtn) {
                     sendBtn.disabled = true;
                     sendBtn.innerHTML = '⏳ Speichern...';
@@ -2101,22 +2132,10 @@
                     statusEl.style.display = 'block';
                     statusEl.style.background = 'rgba(137, 180, 250, 0.15)';
                     statusEl.style.color = 'var(--accent)';
-                    statusEl.textContent = 'Entwurf wird aktualisiert...';
+                    statusEl.textContent = 'Entwurf wird gespeichert...';
                 }
-                try {
-                    const notifRes = await fetch(getApiUrl(`/api/notifications/${notificationId}`));
-                    let actData = {};
-                    if (notifRes.ok) {
-                        const notif = await notifRes.json();
-                        actData = notif.actionData;
-                        if (typeof actData === 'string') {
-                            try { actData = JSON.parse(actData); } catch (_) {}
-                        }
-                    }
-                    actData = actData || {};
-                    const isReply = actData.actionType === 'send_mail_reply' || Boolean(actData.replyData);
-                    const dataKey = isReply ? 'replyData' : 'mailData';
 
+                try {
                     const selectedOpt = accSelect && accSelect.selectedOptions ? accSelect.selectedOptions[0] : null;
                     const selectedAccountText = selectedOpt ? selectedOpt.textContent : '';
                     const accMatch = selectedAccountText.match(/^(.+?)\s*\((.+?)\)$/);
@@ -2126,40 +2145,143 @@
                         ? `${selectedAccountName} <${selectedAccountEmail}>`
                         : (selectedAccountEmail || selectedAccountName);
 
-                    actData[dataKey] = {
-                        ...(actData[dataKey] || {}),
-                        to,
-                        subject,
-                        body,
-                        attachments: currentComposeAttachments,
-                        accountId: Number(accountId),
-                        accountName: selectedAccountName,
-                        fromEmail: selectedAccountEmail,
-                        from: selectedFromStr
-                    };
+                    let updatedNotif = null;
 
-                    const updateRes = await fetch(getApiUrl(`/api/notifications/${notificationId}`), {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            title: `✉️ ${subject}`,
-                            actionData: actData
-                        })
+                    // 1. Wenn eine notificationId vorhanden ist, in DB aktualisieren
+                    if (notificationId) {
+                        try {
+                            const notifRes = await fetch(getApiUrl(`/api/notifications/${notificationId}`));
+                            let actData = {};
+                            if (notifRes.ok) {
+                                const notif = await notifRes.json();
+                                actData = notif.actionData;
+                                if (typeof actData === 'string') {
+                                    try { actData = JSON.parse(actData); } catch (_) {}
+                                }
+                            }
+                            actData = actData || {};
+                            const isReply = actData.actionType === 'send_mail_reply' || Boolean(actData.replyData);
+                            const dataKey = isReply ? 'replyData' : 'mailData';
+
+                            actData[dataKey] = {
+                                ...(actData[dataKey] || {}),
+                                to,
+                                subject,
+                                body,
+                                attachments: currentComposeAttachments,
+                                accountId: Number(accountId),
+                                accountName: selectedAccountName,
+                                fromEmail: selectedAccountEmail,
+                                from: selectedFromStr
+                            };
+
+                            const updateRes = await fetch(getApiUrl(`/api/notifications/${notificationId}`), {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    title: `✉️ ${subject}`,
+                                    actionData: actData
+                                })
+                            });
+                            if (updateRes.ok) {
+                                const patchData = await updateRes.json();
+                                updatedNotif = patchData.notification || { id: Number(notificationId) };
+                            }
+                        } catch (e) {
+                            console.warn("[Mail] Konnte bestehende Notification nicht patchen:", e);
+                        }
+                    }
+
+                    // 2. Wenn Notification noch nicht in DB existiert (z. B. aus Chat geparst), jetzt in DB anlegen
+                    if (!updatedNotif) {
+                        try {
+                            const targetConvId = (typeof currentConversationId !== 'undefined' ? currentConversationId : null) || window.currentEditCardData?.conversationId || null;
+                            const createRes = await fetch(getApiUrl('/api/notifications'), {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    title: `✉️ ${subject}`,
+                                    message: body,
+                                    type: 'action_required',
+                                    priority: 'normal',
+                                    conversationId: targetConvId,
+                                    actionData: {
+                                        actionType: 'send_mail_reply',
+                                        replyData: {
+                                            mailId: window.currentEditCardData?.mailId || 0,
+                                            to,
+                                            subject,
+                                            body,
+                                            attachments: currentComposeAttachments,
+                                            accountId: Number(accountId),
+                                            from: selectedFromStr,
+                                            fromEmail: selectedAccountEmail,
+                                            accountName: selectedAccountName
+                                        }
+                                    },
+                                    buttons: [
+                                        { label: 'Ja, Antwort senden', action: 'execute_action', style: 'primary' }
+                                    ]
+                                })
+                            });
+                            if (createRes.ok) {
+                                updatedNotif = await createRes.json();
+                                if (notifIdInput) notifIdInput.value = updatedNotif.id;
+                            }
+                        } catch (e) {
+                            console.warn("[Mail] Konnte neue Notification für Entwurf nicht anlegen:", e);
+                        }
+                    }
+
+                    // 3. Karten im DOM (im Chat und im Briefing) sofort visuell aktualisieren
+                    const targetCards = [];
+                    if (window.currentEditCardElement) targetCards.push(window.currentEditCardElement);
+                    if (notificationId) {
+                        const byId = document.querySelector(`[data-notification-id="${notificationId}"]`);
+                        if (byId && !targetCards.includes(byId)) targetCards.push(byId);
+                    }
+                    if (updatedNotif?.id) {
+                        const byNewId = document.querySelector(`[data-notification-id="${updatedNotif.id}"]`);
+                        if (byNewId && !targetCards.includes(byNewId)) targetCards.push(byNewId);
+                    }
+
+                    targetCards.forEach(targetCard => {
+                        if (updatedNotif?.id) {
+                            targetCard.setAttribute('data-notification-id', String(updatedNotif.id));
+                            targetCard.querySelectorAll('.chat-notification-btn').forEach(b => {
+                                const currentClick = b.getAttribute('onclick') || '';
+                                b.setAttribute('onclick', currentClick.replace(/handleChatNotificationClick\(this,\s*(?:null|''|\d+)/, `handleChatNotificationClick(this, ${updatedNotif.id}`));
+                            });
+                        }
+                        const toVal = targetCard.querySelector('.mail-draft-to-val');
+                        if (toVal) {
+                            toVal.textContent = to;
+                            const toRow = targetCard.querySelector('.mail-draft-to-row');
+                            if (toRow) toRow.style.display = 'block';
+                        }
+                        const subVal = targetCard.querySelector('.mail-draft-subject-val');
+                        if (subVal) {
+                            subVal.textContent = subject;
+                            const subRow = targetCard.querySelector('.mail-draft-subject-row');
+                            if (subRow) subRow.style.display = 'block';
+                        }
+                        const bodyVal = targetCard.querySelector('.mail-draft-body-val') || targetCard.querySelector('.action-preview-box div[style*="white-space: pre-wrap"]');
+                        if (bodyVal) bodyVal.textContent = body;
+                        const fromVal = targetCard.querySelector('.mail-draft-from-val');
+                        if (fromVal) {
+                            fromVal.textContent = selectedFromStr;
+                            const vonRow = targetCard.querySelector('.mail-draft-von-row');
+                            if (vonRow) {
+                                vonRow.style.display = 'block';
+                                vonRow.setAttribute('data-account-id', String(accountId));
+                            }
+                        }
                     });
 
-                    if (updateRes.ok) {
-                        closeMailComposeModal();
-                        if (typeof loadTopWidgets === 'function') loadTopWidgets();
-                        if (typeof currentConversationId !== 'undefined' && currentConversationId && typeof loadConversationNotifications === 'function') {
-                            loadConversationNotifications(currentConversationId);
-                        }
-                    } else {
-                        if (statusEl) {
-                            statusEl.style.display = 'block';
-                            statusEl.style.background = 'rgba(243, 139, 168, 0.15)';
-                            statusEl.style.color = 'var(--off)';
-                            statusEl.textContent = 'Fehler beim Speichern des Entwurfs.';
-                        }
+                    closeMailComposeModal();
+                    if (typeof loadTopWidgets === 'function') loadTopWidgets();
+                    if (typeof currentConversationId !== 'undefined' && currentConversationId && typeof loadConversationNotifications === 'function') {
+                        loadConversationNotifications(currentConversationId);
                     }
                 } catch (err) {
                     console.error("Fehler beim Speichern des Entwurfs:", err);
@@ -2167,7 +2289,7 @@
                         statusEl.style.display = 'block';
                         statusEl.style.background = 'rgba(243, 139, 168, 0.15)';
                         statusEl.style.color = 'var(--off)';
-                        statusEl.textContent = `Fehler: ${err.message || 'Speichern fehlgeschlagen'}`;
+                        statusEl.textContent = `Fehler beim Speichern: ${err.message || 'Speichern fehlgeschlagen'}`;
                     }
                 } finally {
                     if (sendBtn) {
@@ -2178,6 +2300,9 @@
                 return;
             }
 
+            // ==========================================
+            // NORMALES VERFASSEN & SOFORTIGES SENDEN (NUR FÜR NEUE MAILS)
+            // ==========================================
             if (sendBtn) {
                 sendBtn.disabled = true;
                 sendBtn.innerHTML = '⏳ Senden...';
@@ -2200,8 +2325,7 @@
                         subject,
                         body,
                         inReplyTo,
-                        attachments: currentComposeAttachments,
-                        notificationId: notificationId ? Number(notificationId) : undefined
+                        attachments: currentComposeAttachments
                     })
                 });
 
@@ -2209,16 +2333,6 @@
                 if (res.ok && result.success) {
                     alert("✅ E-Mail erfolgreich gesendet!");
                     closeMailComposeModal();
-                    if (notificationId) {
-                        const cardEl = document.querySelector(`[data-notification-id="${notificationId}"]`);
-                        if (cardEl) {
-                            cardEl.classList.add('dismissed');
-                            const statusContainer = cardEl.querySelector('.chat-notification-status-container');
-                            if (statusContainer) {
-                                statusContainer.innerHTML = '<span class="chat-notification-status" style="background: rgba(166, 227, 161, 0.15); color: #a6e3a1;">✅ Gesendet</span>';
-                            }
-                        }
-                    }
                     if (typeof loadTopWidgets === 'function') loadTopWidgets();
                 } else {
                     if (statusEl) {
@@ -2243,7 +2357,6 @@
                 }
             }
         }
-
 
         window.sendComposedEmail = sendComposedEmail;
 

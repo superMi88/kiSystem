@@ -88,6 +88,91 @@ export class AgentRunService {
   }
 
   /**
+   * Stellt Tools inkl. Google Search Grounding bereit.
+   */
+  static getAgentTools(pluginManager: PluginManager, filter?: string): any[] {
+    const groundingEnabled = getSettings().googleSearchGrounding !== false;
+    const tools: any[] = [{ functionDeclarations: pluginManager.getGeminiTools(filter) }];
+    if (groundingEnabled) {
+      tools.push({ googleSearch: {} });
+    }
+    return tools;
+  }
+
+  /**
+   * Konfiguration für Tool-Invocations inkl. serverseitigem Google Search Grounding.
+   */
+  static getToolConfig(): any {
+    return {
+      functionCallingConfig: {
+        mode: FunctionCallingMode.AUTO
+      },
+      includeServerSideToolInvocations: true
+    };
+  }
+
+  /**
+   * Sendet Tool-Antworten sicher an Gemini, kompatibel mit gemini-3.8-flash und gemini-4.0.
+   */
+  static async sendFunctionResponses(chat: any, model: any, functionResponses: any[]) {
+    try {
+      return await chat.sendMessage(functionResponses);
+    } catch (err: any) {
+      if (err.message && err.message.includes("Role 'function' is not supported")) {
+        chat._history.push({
+          role: "user",
+          parts: functionResponses
+        });
+        const nextStep = await model.generateContent({
+          contents: chat._history
+        });
+        if (nextStep.response && nextStep.response.candidates && nextStep.response.candidates[0] && nextStep.response.candidates[0].content) {
+          chat._history.push(nextStep.response.candidates[0].content);
+        }
+        return nextStep;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Extrahiert Quellen und Suchanfragen aus dem Google Search Grounding.
+   */
+  static extractGroundingInfo(currentResponse: any, executedTools: any[], aiText: string): string {
+    const groundingMeta = currentResponse?.candidates?.[0]?.groundingMetadata;
+    if (!groundingMeta) return aiText;
+
+    if (groundingMeta.webSearchQueries?.length) {
+      for (const query of groundingMeta.webSearchQueries) {
+        executedTools.push({
+          name: "google_suche",
+          args: { anfrage: query },
+          status: "success",
+          message: `Web-Suche nach: "${query}"`
+        });
+      }
+    }
+
+    if (groundingMeta.groundingChunks?.length) {
+      const sources: string[] = [];
+      const seenUrls = new Set<string>();
+      for (const chunk of groundingMeta.groundingChunks) {
+        const web = (chunk as any).web;
+        if (web?.uri && !seenUrls.has(web.uri)) {
+          seenUrls.add(web.uri);
+          const title = web.title || "Quelle";
+          sources.push(`[${title}](${web.uri})`);
+        }
+      }
+      if (sources.length > 0 && !aiText.includes("🔍 **Quellen:**")) {
+        aiText = `${aiText.trim()}\n\n🔍 **Quellen:** ${sources.slice(0, 5).join(' • ')}`;
+      }
+    }
+
+    return aiText;
+  }
+
+  /**
    * Bereitet den Chatverlauf für Gemini strikt nach API-Vorgaben auf:
    * 1. Die Historie MUSS zwingend mit der Rolle 'user' beginnen (GoogleGenerativeAI Regel).
    * 2. Aufeinanderfolgende gleiche Rollen werden zusammengeführt.
@@ -333,16 +418,13 @@ OBERSTE REGELN:
 - Antworte auf Deutsch, präzise und freundlich.`;
 
     const userModel = getSettings().aiModel;
-    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-3.8-flash";
 
+      const tools = AgentRunService.getAgentTools(pluginManager, agentConfig?.id || "mail");
       const model = genAI.getGenerativeModel({
         model: modelName,
-        tools: [{ functionDeclarations: pluginManager.getGeminiTools(agentConfig?.id || "mail") } as any],
-        toolConfig: {
-          functionCallingConfig: {
-            mode: FunctionCallingMode.AUTO
-          }
-        },
+        tools: tools as any,
+        toolConfig: AgentRunService.getToolConfig(),
         generationConfig: {
           thinkingConfig: {
             thinkingBudget: 0
@@ -452,7 +534,7 @@ OBERSTE REGELN FÜR DEN AGENTEN:
           });
         }
 
-        const nextStep = await chat.sendMessage(functionResponses);
+        const nextStep = await AgentRunService.sendFunctionResponses(chat, model, functionResponses);
         currentResponse = nextStep.response;
         step++;
       }
@@ -464,6 +546,8 @@ OBERSTE REGELN FÜR DEN AGENTEN:
           aiText = "Die E-Mail wurde erfolgreich analysiert.";
         }
       }
+
+      aiText = AgentRunService.extractGroundingInfo(currentResponse, executedTools, aiText);
 
       // Kompakte, zugeklappte Zusammenfassung der Aktionen anhängen
       if (executedTools.length > 0) {
@@ -665,7 +749,7 @@ OBERSTE REGELN FÜR DEN AGENTEN:
       const tzName = timeCtx.tzName;
 
       const userModel = getSettings().aiModel;
-      const modelName = userModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+      const modelName = userModel || process.env.GEMINI_MODEL || "gemini-3.8-flash";
 
       const systemPrompt = `Du bist ein autonomer persönlicher KI-Agent im System, verbunden mit dem Discord-Bot.
 Ein Benutzer hat dir über Discord eine Frage gestellt oder einen Auftrag erteilt.
@@ -716,14 +800,11 @@ OBERSTE REGELN FÜR DEN DISCORD AGENTEN:
 4. ANTWORTEN:
    - Antworte stets auf Deutsch, präzise, hilfsbereit und freundlich.${agentConfig?.systemPrompt?.trim() ? `\n\nSPEZIELLE ROLLENANWEISUNGEN FÜR DIESEN AGENTEN:\n${agentConfig.systemPrompt.trim()}` : ""}`;
 
+      const tools = AgentRunService.getAgentTools(pluginManager, conversation.triggerType || undefined);
       const model = genAI.getGenerativeModel({
         model: modelName,
-        tools: [{ functionDeclarations: pluginManager.getGeminiTools(conversation.triggerType || undefined) } as any],
-        toolConfig: {
-          functionCallingConfig: {
-            mode: FunctionCallingMode.AUTO
-          }
-        },
+        tools: tools as any,
+        toolConfig: AgentRunService.getToolConfig(),
         generationConfig: {
           thinkingConfig: {
             thinkingBudget: 0
@@ -823,7 +904,7 @@ OBERSTE REGELN FÜR DEN DISCORD AGENTEN:
           });
         }
 
-        const nextStep = await chat.sendMessage(functionResponses);
+        const nextStep = await AgentRunService.sendFunctionResponses(chat, model, functionResponses);
         currentResponse = nextStep.response;
         step++;
       }
@@ -835,6 +916,8 @@ OBERSTE REGELN FÜR DEN DISCORD AGENTEN:
           aiText = "Anfrage verarbeitet.";
         }
       }
+
+      aiText = AgentRunService.extractGroundingInfo(currentResponse, executedTools, aiText);
 
       if (executedTools.length > 0) {
         aiText = `${aiText.trim()}${AgentRunService.formatExecutedToolsSummary(executedTools)}`;
@@ -949,7 +1032,7 @@ OBERSTE REGELN FÜR DEN DISCORD AGENTEN:
     const tzName = timeCtx.tzName;
 
     const userModel = getSettings().aiModel;
-    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-3.8-flash";
 
     const isDiscord = conversation.triggerType === "discord";
     const systemPrompt = isDiscord
@@ -974,14 +1057,11 @@ OBERSTE REGELN:
 - Melde NIEMALS Scheinerfolge.
 - Antworte auf Deutsch, präzise und freundlich.`;
 
+    const tools = AgentRunService.getAgentTools(pluginManager, conversation.triggerType || undefined);
     const model = genAI.getGenerativeModel({
       model: modelName,
-      tools: [{ functionDeclarations: pluginManager.getGeminiTools(conversation.triggerType || undefined) } as any],
-      toolConfig: {
-        functionCallingConfig: {
-          mode: FunctionCallingMode.AUTO
-        }
-      },
+      tools: tools as any,
+      toolConfig: AgentRunService.getToolConfig(),
       generationConfig: {
         thinkingConfig: {
           thinkingBudget: 0
@@ -1069,7 +1149,7 @@ OBERSTE REGELN:
         });
       }
 
-      const nextStep = await chat.sendMessage(functionResponses);
+      const nextStep = await AgentRunService.sendFunctionResponses(chat, model, functionResponses);
       currentResponse = nextStep.response;
       step++;
     }
@@ -1081,6 +1161,8 @@ OBERSTE REGELN:
         aiText = "Aktion erfolgreich ausgeführt.";
       }
     }
+
+    aiText = AgentRunService.extractGroundingInfo(currentResponse, executedTools, aiText);
 
     if (executedTools.length > 0) {
       aiText = `${aiText.trim()}${AgentRunService.formatExecutedToolsSummary(executedTools)}`;
@@ -1209,16 +1291,13 @@ OBERSTE REGELN:
 
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
     const userModel = getSettings().aiModel;
-    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const modelName = userModel || process.env.GEMINI_MODEL || "gemini-3.8-flash";
 
+    const tools = AgentRunService.getAgentTools(pluginManager, agentConfig?.id || triggerType);
     const model = genAI.getGenerativeModel({
       model: modelName,
-      tools: [{ functionDeclarations: pluginManager.getGeminiTools(agentConfig?.id || triggerType) } as any],
-      toolConfig: {
-        functionCallingConfig: {
-          mode: FunctionCallingMode.AUTO
-        }
-      },
+      tools: tools as any,
+      toolConfig: AgentRunService.getToolConfig(),
       generationConfig: {
         thinkingConfig: {
           thinkingBudget: 0
@@ -1275,7 +1354,7 @@ OBERSTE REGELN:
         }
       }
 
-      const nextResult = await chat.sendMessage(functionResponses as any);
+      const nextResult = await AgentRunService.sendFunctionResponses(chat, model, functionResponses as any);
       currentResponse = nextResult.response;
     }
 
@@ -1283,6 +1362,8 @@ OBERSTE REGELN:
       const finalCand = currentResponse.candidates?.[0];
       aiText = finalCand?.content?.parts?.filter((p: any) => p.text).map((p: any) => p.text).join("\n") || "";
     }
+
+    aiText = AgentRunService.extractGroundingInfo(currentResponse, executedTools, aiText);
 
     if (executedTools.length > 0) {
       aiText = `${aiText.trim()}${AgentRunService.formatExecutedToolsSummary(executedTools)}`;

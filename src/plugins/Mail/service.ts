@@ -652,9 +652,36 @@ export class MailService {
   }
 
   /**
-   * Gibt alle benutzerdefinierten Mail-Kategorien zurück.
+   * Gibt alle benutzerdefinierten Mail-Kategorien zurück und synchronisiert automatisch
+   * Kategorien, die auf E-Mails zugewiesen wurden.
    */
   static async getCategories(prisma: PrismaClient) {
+    try {
+      const emailsWithCats = await prisma.cachedEmail.findMany({
+        where: { category: { not: null } },
+        select: { category: true }
+      });
+      const distinctCats = new Set<string>();
+      emailsWithCats.forEach(e => {
+        if (e.category) {
+          e.category.split(',').forEach(c => {
+            const trimmed = c.trim();
+            if (trimmed) distinctCats.add(trimmed);
+          });
+        }
+      });
+      for (const catName of distinctCats) {
+        const lower = catName.toLowerCase();
+        const defaultIcon = lower.includes('wichtig') ? '⭐' : (lower.includes('persönlich') || lower.includes('privat') ? '👤' : (lower.includes('termin') ? '📅' : (lower.includes('rechnung') ? '🧾' : (lower.includes('finanz') ? '💰' : (lower.includes('arbeit') ? '💼' : (lower.includes('newsletter') ? '📰' : (lower.includes('spam') ? '🚫' : '🏷️')))))));
+        await prisma.mailCategory.upsert({
+          where: { name: catName },
+          update: {},
+          create: { name: catName, icon: defaultIcon }
+        }).catch(() => {});
+      }
+    } catch (err) {
+      console.warn("[MailService] Konnte Kategorien aus Mails nicht synchronisieren:", err);
+    }
     return await prisma.mailCategory.findMany({
       orderBy: { name: "asc" }
     });
@@ -785,6 +812,21 @@ export class MailService {
       cleanCategory = list.length > 0 ? Array.from(new Set(list)).join(", ") : null;
     } else if (typeof category === "string" && category.trim()) {
       cleanCategory = category.trim();
+    }
+
+    if (cleanCategory) {
+      const cats = cleanCategory.split(',').map(c => c.trim()).filter(Boolean);
+      for (const catName of cats) {
+        try {
+          const lower = catName.toLowerCase();
+          const defaultIcon = lower.includes('wichtig') ? '⭐' : (lower.includes('persönlich') || lower.includes('privat') ? '👤' : (lower.includes('termin') ? '📅' : (lower.includes('rechnung') ? '🧾' : (lower.includes('finanz') ? '💰' : (lower.includes('arbeit') ? '💼' : (lower.includes('newsletter') ? '📰' : (lower.includes('spam') ? '🚫' : '🏷️')))))));
+          await prisma.mailCategory.upsert({
+            where: { name: catName },
+            update: {},
+            create: { name: catName, icon: defaultIcon }
+          });
+        } catch (_) {}
+      }
     }
 
     return await prisma.cachedEmail.update({

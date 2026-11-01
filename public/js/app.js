@@ -360,9 +360,33 @@
         }
 
 
+        function isMobileDevice() {
+            if (window.Capacitor || window.AndroidWidgetInterface) return true;
+            const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+            return /android|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile/i.test(ua);
+        }
+
         userInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
-                // Let browser insert newline naturally and resize input
+                if (e.isComposing) return;
+
+                // Auf dem PC: Enter schickt ab, Shift+Enter erzeugt eine neue Zeile
+                // Auf dem Handy: Enter erzeugt wie bisher eine neue Zeile
+                if (!isMobileDevice()) {
+                    if (!e.shiftKey) {
+                        e.preventDefault();
+                        if (typeof sendMessage === 'function') {
+                            sendMessage();
+                        }
+                        if (userInput) {
+                            userInput.focus();
+                        }
+                        return;
+                    }
+                }
+
+                // Shift+Enter auf dem PC oder normales Enter auf dem Handy:
+                // Browser fügt Zeilenumbruch ein und Input wird angepasst
                 setTimeout(autoResizeInput, 0);
             }
         });

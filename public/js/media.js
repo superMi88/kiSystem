@@ -517,6 +517,13 @@
         // Favoriten immer zuerst sortieren, danach chronologisch
         filtered.sort((a, b) => ((b.isFavorite ? 1 : 0) - (a.isFavorite ? 1 : 0)) || (new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()));
 
+        const isDocsFilterOpen = Boolean(window.docsFilterOpen);
+        const docsFilterBtn = document.getElementById('header-docs-filter-btn');
+        if (docsFilterBtn) {
+            if (isDocsFilterOpen) docsFilterBtn.classList.add('active');
+            else docsFilterBtn.classList.remove('active');
+        }
+
         let html = `
             <div class="media-dashboard docs-dashboard" ondragenter="handleDocsDragEnter(event)" ondragover="handleDocsDragOver(event)" ondragleave="handleDocsDragLeave(event)" ondrop="handleDocsDrop(event)">
                 <!-- Unsichtbarer Input für Header-Upload-Button -->

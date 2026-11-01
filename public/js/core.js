@@ -660,9 +660,8 @@ function switchMobileView(viewName) {
         }
     }
 
-    // Force keyboard to close on mobile view switch by blurring active inputs
-    const inputField = document.getElementById('user-input');
-    if (document.body.classList.contains('mobile-mode')) {
+    // Force keyboard to close on mobile view switch by blurring active inputs (nur wenn nicht zur Chat-Ansicht gewechselt wird)
+    if (viewName !== 'chat' && document.body.classList.contains('mobile-mode')) {
         if (document.activeElement && typeof document.activeElement.blur === 'function') {
             document.activeElement.blur();
         }
@@ -1351,6 +1350,14 @@ window.handleDrawerMemory = function () {
         closeMailReadModal();
     }
     focusWidget('memory');
+};
+
+window.handleDrawerLocations = function () {
+    closeMobileDrawer();
+    if (document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
+        closeMailReadModal();
+    }
+    focusWidget('locations');
 };
 
 window.handleDrawerPhotos = function () {
