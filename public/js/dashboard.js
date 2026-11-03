@@ -652,14 +652,23 @@
                         const startBadge = timeBadges.startBadge;
                         const endBadge = timeBadges.endBadge;
 
-                        let personsHtml = '';
+                        let metaChipsHtml = '';
+                        if (ev.locationObj) {
+                            const locId = ev.locationObj.id;
+                            const locName = ev.locationObj.name || ev.locationObj.formattedAddress;
+                            metaChipsHtml += `<span class="meta-chip location" onclick="event.stopPropagation(); handleEntityClick(event, 'location', ${locId});" title="Ort: ${escapeHtml(locName)}">📍 ${escapeHtml(locName)}</span>`;
+                        } else if (ev.location) {
+                            metaChipsHtml += `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ev.location)}" target="_blank" onclick="event.stopPropagation()" class="meta-chip location" title="Standort auf Google Maps anzeigen">📍 ${escapeHtml(ev.location)}</a>`;
+                        }
                         if (ev.persons && ev.persons.length > 0) {
                             ev.persons.forEach(p => {
-                                 personsHtml += `
-                                    <span onclick="event.stopPropagation(); openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.68rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 1px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer;">
-                                      ${googleIcon('person', '11px')} ${escapeHtml(p.name)}
-                                    </span>
-                                `;
+                                metaChipsHtml += `<span class="meta-chip person" onclick="event.stopPropagation(); openPersonProfileModal(${p.id})" title="Person: ${escapeHtml(p.name)}">👤 ${escapeHtml(p.name)}</span>`;
+                            });
+                        }
+                        if (ev.media && ev.media.length > 0) {
+                            ev.media.forEach(m => {
+                                const isImg = m.category === 'image' || (m.mimeType && m.mimeType.startsWith('image/')) || /\.(jpe?g|png|gif|webp|svg)$/i.test(m.fileName || '');
+                                metaChipsHtml += `<span class="meta-chip media" onclick="event.stopPropagation(); handleEntityClick(event, 'media', ${m.id});" title="Datei: ${escapeHtml(m.title || m.fileName)}">${isImg ? '🖼️' : '📄'} ${escapeHtml(m.title || m.fileName)}</span>`;
                             });
                         }
 
@@ -705,7 +714,7 @@
                             const durationInfo = ev.travelDurationMinutes ? `<span style="font-size: 0.72rem; color: #a6e3a1; font-weight: 500; white-space: nowrap;">(${ev.travelDurationMinutes} Min.${ev.travelDistanceText ? ' • ' + escapeHtml(ev.travelDistanceText) : ''})</span>` : '';
 
                             eventItemHtml = `
-                                <div class="arbeitstisch-item" onclick="openEventDetailModal('${ev.id}', '${escapeHtml(ev.title || 'Termin')}', '${ev.time || ev.start || ''}', '${ev.endTime || ev.end || ''}', ${!!ev.isAllDay}, '${ev.fuzzyTime || ''}', '${escapeHtml(ev.description || '')}', ${!!isRec}, '${ev.occurrenceDate || ''}', [], ${!!ev.isCancelled}, '${escapeHtml(ev.cancellationReason || '')}', '${escapeHtml(ev.location || '')}')" style="${birthdayStyle} ${rescheduleBorder} ${travelStyle}">
+                                <div class="arbeitstisch-item" onclick="openEventDetailModal('${ev.id}', '${escapeHtml(ev.title || 'Termin')}', '${ev.time || ev.start || ''}', '${ev.endTime || ev.end || ''}', ${!!ev.isAllDay}, '${ev.fuzzyTime || ''}', '${escapeHtml(ev.description || '')}', ${!!isRec}, '${ev.occurrenceDate || ''}', ${escapeHtml(JSON.stringify(ev.persons || []))}, ${!!ev.isCancelled}, '${escapeHtml(ev.cancellationReason || '')}', '${escapeHtml(ev.location || '')}', ${ev.locationId || (ev.locationObj ? ev.locationObj.id : 'null')}, ${escapeHtml(JSON.stringify(ev.locationObj || null))}, ${escapeHtml(JSON.stringify(ev.media || []))})" style="${birthdayStyle} ${rescheduleBorder} ${travelStyle}">
                                     <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1;">
                                         <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
                                             <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0;">
@@ -730,7 +739,7 @@
                             `;
                         } else {
                             eventItemHtml = `
-                                <div class="arbeitstisch-item" onclick="openEventDetailModal('${ev.id}', '${escapeHtml(ev.title || 'Termin')}', '${ev.time || ev.start || ''}', '${ev.endTime || ev.end || ''}', ${!!ev.isAllDay}, '${ev.fuzzyTime || ''}', '${escapeHtml(ev.description || '')}', ${!!isRec}, '${ev.occurrenceDate || ''}', [], ${!!ev.isCancelled}, '${escapeHtml(ev.cancellationReason || '')}', '${escapeHtml(ev.location || '')}')" style="${birthdayStyle} ${rescheduleBorder}">
+                                <div class="arbeitstisch-item" onclick="openEventDetailModal('${ev.id}', '${escapeHtml(ev.title || 'Termin')}', '${ev.time || ev.start || ''}', '${ev.endTime || ev.end || ''}', ${!!ev.isAllDay}, '${ev.fuzzyTime || ''}', '${escapeHtml(ev.description || '')}', ${!!isRec}, '${ev.occurrenceDate || ''}', ${escapeHtml(JSON.stringify(ev.persons || []))}, ${!!ev.isCancelled}, '${escapeHtml(ev.cancellationReason || '')}', '${escapeHtml(ev.location || '')}', ${ev.locationId || (ev.locationObj ? ev.locationObj.id : 'null')}, ${escapeHtml(JSON.stringify(ev.locationObj || null))}, ${escapeHtml(JSON.stringify(ev.media || []))})" style="${birthdayStyle} ${rescheduleBorder}">
                                     <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;">
                                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                                             ${startBadge}
@@ -741,15 +750,7 @@
                                             ${reasonHtml}
                                             ${ev.isPlanned ? `<span style="font-size: 0.65rem; color: #f9e2af; font-weight: bold; background: rgba(249, 226, 175, 0.15); border: 1px solid rgba(249, 226, 175, 0.3); padding: 1px 5px; border-radius: 4px;">🟡 In Planung</span>` : ''}
                                         </div>
-                                        ${ev.location ? `
-                                            <div style="display: flex; align-items: center; gap: 4px; margin-top: 2px; font-size: 0.72rem; color: #89b4fa;">
-                                                <span style="display: inline-flex; align-items: center;">${googleIcon('location_on', '13px', 'fill: #89b4fa;')}</span>
-                                                <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ev.location)}" target="_blank" onclick="event.stopPropagation()" style="color: #89b4fa; text-decoration: underline;" title="Standort auf Google Maps anzeigen">
-                                                    ${escapeHtml(ev.location)}
-                                                </a>
-                                            </div>
-                                        ` : ''}
-                                        ${personsHtml ? `<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 2px;">${personsHtml}</div>` : ''}
+                                        ${metaChipsHtml ? `<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 3px;">${metaChipsHtml}</div>` : ''}
                                         ${descText}
                                         ${endBadge ? `
                                             <div class="timeline-event-end-row">

@@ -165,3 +165,93 @@
     color: var(--accent);
     background: rgba(137, 180, 250, 0.1);
 }
+/* Entity Picker Chips & Linked Entity Badges */
+.entity-picker-chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 4px 0;
+}
+
+.entity-picker-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    padding: 4px 9px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.entity-picker-chip:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+.entity-picker-chip.selected {
+    background: rgba(137, 180, 250, 0.25);
+    border-color: #89b4fa;
+    color: #89b4fa;
+    font-weight: 600;
+}
+
+.entity-picker-chip.selected.person {
+    background: rgba(203, 166, 247, 0.22);
+    border-color: #cba6f7;
+    color: #cba6f7;
+}
+
+.entity-picker-chip.selected.media {
+    background: rgba(249, 226, 175, 0.22);
+    border-color: #f9e2af;
+    color: #f9e2af;
+}
+
+/* Event & Task Meta Chips in Timeline and Cards */
+.meta-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.7rem;
+    padding: 2px 7px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    text-decoration: none !important;
+    white-space: nowrap;
+}
+
+.meta-chip.person {
+    background: rgba(203, 166, 247, 0.12);
+    color: #cba6f7;
+    border: 1px solid rgba(203, 166, 247, 0.28);
+}
+.meta-chip.person:hover {
+    background: rgba(203, 166, 247, 0.25);
+    border-color: #cba6f7;
+}
+
+.meta-chip.location {
+    background: rgba(137, 180, 250, 0.12);
+    color: #89b4fa;
+    border: 1px solid rgba(137, 180, 250, 0.28);
+}
+.meta-chip.location:hover {
+    background: rgba(137, 180, 250, 0.25);
+    border-color: #89b4fa;
+}
+
+.meta-chip.media {
+    background: rgba(249, 226, 175, 0.12);
+    color: #f9e2af;
+    border: 1px solid rgba(249, 226, 175, 0.28);
+}
+.meta-chip.media:hover {
+    background: rgba(249, 226, 175, 0.25);
+    border-color: #f9e2af;
+}

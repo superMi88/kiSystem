@@ -86,6 +86,8 @@ model Person {
   cachedEmails CachedEmail[] // Verknüpfte E-Mails dieser Person
   locations PersonLocation[] // Verknüpfte Orte & Adressen dieser Person (N:M)
   media     MediaPerson[]    // Verknüpfte Bilder, Dokumente & Dateien dieser Person (N:M)
+  eventPersons EventPerson[] // Verknüpfte Termine (N:M)
+  taskPersons  TaskPerson[]  // Verknüpfte Aufgaben (N:M)
   isDeleted Boolean          @default(false) // Soft-Delete-Flag (gelöscht ja/nein)
   isOwner   Boolean          @default(false) // Flag, ob dieses Profil das eigene Profil des Benutzers ist ("Ich / Über mich")
 }
@@ -172,6 +174,10 @@ model Event {
   travelOriginLocation   String?            // Startort der Reise (Standort des vorherigen Termins)
   travelAiSuggestion     String?            // Vorschlag des Routenplaner-Agenten
   travelTransitDetails   Json?              // Detaillierter ÖPNV-/Bahnverlauf (Linien, Abfahrten, Umstiegszeiten)
+  locationId             Int?               // Optionale ID eines verknüpften Ortes
+  locationRef            Location?          @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  persons                EventPerson[]      // Verknüpfte Personen (N:M)
+  media                  MediaEvent[]       // Verknüpfte Medien / Dokumente (N:M)
 
   createdAt              DateTime           @default(now()) // Erstellungszeitpunkt
   updatedAt              DateTime           @updatedAt // Letzte Aktualisierung
@@ -213,6 +219,10 @@ model Task {
   isDeleted   Boolean   @default(false) // Soft-Delete-Flag
   projectId   Int?      // Optionale ID eines zugeordneten Projekts
   project     Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade) // Relation zum Projekt
+  locationId  Int?      // Optionale ID eines verknüpften Ortes aus dem Locations Plugin
+  location    Location? @relation(fields: [locationId], references: [id], onDelete: SetNull) // Relation zum Ort
+  persons     TaskPerson[]  // Verknüpfte Personen (N:M)
+  media       MediaTask[]   // Verknüpfte Medien / Dokumente (N:M)
 }
 
 /// [Projects Plugin] Verwaltet Projekte, die als Container für zusammengehörende Aufgaben und Notizen dienen.
@@ -375,6 +385,8 @@ model Location {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   persons          PersonLocation[]
+  events           Event[]
+  tasks            Task[]
 }
 
 /// [Locations Plugin] N:M (n:n) Verknüpfungstabelle zwischen Personen und Orten.
@@ -410,6 +422,8 @@ model MediaItem {
   updatedAt     DateTime       @updatedAt
   persons       MediaPerson[]  // Verknüpfte Personen (N:M)
   projects      MediaProject[] // Verknüpfte Projekte (N:M)
+  events        MediaEvent[]   // Verknüpfte Termine (N:M)
+  tasks         MediaTask[]    // Verknüpfte Aufgaben (N:M)
 }
 
 /// [Media Plugin] N:M (n:n) Verknüpfungstabelle zwischen Dateien/Bildern und Personen.
@@ -436,4 +450,52 @@ model MediaProject {
   createdAt DateTime  @default(now())
 
   @@unique([mediaId, projectId])
+}
+
+/// [Calendar Plugin] N:M (n:n) Verknüpfungstabelle zwischen Terminen und Personen.
+model EventPerson {
+  id        Int      @id @default(autoincrement())
+  eventId   Int
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  personId  Int
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, personId])
+}
+
+/// [Tasks Plugin] N:M (n:n) Verknüpfungstabelle zwischen Aufgaben und Personen.
+model TaskPerson {
+  id        Int      @id @default(autoincrement())
+  taskId    Int
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  personId  Int
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([taskId, personId])
+}
+
+/// [Media Plugin] N:M (n:n) Verknüpfungstabelle zwischen Dateien/Dokumenten und Terminen.
+model MediaEvent {
+  id        Int       @id @default(autoincrement())
+  mediaId   Int
+  media     MediaItem @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  eventId   Int
+  event     Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@unique([mediaId, eventId])
+}
+
+/// [Media Plugin] N:M (n:n) Verknüpfungstabelle zwischen Dateien/Dokumenten und Aufgaben.
+model MediaTask {
+  id        Int       @id @default(autoincrement())
+  mediaId   Int
+  media     MediaItem @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  taskId    Int
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@unique([mediaId, taskId])
 }

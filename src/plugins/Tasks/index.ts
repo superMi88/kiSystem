@@ -65,6 +65,21 @@ export const tasksPlugin: Plugin = {
 
         const tasks = await prisma.task.findMany({
           where: whereClause,
+          include: {
+            location: true,
+            persons: {
+              include: {
+                person: {
+                  include: { aliases: true }
+                }
+              }
+            },
+            media: {
+              include: {
+                media: true
+              }
+            }
+          },
           orderBy: { updatedAt: "desc" }
         });
         return {
@@ -81,7 +96,21 @@ export const tasksPlugin: Plugin = {
             geloescht: t.isDeleted,
             inPlanung: t.isPlanned,
             isStarred: t.isStarred,
-            status: t.status || (t.completed ? "done" : (t.isPlanned ? "suggestion" : "in_progress"))
+            status: t.status || (t.completed ? "done" : (t.isPlanned ? "suggestion" : "in_progress")),
+            location: t.location ? t.location.name : null,
+            locationId: t.locationId || null,
+            locationObj: t.location ? { id: t.location.id, name: t.location.name, address: t.location.formattedAddress || t.location.address || t.location.name } : null,
+            persons: (t.persons || []).map((tp: any) => ({
+              id: tp.person.id,
+              name: tp.person.aliases?.find((a: any) => a.isPrimary)?.name || tp.person.aliases?.[0]?.name || tp.person.name || "Person"
+            })),
+            media: (t.media || []).map((tm: any) => ({
+              id: tm.media.id,
+              title: tm.media.title,
+              fileName: tm.media.fileName,
+              filePath: tm.media.filePath,
+              category: tm.media.category
+            }))
           }))
         };
       }
@@ -101,7 +130,10 @@ export const tasksPlugin: Plugin = {
             projectId: { type: SchemaType.INTEGER, description: "Die ID des Projekts, dem die Aufgabe zugeordnet ist (optional)" },
             inPlanung: { type: SchemaType.BOOLEAN, description: "Ob die Aufgabe noch 'In Planung' / Vorschlag ist (optional)" },
             isStarred: { type: SchemaType.BOOLEAN, description: "Ob die Aufgabe mit einem Stern versehen und angepinnt werden soll (optional)" },
-            status: { type: SchemaType.STRING, description: "Status der Aufgabe: 'suggestion' (Vorschlag), 'in_progress' (In Arbeit) oder 'done' (Fertig). Standard ist 'in_progress'." }
+            status: { type: SchemaType.STRING, description: "Status der Aufgabe: 'suggestion' (Vorschlag), 'in_progress' (In Arbeit) oder 'done' (Fertig). Standard ist 'in_progress'." },
+            locationId: { type: SchemaType.INTEGER, description: "Optionale ID des zugeordneten Ortes aus dem Locations-Plugin" },
+            personIds: { type: SchemaType.ARRAY, items: { type: SchemaType.INTEGER }, description: "Optionale IDs zugeordneter Personen" },
+            mediaIds: { type: SchemaType.ARRAY, items: { type: SchemaType.INTEGER }, description: "Optionale IDs zugeordneter Medien/Dokumente" }
           },
           required: ["titel"]
         } as any
@@ -130,6 +162,7 @@ export const tasksPlugin: Plugin = {
               listTitle: args.aufgabenlisteTitel || "Standard",
               recurrence: recurrence,
               projectId: projectId,
+              locationId: args.locationId ? Number(args.locationId) : null,
               isPlanned: isPlanned,
               isStarred: isStarred,
               status: taskStatus,
@@ -137,6 +170,20 @@ export const tasksPlugin: Plugin = {
               completedAt: completed ? new Date() : null
             }
           });
+
+          if (args.personIds) {
+            const pIds = Array.isArray(args.personIds) ? args.personIds : String(args.personIds).split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
+            for (const pid of pIds) {
+              await prisma.taskPerson.create({ data: { taskId: task.id, personId: Number(pid) } }).catch(() => {});
+            }
+          }
+
+          if (args.mediaIds) {
+            const mIds = Array.isArray(args.mediaIds) ? args.mediaIds : String(args.mediaIds).split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
+            for (const mid of mIds) {
+              await prisma.mediaTask.create({ data: { taskId: task.id, mediaId: Number(mid) } }).catch(() => {});
+            }
+          }
           return {
             status: "success",
             message: `Aufgabe '${args.titel}' wurde erstellt.`,
@@ -314,7 +361,10 @@ export const tasksPlugin: Plugin = {
             projectId: { type: SchemaType.INTEGER, description: "Die neue ID des Projekts oder 'null' zum Entfernen (optional)" },
             inPlanung: { type: SchemaType.BOOLEAN, description: "Ob die Aufgabe noch 'In Planung' / Vorschlag ist (optional)" },
             isStarred: { type: SchemaType.BOOLEAN, description: "Ob die Aufgabe mit einem Stern versehen und angepinnt werden soll (optional)" },
-            status: { type: SchemaType.STRING, description: "Status der Aufgabe: 'suggestion' (Vorschlag), 'in_progress' (In Arbeit) oder 'done' (Fertig) (optional)" }
+            status: { type: SchemaType.STRING, description: "Status der Aufgabe: 'suggestion' (Vorschlag), 'in_progress' (In Arbeit) oder 'done' (Fertig) (optional)" },
+            locationId: { type: SchemaType.INTEGER, description: "Optionale ID des zugeordneten Ortes aus dem Locations-Plugin" },
+            personIds: { type: SchemaType.ARRAY, items: { type: SchemaType.INTEGER }, description: "Optionale IDs zugeordneter Personen" },
+            mediaIds: { type: SchemaType.ARRAY, items: { type: SchemaType.INTEGER }, description: "Optionale IDs zugeordneter Medien/Dokumente" }
           },
           required: ["taskId"]
         } as any
@@ -361,11 +411,34 @@ export const tasksPlugin: Plugin = {
           if (args.projectId !== undefined) {
             updateData.projectId = args.projectId === "null" || args.projectId === null ? null : Number(args.projectId);
           }
+          if (args.locationId !== undefined) {
+            updateData.locationId = args.locationId === "null" || args.locationId === null ? null : Number(args.locationId);
+          }
 
           const updatedTask = await prisma.task.update({
             where: { id: Number(args.taskId) },
             data: updateData
           });
+
+          if (args.personIds !== undefined) {
+            await prisma.taskPerson.deleteMany({ where: { taskId: updatedTask.id } });
+            if (args.personIds && args.personIds !== "null") {
+              const pIds = Array.isArray(args.personIds) ? args.personIds : String(args.personIds).split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
+              for (const pid of pIds) {
+                await prisma.taskPerson.create({ data: { taskId: updatedTask.id, personId: Number(pid) } }).catch(() => {});
+              }
+            }
+          }
+
+          if (args.mediaIds !== undefined) {
+            await prisma.mediaTask.deleteMany({ where: { taskId: updatedTask.id } });
+            if (args.mediaIds && args.mediaIds !== "null") {
+              const mIds = Array.isArray(args.mediaIds) ? args.mediaIds : String(args.mediaIds).split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
+              for (const mid of mIds) {
+                await prisma.mediaTask.create({ data: { taskId: updatedTask.id, mediaId: Number(mid) } }).catch(() => {});
+              }
+            }
+          }
           return {
             status: "success",
             message: "Aufgabe erfolgreich aktualisiert.",
@@ -398,6 +471,23 @@ export const tasksPlugin: Plugin = {
     displayName: "Aufgabe"
   },
   resolveEntity: async (id, { prisma }) => {
-    return prisma.task.findUnique({ where: { id } });
+    return prisma.task.findUnique({
+      where: { id: Number(id) },
+      include: {
+        location: true,
+        persons: {
+          include: {
+            person: {
+              include: { aliases: true }
+            }
+          }
+        },
+        media: {
+          include: {
+            media: true
+          }
+        }
+      }
+    });
   }
 };

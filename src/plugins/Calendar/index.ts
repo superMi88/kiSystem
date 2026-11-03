@@ -218,6 +218,21 @@ export async function getEventsForRange(start: Date, end: Date, prisma: any): Pr
         isDeleted: false,
         start: { lte: end },
         end: { gte: start }
+      },
+      include: {
+        locationRef: true,
+        persons: {
+          include: {
+            person: {
+              include: { aliases: true }
+            }
+          }
+        },
+        media: {
+          include: {
+            media: true
+          }
+        }
       }
     });
 
@@ -249,6 +264,21 @@ export async function getEventsForRange(start: Date, end: Date, prisma: any): Pr
           gte: start,
           lte: end
         }
+      },
+      include: {
+        location: true,
+        persons: {
+          include: {
+            person: {
+              include: { aliases: true }
+            }
+          }
+        },
+        media: {
+          include: {
+            media: true
+          }
+        }
       }
     });
   } catch (e) {
@@ -276,7 +306,25 @@ export async function getEventsForRange(start: Date, end: Date, prisma: any): Pr
       originalEnd: e.originalEnd ? e.originalEnd.toISOString() : null,
       fuzzyTime: e.fuzzyTime,
       isPlanned: e.isPlanned,
-      location: e.location || null,
+      location: e.location || (e.locationRef ? e.locationRef.name : null),
+      locationId: e.locationId || null,
+      locationObj: e.locationRef ? {
+        id: e.locationRef.id,
+        name: e.locationRef.name,
+        address: e.locationRef.formattedAddress || e.locationRef.address || e.locationRef.name
+      } : null,
+      persons: (e.persons || []).map((ep: any) => ({
+        id: ep.person.id,
+        name: ep.person.aliases?.find((a: any) => a.isPrimary)?.name || ep.person.aliases?.[0]?.name || ep.person.name || "Person"
+      })),
+      media: (e.media || []).map((em: any) => ({
+        id: em.media.id,
+        title: em.media.title,
+        fileName: em.media.fileName,
+        filePath: em.media.filePath,
+        category: em.media.category,
+        fileType: em.media.fileType
+      })),
       travelMode: e.travelMode || null,
       travelDurationMinutes: e.travelDurationMinutes || null,
       travelDistanceText: e.travelDistanceText || null,
@@ -325,7 +373,28 @@ export async function getEventsForRange(start: Date, end: Date, prisma: any): Pr
         recurring: t.recurrence !== null && t.recurrence !== "none",
         recurrence: t.recurrence,
         listTitle: t.listTitle,
-        isPlanned: t.isPlanned
+        isPlanned: t.isPlanned,
+        location: t.location ? t.location.name : null,
+        locationId: t.locationId || null,
+        locationObj: t.location ? {
+          id: t.location.id,
+          name: t.location.name,
+          address: t.location.formattedAddress || t.location.address || t.location.name
+        } : null,
+        persons: (t.persons || []).map((tp: any) => ({
+          id: tp.person.id,
+          name: tp.person.aliases?.find((a: any) => a.isPrimary)?.name || tp.person.aliases?.[0]?.name || tp.person.name || "Person"
+        })),
+        media: (t.media || []).map((tm: any) => ({
+          id: tm.media.id,
+          title: tm.media.title,
+          fileName: tm.media.fileName,
+          filePath: tm.media.filePath,
+          category: tm.media.category,
+          fileType: tm.media.fileType
+        })),
+        isStarred: t.isStarred,
+        status: t.status
       };
     }),
     ...birthdayEvents
@@ -386,6 +455,11 @@ export async function getTimelineRangeData(startDate: Date, endDate: Date, prism
           lte: endOfRange
         }
       },
+      include: {
+        location: true,
+        persons: { include: { person: { include: { aliases: true } } } },
+        media: { include: { media: true } }
+      },
       orderBy: { completedAt: "asc" }
     });
   } catch (e) {
@@ -408,6 +482,11 @@ export async function getTimelineRangeData(startDate: Date, endDate: Date, prism
           lt: today
         }
       },
+      include: {
+        location: true,
+        persons: { include: { person: { include: { aliases: true } } } },
+        media: { include: { media: true } }
+      },
       orderBy: { due: "asc" }
     });
   } catch (e) {
@@ -427,6 +506,11 @@ export async function getTimelineRangeData(startDate: Date, endDate: Date, prism
           gte: today,
           lte: endOfToday
         }
+      },
+      include: {
+        location: true,
+        persons: { include: { person: { include: { aliases: true } } } },
+        media: { include: { media: true } }
       },
       orderBy: { completedAt: "asc" }
     });
@@ -541,7 +625,21 @@ export async function getTimelineRangeData(startDate: Date, endDate: Date, prism
     isOverdue: true,
     completed: !!t.completed,
     completedAt: t.completedAt ? (t.completedAt instanceof Date ? t.completedAt.toISOString() : t.completedAt) : null,
-    projectId: t.projectId
+    projectId: t.projectId,
+    location: t.location ? t.location.name : null,
+    locationId: t.locationId || null,
+    locationObj: t.location ? { id: t.location.id, name: t.location.name, address: t.location.formattedAddress || t.location.address || t.location.name } : null,
+    persons: (t.persons || []).map((tp: any) => ({
+      id: tp.person.id,
+      name: tp.person.aliases?.find((a: any) => a.isPrimary)?.name || tp.person.aliases?.[0]?.name || tp.person.name || "Person"
+    })),
+    media: (t.media || []).map((tm: any) => ({
+      id: tm.media.id,
+      title: tm.media.title,
+      fileName: tm.media.fileName,
+      filePath: tm.media.filePath,
+      category: tm.media.category
+    }))
   }));
 
   const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -612,7 +710,10 @@ export const calendarPlugin: Plugin = {
             standort: { type: SchemaType.STRING, description: "Standort/Adresse des Termins (z.B. 'Alexanderplatz 1, Berlin' oder 'Büro') für Routenplanung und Google Maps (optional)" },
             verkehrsmittel: { type: SchemaType.STRING, description: "Verkehrsmittel: 'transit' (Bahn), 'driving' (Auto), 'bicycling' (Fahrrad), 'walking' (Zu Fuß). Wenn angegeben, wird der Termin als vollwertige Wegzeit angelegt (optional)." },
             startort: { type: SchemaType.STRING, description: "Startort/Startadresse der Reise (optional, falls Wegzeit)" },
-            ist_wegzeit: { type: SchemaType.BOOLEAN, description: "Ob dieser Termin eine eigenständige Wegzeit/Fahrtzeit ist (optional)" }
+            ist_wegzeit: { type: SchemaType.BOOLEAN, description: "Ob dieser Termin eine eigenständige Wegzeit/Fahrtzeit ist (optional)" },
+            locationId: { type: SchemaType.INTEGER, description: "Optionale ID des zugeordneten Ortes aus dem Locations-Plugin" },
+            personIds: { type: SchemaType.ARRAY, items: { type: SchemaType.INTEGER }, description: "Optionale IDs zugeordneter Personen" },
+            mediaIds: { type: SchemaType.ARRAY, items: { type: SchemaType.INTEGER }, description: "Optionale IDs zugeordneter Medien/Dokumente" }
           },
           required: ["titel", "datum"]
         } as any
@@ -755,7 +856,7 @@ export const calendarPlugin: Plugin = {
               }
             });
           } else {
-            await prisma.event.create({
+            const createdEv = await prisma.event.create({
               data: {
                 title: args.titel,
                 description: args.beschreibung || null,
@@ -765,6 +866,7 @@ export const calendarPlugin: Plugin = {
                 fuzzyTime,
                 isPlanned: !!args.inPlanung,
                 location,
+                locationId: args.locationId ? Number(args.locationId) : null,
                 travelMode,
                 travelDurationMinutes,
                 travelDistanceText,
@@ -772,6 +874,20 @@ export const calendarPlugin: Plugin = {
                 travelTransitDetails
               }
             });
+
+            if (args.personIds) {
+              const pIds = Array.isArray(args.personIds) ? args.personIds : String(args.personIds).split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
+              for (const pid of pIds) {
+                await prisma.eventPerson.create({ data: { eventId: createdEv.id, personId: Number(pid) } }).catch(() => {});
+              }
+            }
+
+            if (args.mediaIds) {
+              const mIds = Array.isArray(args.mediaIds) ? args.mediaIds : String(args.mediaIds).split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
+              for (const mid of mIds) {
+                await prisma.mediaEvent.create({ data: { eventId: createdEv.id, mediaId: Number(mid) } }).catch(() => {});
+              }
+            }
           }
 
           const startOfDay = new Date(start);
@@ -999,7 +1115,10 @@ export const calendarPlugin: Plugin = {
             inPlanung: { type: SchemaType.BOOLEAN, description: "Ob der Termin noch in Planung ist (optional)" },
             standort: { type: SchemaType.STRING, description: "Neuer Standort/Ort des Termins (optional)" },
             verkehrsmittel: { type: SchemaType.STRING, description: "Neues Verkehrsmittel: 'driving', 'transit', 'bicycling', 'walking' (optional)" },
-            startort: { type: SchemaType.STRING, description: "Startort/Startadresse der Reise (optional)" }
+            startort: { type: SchemaType.STRING, description: "Startort/Startadresse der Reise (optional)" },
+            locationId: { type: SchemaType.INTEGER, description: "Optionale ID des zugeordneten Ortes aus dem Locations-Plugin" },
+            personIds: { type: SchemaType.ARRAY, items: { type: SchemaType.INTEGER }, description: "Optionale IDs zugeordneter Personen" },
+            mediaIds: { type: SchemaType.ARRAY, items: { type: SchemaType.INTEGER }, description: "Optionale IDs zugeordneter Medien/Dokumente" }
           },
           required: ["eventId"]
         } as any
@@ -1048,6 +1167,9 @@ export const calendarPlugin: Plugin = {
               if (args.inPlanung !== undefined) data.isPlanned = !!args.inPlanung;
               if (args.standort !== undefined) {
                 data.location = args.standort === "" ? null : args.standort;
+              }
+              if (args.locationId !== undefined) {
+                data.locationId = (args.locationId === "null" || args.locationId === null || args.locationId === "") ? null : Number(args.locationId);
               }
 
               if (args.tageszeit !== undefined) {
@@ -1142,6 +1264,26 @@ export const calendarPlugin: Plugin = {
                 where: { id },
                 data
               });
+
+              if (args.personIds !== undefined) {
+                await (prisma as any).eventPerson.deleteMany({ where: { eventId: id } });
+                if (args.personIds && args.personIds !== "null") {
+                  const pIds = Array.isArray(args.personIds) ? args.personIds : String(args.personIds).split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
+                  for (const pid of pIds) {
+                    await (prisma as any).eventPerson.create({ data: { eventId: id, personId: Number(pid) } }).catch(() => {});
+                  }
+                }
+              }
+
+              if (args.mediaIds !== undefined) {
+                await (prisma as any).mediaEvent.deleteMany({ where: { eventId: id } });
+                if (args.mediaIds && args.mediaIds !== "null") {
+                  const mIds = Array.isArray(args.mediaIds) ? args.mediaIds : String(args.mediaIds).split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
+                  for (const mid of mIds) {
+                    await (prisma as any).mediaEvent.create({ data: { eventId: id, mediaId: Number(mid) } }).catch(() => {});
+                  }
+                }
+              }
             }
           } else {
             // Edit entire series or one-off
@@ -1358,7 +1500,24 @@ export const calendarPlugin: Plugin = {
     const cleanId = rawId.replace(/^event-/, '').replace(/^app:\/\/event\//, '');
     const numId = Number(cleanId);
     if (!isNaN(numId)) {
-      return prisma.event.findUnique({ where: { id: numId } });
+      return prisma.event.findUnique({
+        where: { id: numId },
+        include: {
+          locationRef: true,
+          persons: {
+            include: {
+              person: {
+                include: { aliases: true }
+              }
+            }
+          },
+          media: {
+            include: {
+              media: true
+            }
+          }
+        }
+      });
     }
     return null;
   }

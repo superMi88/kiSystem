@@ -843,6 +843,12 @@
                     </div>
                 </div>
 
+                <div id="event-detail-media-section" class="detail-modal-section" style="display: none;">
+                    <span class="detail-modal-label">Bilder & Dokumente</span>
+                    <div id="event-detail-media" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px;">
+                    </div>
+                </div>
+
                 <div class="detail-modal-section">
                     <span class="detail-modal-label">Beschreibung / Notizen</span>
                     <div id="event-detail-description" class="detail-modal-box" style="color: #cdd6f4;">Keine
@@ -887,8 +893,30 @@
                     <label
                         style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">📍
                         Standort / Ort (für Google Maps & Routenplaner)</label>
+                    <select id="event-edit-location-select" onchange="handleEventLocationSelectChange(this)"
+                        style="width: 100%; margin-bottom: 6px; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: var(--input); color: white; color-scheme: dark;">
+                        <option value="">-- Gespeicherten Ort wählen oder manuell eingeben --</option>
+                    </select>
                     <input type="text" id="event-edit-location-input"
                         placeholder="z.B. Alexanderplatz 1, Berlin oder Büro..." style="width: 100%;">
+                </div>
+
+                <div class="settings-group">
+                    <label
+                        style="display: block; font-size: 0.75rem; font-weight: 700; color: #cba6f7; text-transform: uppercase; margin-bottom: 4px;">👤
+                        Personen zuordnen</label>
+                    <div id="event-edit-persons-container" class="entity-picker-chips-container">
+                        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Lade Personen...</span>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <label
+                        style="display: block; font-size: 0.75rem; font-weight: 700; color: #f9e2af; text-transform: uppercase; margin-bottom: 4px;">📄
+                        Bilder & Dokumente anhängen</label>
+                    <div id="event-edit-media-container" class="entity-picker-chips-container">
+                        <span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Lade Dokumente...</span>
+                    </div>
                 </div>
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
@@ -1008,6 +1036,28 @@
                 <div id="task-detail-project-section" class="detail-modal-section" style="display: none;">
                     <span class="detail-modal-label">Projekt</span>
                     <div id="task-detail-project" class="detail-modal-value">📁 --</div>
+                </div>
+
+                <div id="task-detail-location-section" class="detail-modal-section" style="display: none;">
+                    <span class="detail-modal-label">Standort</span>
+                    <div id="task-detail-location" class="detail-modal-value"
+                        style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                        <span id="task-detail-location-text">📍 --</span>
+                        <a id="task-detail-maps-link" href="#" target="_blank"
+                            style="color: var(--accent); font-size: 0.78rem; text-decoration: underline; white-space: nowrap;">In Google Maps ansehen ↗</a>
+                    </div>
+                </div>
+
+                <div id="task-detail-persons-section" class="detail-modal-section" style="display: none;">
+                    <span class="detail-modal-label">Zugeordnete Personen</span>
+                    <div id="task-detail-persons" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px;">
+                    </div>
+                </div>
+
+                <div id="task-detail-media-section" class="detail-modal-section" style="display: none;">
+                    <span class="detail-modal-label">Bilder & Dokumente</span>
+                    <div id="task-detail-media" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px;">
+                    </div>
                 </div>
 
                 <div class="detail-modal-section">
@@ -1207,6 +1257,28 @@
                     <option value="monthly">Monatlich</option>
                     <option value="yearly">Jährlich</option>
                 </select>
+            </div>
+            <div class="settings-group" style="text-align: left; margin-bottom: 15px;">
+                <label
+                    style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">📍 Standort / Ort (optional)</label>
+                <select id="task-location-select"
+                    style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); background: var(--input); color: white; outline: none; font-size: 0.88rem; color-scheme: dark;">
+                    <option value="">-- Kein Ort zugeordnet --</option>
+                </select>
+            </div>
+            <div class="settings-group" style="text-align: left; margin-bottom: 15px;">
+                <label
+                    style="display: block; font-size: 0.8rem; font-weight: 700; color: #cba6f7; text-transform: uppercase; margin-bottom: 6px;">👤 Personen zuordnen</label>
+                <div id="task-persons-container" class="entity-picker-chips-container">
+                    <span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Lade Personen...</span>
+                </div>
+            </div>
+            <div class="settings-group" style="text-align: left; margin-bottom: 15px;">
+                <label
+                    style="display: block; font-size: 0.8rem; font-weight: 700; color: #f9e2af; text-transform: uppercase; margin-bottom: 6px;">📄 Bilder & Dokumente anhängen</label>
+                <div id="task-media-container" class="entity-picker-chips-container">
+                    <span style="font-size: 0.75rem; color: rgba(255,255,255,0.4);">Lade Dokumente...</span>
+                </div>
             </div>
             <div class="settings-group" style="text-align: left; margin-bottom: 15px;">
                 <label

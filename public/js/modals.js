@@ -3,8 +3,97 @@
         // =========================================================================
         // Event Detail & Edit Modal Functions
         // =========================================================================
-        window.openEventDetailModal = function(eventId, title, start, end, isAllDay, fuzzyTime, description, isRecurring, occurrenceDate, persons = [], isCancelled = false, cancellationReason = '', location = '') {
+
+        // =========================================================================
+        // Entity Picker Data & Helpers (Persons, Locations, Media)
+        // =========================================================================
+        let cachedPickerPeople = null;
+        let cachedPickerLocations = null;
+        let cachedPickerMedia = null;
+
+        async function loadEntityPickerData(forceRefresh = false) {
+            try {
+                const promises = [];
+                if (!cachedPickerPeople || forceRefresh) {
+                    promises.push(fetch(getApiUrl('/api/memory/people')).then(r => r.ok ? r.json() : []).then(d => { cachedPickerPeople = d; }));
+                }
+                if (!cachedPickerLocations || forceRefresh) {
+                    promises.push(fetch(getApiUrl('/api/locations')).then(r => r.ok ? r.json() : []).then(d => { cachedPickerLocations = d; }));
+                }
+                if (!cachedPickerMedia || forceRefresh) {
+                    promises.push(fetch(getApiUrl('/api/media')).then(r => r.ok ? r.json() : []).then(d => { cachedPickerMedia = d; }));
+                }
+                await Promise.all(promises);
+            } catch (err) {
+                console.error("Fehler beim Laden von Entitäten für Picker:", err);
+            }
+        }
+
+        function renderPickerChips(containerId, items, selectedIds = [], type = 'person') {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            if (!items || items.length === 0) {
+                container.innerHTML = `<span style="font-size: 0.72rem; color: rgba(255,255,255,0.4);">Keine ${type === 'person' ? 'Personen' : 'Dokumente/Bilder'} vorhanden</span>`;
+                return;
+            }
+            const selSet = new Set((selectedIds || []).map(id => Number(id)));
+            container.innerHTML = items.map(item => {
+                const id = item.id;
+                const isSel = selSet.has(Number(id));
+                const isImg = item.category === 'image' || (item.mimeType && item.mimeType.startsWith('image/')) || /\.(jpe?g|png|gif|webp|svg)$/i.test(item.fileName || '');
+                const icon = type === 'person' ? '👤' : (isImg ? '🖼️' : '📄');
+                const label = type === 'person' ? (item.name || `Person #${id}`) : (item.title || item.fileName || `Datei #${id}`);
+                return `<div class="entity-picker-chip ${type} ${isSel ? 'selected' : ''}" data-id="${id}" onclick="this.classList.toggle('selected')">
+                    <span>${icon}</span>
+                    <span>${escapeHtml(label)}</span>
+                </div>`;
+            }).join('');
+        }
+
+        function getSelectedChipIds(containerId) {
+            const container = document.getElementById(containerId);
+            if (!container) return [];
+            const chips = container.querySelectorAll('.entity-picker-chip.selected');
+            const ids = [];
+            chips.forEach(c => {
+                const id = Number(c.getAttribute('data-id'));
+                if (!isNaN(id)) ids.push(id);
+            });
+            return ids;
+        }
+
+        function populateLocationSelect(selectId, locations, selectedId = null) {
+            const selectEl = document.getElementById(selectId);
+            if (!selectEl) return;
+            let optionsHtml = '<option value="">-- Kein gespeicherter Ort zugeordnet --</option>';
+            if (locations && locations.length > 0) {
+                optionsHtml += locations.map(loc => {
+                    const sel = Number(selectedId) === Number(loc.id) ? 'selected' : '';
+                    const name = loc.name || loc.formattedAddress || `Ort #${loc.id}`;
+                    return `<option value="${loc.id}" ${sel}>📍 ${escapeHtml(name)}</option>`;
+                }).join('');
+            }
+            selectEl.innerHTML = optionsHtml;
+        }
+
+        window.handleEventLocationSelectChange = function(selectEl) {
+            const locId = selectEl.value;
+            const locInput = document.getElementById('event-edit-location-input');
+            if (!locId) return;
+            const loc = (cachedPickerLocations || []).find(l => String(l.id) === String(locId));
+            if (loc && locInput) {
+                locInput.value = loc.formattedAddress || loc.address || loc.name || '';
+            }
+        };
+
+        window.openEventDetailModal = function(eventId, title, start, end, isAllDay, fuzzyTime, description, isRecurring, occurrenceDate, persons = [], isCancelled = false, cancellationReason = '', location = '', locationId = null, locationObj = null, media = []) {
             const modal = document.getElementById('event-detail-modal');
+            if (Array.isArray(persons)) {
+                persons = persons.map(p => p.person ? { id: p.person.id, name: (p.person.aliases?.find(a => a.isPrimary) || p.person.aliases?.[0])?.name || (p.person.isOwner ? 'Ich' : `Person #${p.person.id}`) } : p);
+            }
+            if (Array.isArray(media)) {
+                media = media.map(m => m.media ? m.media : m);
+            }
             if (!modal) return;
 
             document.getElementById('event-detail-id').value = eventId || '';
@@ -35,12 +124,20 @@
             // Location
             const locSection = document.getElementById('event-detail-location-section');
             if (locSection) {
-                if (location && location.trim()) {
+                const locName = (locationObj && (locationObj.name || locationObj.formattedAddress)) || location || '';
+                const locId = locationId || (locationObj ? locationObj.id : null);
+                if (locName && locName.trim()) {
                     locSection.style.display = 'flex';
                     const locText = document.getElementById('event-detail-location-text');
-                    if (locText) locText.textContent = `📍 ${location}`;
+                    if (locText) {
+                        if (locId) {
+                            locText.innerHTML = `<span class="meta-chip location" onclick="closeEventDetailModal(); handleEntityClick(event, 'location', ${locId});">📍 ${escapeHtml(locName)}</span>`;
+                        } else {
+                            locText.textContent = `📍 ${locName}`;
+                        }
+                    }
                     const mapsLink = document.getElementById('event-detail-maps-link');
-                    if (mapsLink) mapsLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
+                    if (mapsLink) mapsLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locName)}`;
                 } else {
                     locSection.style.display = 'none';
                 }
@@ -68,16 +165,38 @@
             // Persons
             const personsSection = document.getElementById('event-detail-persons-section');
             const personsContainer = document.getElementById('event-detail-persons');
-            if (persons && persons.length > 0) {
-                personsSection.style.display = 'flex';
-                personsContainer.innerHTML = persons.map(p => `
-                    <span onclick="closeEventDetailModal(); openPersonProfileModal(${p.id});" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.75rem; background: rgba(203, 166, 247, 0.15); color: #cba6f7; border: 1px solid rgba(203, 166, 247, 0.3); padding: 3px 8px; border-radius: 12px; cursor: pointer;">
-                        👤 ${escapeHtml(p.name)}
-                    </span>
-                `).join('');
-            } else {
-                personsSection.style.display = 'none';
-                personsContainer.innerHTML = '';
+            if (personsSection && personsContainer) {
+                if (persons && persons.length > 0) {
+                    personsSection.style.display = 'flex';
+                    personsContainer.innerHTML = persons.map(p => `
+                        <span class="meta-chip person" onclick="closeEventDetailModal(); openPersonProfileModal(${p.id});">
+                            👤 ${escapeHtml(p.name)}
+                        </span>
+                    `).join('');
+                } else {
+                    personsSection.style.display = 'none';
+                    personsContainer.innerHTML = '';
+                }
+            }
+
+            // Media & Documents
+            const mediaSection = document.getElementById('event-detail-media-section');
+            const mediaContainer = document.getElementById('event-detail-media');
+            if (mediaSection && mediaContainer) {
+                if (media && media.length > 0) {
+                    mediaSection.style.display = 'flex';
+                    mediaContainer.innerHTML = media.map(m => {
+                        const isImg = m.category === 'image' || (m.mimeType && m.mimeType.startsWith('image/')) || /\.(jpe?g|png|gif|webp|svg)$/i.test(m.fileName || '');
+                        return `
+                            <span class="meta-chip media" onclick="closeEventDetailModal(); handleEntityClick(event, 'media', ${m.id});">
+                                ${isImg ? '🖼️' : '📄'} ${escapeHtml(m.title || m.fileName || 'Datei')}
+                            </span>
+                        `;
+                    }).join('');
+                } else {
+                    mediaSection.style.display = 'none';
+                    mediaContainer.innerHTML = '';
+                }
             }
 
             // Description
@@ -107,7 +226,10 @@
 
             document.getElementById('event-detail-edit-btn').onclick = () => {
                 closeEventDetailModal();
-                openEventEditModal(eventId, title, start, end, isAllDay, fuzzyTime, description, isRecurring, occurrenceDate, false, location);
+                const personIds = (persons || []).map(p => p.id);
+                const mediaIds = (media || []).map(m => m.id);
+                const locId = locationId || (locationObj ? locationObj.id : null);
+                openEventEditModal(eventId, title, start, end, isAllDay, fuzzyTime, description, isRecurring, occurrenceDate, false, location, locId, personIds, mediaIds);
             };
 
             modal.style.display = 'block';
@@ -134,6 +256,20 @@
                 }
             } catch(e) {}
 
+            let media = [];
+            try {
+                if (data.eventMedia) {
+                    media = JSON.parse(data.eventMedia);
+                }
+            } catch(e) {}
+
+            let locationObj = null;
+            try {
+                if (data.eventLocationObj) {
+                    locationObj = JSON.parse(data.eventLocationObj);
+                }
+            } catch(e) {}
+
             openEventDetailModal(
                 data.eventId || data.linkId,
                 data.eventTitle || data.linkLabel,
@@ -147,13 +283,16 @@
                 persons,
                 data.eventIscancelled === 'true' || data.eventIscancelled === true,
                 data.eventCancelreason || '',
-                data.eventLocation || data.location || ''
+                data.eventLocation || data.location || '',
+                data.eventLocationId ? Number(data.eventLocationId) : (locationObj ? locationObj.id : null),
+                locationObj,
+                media
             );
         };
 
 
 
-        window.openEventEditModal = function(eventId = null, title = '', start = '', end = '', isAllDay = false, fuzzyTime = '', description = '', isRecurring = false, occurrenceDate = '', isPlanned = false, location = '') {
+        window.openEventEditModal = function(eventId = null, title = '', start = '', end = '', isAllDay = false, fuzzyTime = '', description = '', isRecurring = false, occurrenceDate = '', isPlanned = false, location = '', locationId = null, personIds = [], mediaIds = []) {
             const modal = document.getElementById('event-edit-modal');
             if (!modal) return;
 
@@ -207,6 +346,13 @@
 
             const delBtn = document.getElementById('event-edit-delete-btn');
             if (delBtn) delBtn.style.display = eventId ? 'block' : 'none';
+
+            // Populate Entity Pickers (Locations, Persons, Media)
+            loadEntityPickerData().then(() => {
+                populateLocationSelect('event-edit-location-select', cachedPickerLocations, locationId);
+                renderPickerChips('event-edit-persons-container', cachedPickerPeople, personIds, 'person');
+                renderPickerChips('event-edit-media-container', cachedPickerMedia, mediaIds, 'media');
+            });
 
             modal.style.display = 'block';
             document.body.classList.add('modal-active');
@@ -317,6 +463,11 @@
                     if (isRecurring) {
                         nurDiesesVorkommen = confirm("Möchtest du NUR DIESES EINE VORKOMMEN bearbeiten?\n\n(OK = Nur dieses Vorkommen, Abbrechen = Gesamte Serie)");
                     }
+                    const locSelect = document.getElementById('event-edit-location-select');
+                    const selectedLocId = locSelect && locSelect.value ? Number(locSelect.value) : null;
+                    const selectedPersonIds = getSelectedChipIds('event-edit-persons-container');
+                    const selectedMediaIds = getSelectedChipIds('event-edit-media-container');
+
                     await callTool('bearbeite_termin', {
                         eventId: String(id),
                         datum: occurrenceDate || dateVal,
@@ -328,9 +479,17 @@
                         ganztaegig: isAllDay,
                         tageszeit: fuzzyVal || undefined,
                         inPlanung: isPlanned,
-                        standort: locationVal
+                        standort: locationVal,
+                        locationId: selectedLocId || undefined,
+                        personIds: selectedPersonIds,
+                        mediaIds: selectedMediaIds
                     });
                 } else {
+                    const locSelect = document.getElementById('event-edit-location-select');
+                    const selectedLocId = locSelect && locSelect.value ? Number(locSelect.value) : null;
+                    const selectedPersonIds = getSelectedChipIds('event-edit-persons-container');
+                    const selectedMediaIds = getSelectedChipIds('event-edit-media-container');
+
                     await callTool('fuege_termin_hinzu', {
                         titel: title,
                         datum: startIso,
@@ -339,7 +498,10 @@
                         ganztaegig: isAllDay,
                         tageszeit: fuzzyVal || undefined,
                         inPlanung: isPlanned,
-                        standort: locationVal
+                        standort: locationVal,
+                        locationId: selectedLocId || undefined,
+                        personIds: selectedPersonIds,
+                        mediaIds: selectedMediaIds
                     });
                 }
                 loadTopWidgets();
@@ -637,8 +799,14 @@
         // =========================================================================
         // Task Detail Modal Functions
         // =========================================================================
-        window.openTaskDetailModal = function(taskId, title, notes = '', due = '', listTitle = 'Standard', recurrence = 'none', projectId = null, completed = false, isPlanned = false) {
+        window.openTaskDetailModal = function(taskId, title, notes = '', due = '', listTitle = 'Standard', recurrence = 'none', projectId = null, completed = false, isPlanned = false, locationId = null, locationObj = null, persons = [], media = [], status = 'in_progress', isStarred = false) {
             const modal = document.getElementById('task-detail-modal');
+            if (Array.isArray(persons)) {
+                persons = persons.map(p => p.person ? { id: p.person.id, name: (p.person.aliases?.find(a => a.isPrimary) || p.person.aliases?.[0])?.name || (p.person.isOwner ? 'Ich' : `Person #${p.person.id}`) } : p);
+            }
+            if (Array.isArray(media)) {
+                media = media.map(m => m.media ? m.media : m);
+            }
             if (!modal) return;
 
             document.getElementById('task-detail-id').value = taskId || '';
@@ -703,6 +871,65 @@
                 projSection.style.display = 'none';
             }
 
+            // Location
+            const locSection = document.getElementById('task-detail-location-section');
+            if (locSection) {
+                const locName = (locationObj && (locationObj.name || locationObj.formattedAddress)) || (locationId ? `Ort #${locationId}` : '');
+                const locIdNum = locationId || (locationObj ? locationObj.id : null);
+                if (locName) {
+                    locSection.style.display = 'flex';
+                    const locText = document.getElementById('task-detail-location-text');
+                    if (locText) {
+                        if (locIdNum) {
+                            locText.innerHTML = `<span class="meta-chip location" onclick="closeTaskDetailModal(); handleEntityClick(event, 'location', ${locIdNum});">📍 ${escapeHtml(locName)}</span>`;
+                        } else {
+                            locText.textContent = `📍 ${locName}`;
+                        }
+                    }
+                    const mapsLink = document.getElementById('task-detail-maps-link');
+                    if (mapsLink) mapsLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locName)}`;
+                } else {
+                    locSection.style.display = 'none';
+                }
+            }
+
+            // Persons
+            const personsSection = document.getElementById('task-detail-persons-section');
+            const personsContainer = document.getElementById('task-detail-persons');
+            if (personsSection && personsContainer) {
+                if (persons && persons.length > 0) {
+                    personsSection.style.display = 'flex';
+                    personsContainer.innerHTML = persons.map(p => `
+                        <span class="meta-chip person" onclick="closeTaskDetailModal(); openPersonProfileModal(${p.id});">
+                            👤 ${escapeHtml(p.name)}
+                        </span>
+                    `).join('');
+                } else {
+                    personsSection.style.display = 'none';
+                    personsContainer.innerHTML = '';
+                }
+            }
+
+            // Media & Documents
+            const mediaSection = document.getElementById('task-detail-media-section');
+            const mediaContainer = document.getElementById('task-detail-media');
+            if (mediaSection && mediaContainer) {
+                if (media && media.length > 0) {
+                    mediaSection.style.display = 'flex';
+                    mediaContainer.innerHTML = media.map(m => {
+                        const isImg = m.category === 'image' || (m.mimeType && m.mimeType.startsWith('image/')) || /\.(jpe?g|png|gif|webp|svg)$/i.test(m.fileName || '');
+                        return `
+                            <span class="meta-chip media" onclick="closeTaskDetailModal(); handleEntityClick(event, 'media', ${m.id});">
+                                ${isImg ? '🖼️' : '📄'} ${escapeHtml(m.title || m.fileName || 'Datei')}
+                            </span>
+                        `;
+                    }).join('');
+                } else {
+                    mediaSection.style.display = 'none';
+                    mediaContainer.innerHTML = '';
+                }
+            }
+
             // Notes
             const notesEl = document.getElementById('task-detail-notes');
             if (notes && notes.trim()) {
@@ -726,7 +953,10 @@
 
             document.getElementById('task-detail-edit-btn').onclick = () => {
                 closeTaskDetailModal();
-                openTaskModal(taskId, title, notes, due, listTitle, recurrence, projectId, isPlanned);
+                const personIds = (persons || []).map(p => p.id);
+                const mediaIds = (media || []).map(m => m.id);
+                const locId = locationId || (locationObj ? locationObj.id : null);
+                openTaskModal(taskId, title, notes, due, listTitle, recurrence, projectId, isPlanned, status, isStarred, locId, personIds, mediaIds);
             };
 
             modal.style.display = 'block';
@@ -773,6 +1003,21 @@
 
 
         window.openTaskDetailModalFromData = function(data) {
+            let persons = [];
+            try {
+                if (data.taskPersons) persons = JSON.parse(data.taskPersons);
+            } catch(e) {}
+
+            let media = [];
+            try {
+                if (data.taskMedia) media = JSON.parse(data.taskMedia);
+            } catch(e) {}
+
+            let locationObj = null;
+            try {
+                if (data.taskLocationObj) locationObj = JSON.parse(data.taskLocationObj);
+            } catch(e) {}
+
             openTaskDetailModal(
                 data.taskId || data.linkId,
                 data.taskTitle || data.linkLabel,
@@ -782,7 +1027,13 @@
                 data.taskRecurrence || 'none',
                 data.taskProjectId ? Number(data.taskProjectId) : (data.projectId ? Number(data.projectId) : null),
                 data.taskCompleted === 'true' || data.taskCompleted === true,
-                data.taskPlanned === 'true' || data.taskPlanned === true || data.isPlanned === 'true' || data.isPlanned === true
+                data.taskPlanned === 'true' || data.taskPlanned === true || data.isPlanned === 'true' || data.isPlanned === true,
+                data.taskLocationId ? Number(data.taskLocationId) : (locationObj ? locationObj.id : null),
+                locationObj,
+                persons,
+                media,
+                data.taskStatus || 'in_progress',
+                data.taskStarred === 'true' || data.taskStarred === true
             );
         };
 
@@ -1062,6 +1313,7 @@
                     if (res.ok) {
                         const task = await res.json();
                         const dueStr = task.due ? new Date(task.due).toISOString().split('T')[0] : '';
+                        const locObj = task.location || task.locationRef || null;
                         openTaskDetailModal(
                             task.id,
                             task.title,
@@ -1071,7 +1323,13 @@
                             task.recurrence || 'none',
                             task.projectId,
                             task.completed,
-                            task.isPlanned
+                            task.isPlanned,
+                            task.locationId || (locObj ? locObj.id : null),
+                            locObj,
+                            task.persons || [],
+                            task.media || [],
+                            task.status || 'in_progress',
+                            task.isStarred || false
                         );
                     } else {
                         alert("Aufgabe konnte nicht geladen werden.");
@@ -1079,7 +1337,31 @@
                 } else if (type === 'project') {
                     focusWidget('projects');
                 } else if (type === 'event') {
-                    focusWidget('calendar');
+                    const res = await fetch(getApiUrl(`/api/entities/event/${id}`));
+                    if (res.ok) {
+                        const ev = await res.json();
+                        const locObj = ev.locationRef || ev.locationObj || null;
+                        openEventDetailModal(
+                            ev.id,
+                            ev.title,
+                            ev.start,
+                            ev.end,
+                            ev.isAllDay,
+                            ev.fuzzyTime,
+                            ev.description,
+                            ev.isRecurring,
+                            ev.occurrenceDate || (ev.start ? String(ev.start).split('T')[0] : ''),
+                            ev.persons || [],
+                            ev.isCancelled,
+                            ev.cancellationReason,
+                            ev.location,
+                            ev.locationId || (locObj ? locObj.id : null),
+                            locObj,
+                            ev.media || []
+                        );
+                    } else {
+                        focusWidget('calendar');
+                    }
                 } else if (type === 'timer') {
                     focusWidget('timer');
                 } else if (type === 'day') {
@@ -3251,7 +3533,7 @@
 
 
 
-        window.openTaskModal = function(taskId = null, title = '', notes = '', due = '', listTitle = '', recurrence = 'none', projectId = null, isPlanned = false, status = 'in_progress', isStarred = false) {
+        window.openTaskModal = function(taskId = null, title = '', notes = '', due = '', listTitle = '', recurrence = 'none', projectId = null, isPlanned = false, status = 'in_progress', isStarred = false, locationId = null, personIds = [], mediaIds = []) {
             const taskIdInput = document.getElementById('task-id-input');
             const modalTitle = document.querySelector('#task-modal h3');
             const saveBtn = document.querySelector('#task-modal .save');
@@ -3330,6 +3612,13 @@
                 if (saveBtn) saveBtn.textContent = "Erstellen";
             }
             
+            // Populate Entity Pickers (Locations, Persons, Media)
+            loadEntityPickerData().then(() => {
+                populateLocationSelect('task-location-select', cachedPickerLocations, locationId);
+                renderPickerChips('task-persons-container', cachedPickerPeople, personIds, 'person');
+                renderPickerChips('task-media-container', cachedPickerMedia, mediaIds, 'media');
+            });
+
             taskModal.style.display = 'block';
             document.body.classList.add('modal-active');
         };
@@ -3362,6 +3651,11 @@
                 return;
             }
             
+            const taskLocSelect = document.getElementById('task-location-select');
+            const selectedLocId = taskLocSelect && taskLocSelect.value ? Number(taskLocSelect.value) : null;
+            const selectedPersonIds = getSelectedChipIds('task-persons-container');
+            const selectedMediaIds = getSelectedChipIds('task-media-container');
+
             if (taskId) {
                 const args = {
                     taskId: taskId,
@@ -3372,7 +3666,10 @@
                     projectId: projectId ? parseInt(projectId) : null,
                     inPlanung: isPlanned || status === 'suggestion',
                     status: status,
-                    isStarred: isStarred
+                    isStarred: isStarred,
+                    locationId: selectedLocId || undefined,
+                    personIds: selectedPersonIds,
+                    mediaIds: selectedMediaIds
                 };
                 await callTool('aktualisiere_aufgabe', args);
             } else {
@@ -3381,7 +3678,10 @@
                     projectId: projectId ? parseInt(projectId) : null,
                     inPlanung: isPlanned || status === 'suggestion',
                     status: status,
-                    isStarred: isStarred
+                    isStarred: isStarred,
+                    locationId: selectedLocId || undefined,
+                    personIds: selectedPersonIds,
+                    mediaIds: selectedMediaIds
                 };
                 if (notes) args.notizen = notes;
                 if (due) args.datum = due;
@@ -3401,8 +3701,8 @@
 
 
 
-        window.editTask = function(taskId, title, notes, due, listTitle, recurrence = 'none', projectId = null, isPlanned = false, status = 'in_progress', isStarred = false) {
-            openTaskModal(taskId, title, notes, due, listTitle, recurrence, projectId, isPlanned, status, isStarred);
+        window.editTask = function(taskId, title, notes, due, listTitle, recurrence = 'none', projectId = null, isPlanned = false, status = 'in_progress', isStarred = false, locationId = null, personIds = [], mediaIds = []) {
+            openTaskModal(taskId, title, notes, due, listTitle, recurrence, projectId, isPlanned, status, isStarred, locationId, personIds, mediaIds);
         };
 
 

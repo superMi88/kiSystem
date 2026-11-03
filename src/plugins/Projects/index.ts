@@ -425,6 +425,11 @@ export const projectsPlugin: Plugin = {
       include: {
         tasks: {
           where: { isDeleted: false },
+          include: {
+            location: true,
+            persons: { include: { person: { include: { aliases: true } } } },
+            media: { include: { media: true } }
+          },
           orderBy: [
             { completed: "asc" },
             { createdAt: "asc" }
@@ -439,6 +444,11 @@ export const projectsPlugin: Plugin = {
 
     const unassignedTasks = await prisma.task.findMany({
       where: { projectId: null, due: null, isDeleted: false },
+      include: {
+        location: true,
+        persons: { include: { person: { include: { aliases: true } } } },
+        media: { include: { media: true } }
+      },
       orderBy: [
         { completed: "asc" },
         { createdAt: "asc" }
@@ -474,7 +484,21 @@ export const projectsPlugin: Plugin = {
               isStarred: t.isStarred,
               status: t.status || (t.completed ? "done" : (t.isPlanned ? "suggestion" : "in_progress")),
               isPlanned: t.isPlanned,
-              due: t.due ? t.due.toISOString() : null
+              due: t.due ? t.due.toISOString() : null,
+              location: t.location ? t.location.name : null,
+              locationId: t.locationId || null,
+              locationObj: t.location ? { id: t.location.id, name: t.location.name, address: t.location.formattedAddress || t.location.address || t.location.name } : null,
+              persons: (t.persons || []).map((tp: any) => ({
+                id: tp.person.id,
+                name: tp.person.aliases?.find((a: any) => a.isPrimary)?.name || tp.person.aliases?.[0]?.name || tp.person.name || "Person"
+              })),
+              media: (t.media || []).map((tm: any) => ({
+                id: tm.media.id,
+                title: tm.media.title,
+                fileName: tm.media.fileName,
+                filePath: tm.media.filePath,
+                category: tm.media.category
+              }))
             })),
             notes: p.notes.map((n: any) => ({
               id: n.id,
@@ -491,7 +515,21 @@ export const projectsPlugin: Plugin = {
             isStarred: t.isStarred,
             status: t.status || (t.completed ? "done" : (t.isPlanned ? "suggestion" : "in_progress")),
             isPlanned: t.isPlanned,
-            due: t.due ? t.due.toISOString() : null
+            due: t.due ? t.due.toISOString() : null,
+            location: t.location ? t.location.name : null,
+            locationId: t.locationId || null,
+            locationObj: t.location ? { id: t.location.id, name: t.location.name, address: t.location.formattedAddress || t.location.address || t.location.name } : null,
+            persons: (t.persons || []).map((tp: any) => ({
+              id: tp.person.id,
+              name: tp.person.aliases?.find((a: any) => a.isPrimary)?.name || tp.person.aliases?.[0]?.name || tp.person.name || "Person"
+            })),
+            media: (t.media || []).map((tm: any) => ({
+              id: tm.media.id,
+              title: tm.media.title,
+              fileName: tm.media.fileName,
+              filePath: tm.media.filePath,
+              category: tm.media.category
+            }))
           })),
           unassignedNotes: matchedUnassignedNotes.map(n => ({
             id: n.id,

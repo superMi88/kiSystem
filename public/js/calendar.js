@@ -311,7 +311,7 @@
                             </div>
                         </div>
                     `;
-                    const extraData = `data-task-id="${rawTaskId}" data-task-title="${escTitle}" data-task-notes="${escapeHtml(t.notes || '')}" data-task-due="${t.due || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}" data-task-completed="${isDone}" data-task-starred="${!!t.isStarred}" data-task-status="${t.status || 'in_progress'}"`;
+                    const extraData = `data-task-id="${rawTaskId}" data-task-title="${escTitle}" data-task-notes="${escapeHtml(t.notes || '')}" data-task-due="${t.due || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}" data-task-completed="${isDone}" data-task-starred="${!!t.isStarred}" data-task-status="${t.status || 'in_progress'}" data-task-location-id="${t.locationId || (t.locationObj ? t.locationObj.id : '')}" data-task-location-obj="${escapeHtml(JSON.stringify(t.locationObj || null))}" data-task-persons="${escapeHtml(JSON.stringify(t.persons || []))}" data-task-media="${escapeHtml(JSON.stringify(t.media || []))}"`;
                     html += renderSwipeLinkWrapper(itemHtml, t.title, 'task', rawTaskId, '', '', '', extraData);
                 });
                 html += `
@@ -557,10 +557,21 @@
                         const repeatBadge = (ev.recurring || recurrenceVal !== 'none') ? ` <span style="font-size: 0.7rem; color: var(--accent); opacity: 0.85;" title="Wiederkehrend: ${recurrenceVal}">🔄</span>` : '';
                         const timeBadge = ev.time ? `<span class="timeline-time-badge task-time-badge">${new Date(ev.time).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr</span>` : '';
 
-                        let personsHtml = '';
+                        let taskMetaChipsHtml = '';
+                        if (ev.locationObj) {
+                            const locId = ev.locationObj.id;
+                            const locName = ev.locationObj.name || ev.locationObj.formattedAddress;
+                            taskMetaChipsHtml += `<span class="meta-chip location" onclick="event.stopPropagation(); handleEntityClick(event, 'location', ${locId});" title="Ort: ${escapeHtml(locName)}">📍 ${escapeHtml(locName)}</span>`;
+                        }
                         if (ev.persons && ev.persons.length > 0) {
                             ev.persons.forEach(p => {
-                                personsHtml += `<span onclick="openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer;">👤 ${escapeHtml(p.name)}</span>`;
+                                taskMetaChipsHtml += `<span class="meta-chip person" onclick="event.stopPropagation(); openPersonProfileModal(${p.id});" title="Person: ${escapeHtml(p.name)}">👤 ${escapeHtml(p.name)}</span>`;
+                            });
+                        }
+                        if (ev.media && ev.media.length > 0) {
+                            ev.media.forEach(m => {
+                                const isImg = m.category === 'image' || (m.mimeType && m.mimeType.startsWith('image/')) || /\.(jpe?g|png|gif|webp|svg)$/i.test(m.fileName || '');
+                                taskMetaChipsHtml += `<span class="meta-chip media" onclick="event.stopPropagation(); handleEntityClick(event, 'media', ${m.id});" title="Datei: ${escapeHtml(m.title || m.fileName)}">${isImg ? '🖼️' : '📄'} ${escapeHtml(m.title || m.fileName)}</span>`;
                             });
                         }
 
@@ -580,16 +591,16 @@
                                             <span style="font-weight: 600; font-size: 0.82rem; ${isDone ? 'text-decoration: line-through; opacity: 0.6;' : ''}">${escTitle}</span>
                                             ${ev.isStarred ? `<span class="pinned-task-indicator" title="Angepinnt">📌</span>` : ''}
                                             ${repeatBadge}
-                                            ${personsHtml}
                                         </div>
                                         ${statusBadgeHtml}
                                     </div>
+                                    ${taskMetaChipsHtml ? `<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 3px;">${taskMetaChipsHtml}</div>` : ''}
                                     ${taskDescText}
                                 </div>
                             </div>
                         `;
 
-                        const extraData = `data-task-id="${rawTaskId}" data-task-title="${escTitle}" data-task-notes="${escNotes}" data-task-due="${ev.time || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}" data-task-completed="${isDone}" data-task-starred="${!!ev.isStarred}" data-task-status="${ev.status || 'in_progress'}"`;
+                        const extraData = `data-task-id="${rawTaskId}" data-task-title="${escTitle}" data-task-notes="${escNotes}" data-task-due="${ev.time || ''}" data-task-list="${escListTitle}" data-task-recurrence="${recurrenceVal}" data-task-completed="${isDone}" data-task-starred="${!!ev.isStarred}" data-task-status="${ev.status || 'in_progress'}" data-task-location-id="${ev.locationId || (ev.locationObj ? ev.locationObj.id : '')}" data-task-location-obj="${escapeHtml(JSON.stringify(ev.locationObj || null))}" data-task-persons="${escapeHtml(JSON.stringify(ev.persons || []))}" data-task-media="${escapeHtml(JSON.stringify(ev.media || []))}"`;
 
                         html += `
                             <div class="${stepClass}">
@@ -627,10 +638,23 @@
                         const startBadge = timeBadges.startBadge;
                         const endBadge = timeBadges.endBadge;
 
-                        let personsHtml = '';
+                        let eventMetaChipsHtml = '';
+                        if (ev.locationObj) {
+                            const locId = ev.locationObj.id;
+                            const locName = ev.locationObj.name || ev.locationObj.formattedAddress;
+                            eventMetaChipsHtml += `<span class="meta-chip location" onclick="event.stopPropagation(); handleEntityClick(event, 'location', ${locId});" title="Ort: ${escapeHtml(locName)}">📍 ${escapeHtml(locName)}</span>`;
+                        } else if (ev.location) {
+                            eventMetaChipsHtml += `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ev.location)}" target="_blank" onclick="event.stopPropagation()" class="meta-chip location" title="Standort auf Google Maps anzeigen">📍 ${escapeHtml(ev.location)}</a>`;
+                        }
                         if (ev.persons && ev.persons.length > 0) {
                             ev.persons.forEach(p => {
-                                personsHtml += `<span onclick="event.stopPropagation(); openPersonProfileModal(${p.id})" style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.7rem; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer;">👤 ${escapeHtml(p.name)}</span>`;
+                                eventMetaChipsHtml += `<span class="meta-chip person" onclick="event.stopPropagation(); openPersonProfileModal(${p.id});" title="Person: ${escapeHtml(p.name)}">👤 ${escapeHtml(p.name)}</span>`;
+                            });
+                        }
+                        if (ev.media && ev.media.length > 0) {
+                            ev.media.forEach(m => {
+                                const isImg = m.category === 'image' || (m.mimeType && m.mimeType.startsWith('image/')) || /\.(jpe?g|png|gif|webp|svg)$/i.test(m.fileName || '');
+                                eventMetaChipsHtml += `<span class="meta-chip media" onclick="event.stopPropagation(); handleEntityClick(event, 'media', ${m.id});" title="Datei: ${escapeHtml(m.title || m.fileName)}">${isImg ? '🖼️' : '📄'} ${escapeHtml(m.title || m.fileName)}</span>`;
                             });
                         }
 
@@ -709,7 +733,7 @@
                         } else {
                             eventContent = `
                                 <div class="arbeitstisch-item ${evIsPast ? 'is-past' : ''} ${evIsCurrent ? 'is-current' : ''}" 
-                                     onclick="openEventDetailModal('${ev.id}', '${escapeHtml(ev.title || 'Termin')}', '${ev.time || ev.start || ''}', '${ev.endTime || ev.end || ''}', ${!!ev.isAllDay}, '${ev.fuzzyTime || ''}', '${escapeHtml(ev.description || '')}', ${!!isRec}, '${occDateStr}', [], ${!!ev.isCancelled}, '${escapeHtml(ev.cancellationReason || '')}', '${escapeHtml(ev.location || '')}')" 
+                                     onclick="openEventDetailModal('${ev.id}', '${escapeHtml(ev.title || 'Termin')}', '${ev.time || ev.start || ''}', '${ev.endTime || ev.end || ''}', ${!!ev.isAllDay}, '${ev.fuzzyTime || ''}', '${escapeHtml(ev.description || '')}', ${!!isRec}, '${occDateStr}', ${escapeHtml(JSON.stringify(ev.persons || []))}, ${!!ev.isCancelled}, '${escapeHtml(ev.cancellationReason || '')}', '${escapeHtml(ev.location || '')}', ${ev.locationId || (ev.locationObj ? ev.locationObj.id : 'null')}, ${escapeHtml(JSON.stringify(ev.locationObj || null))}, ${escapeHtml(JSON.stringify(ev.media || []))})" 
                                      style="cursor: pointer; ${birthdayStyle} ${rescheduleBorder}">
                                     <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; width: 100%;">
                                         <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
@@ -723,15 +747,7 @@
                                                 ${inPlanningBadge}
                                             </div>
                                         </div>
-                                        ${ev.location ? `
-                                            <div style="font-size: 0.72rem; color: #89b4fa; margin-top: 4px; display: flex; align-items: center; gap: 4px;">
-                                                ${googleIcon('location_on', '12px', 'fill: currentColor;')}
-                                                <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ev.location)}" target="_blank" onclick="event.stopPropagation()" style="color: #89b4fa; text-decoration: underline;" title="Standort auf Google Maps anzeigen">
-                                                    ${escapeHtml(ev.location)}
-                                                </a>
-                                            </div>
-                                        ` : ''}
-                                        ${personsHtml ? `<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 3px;">${personsHtml}</div>` : ''}
+                                        ${eventMetaChipsHtml ? `<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 4px;">${eventMetaChipsHtml}</div>` : ''}
                                         ${descText}
                                         ${endBadge ? `
                                             <div class="timeline-event-end-row">
@@ -743,7 +759,7 @@
                             `;
                         }
 
-                        const extraData = `data-event-id="${ev.id}" data-event-title="${escapeHtml(ev.title)}" data-event-start="${ev.time || ev.start || ''}" data-event-end="${ev.endTime || ev.end || ''}" data-event-allday="${ev.isAllDay ? 'true' : 'false'}" data-event-desc="${escapeHtml(ev.description || '')}" data-event-recurring="${ev.recurring ? 'true' : 'false'}" data-event-occ="${occDateStr}" data-event-location="${escapeHtml(ev.location || '')}"`;
+                        const extraData = `data-event-id="${ev.id}" data-event-title="${escapeHtml(ev.title)}" data-event-start="${ev.time || ev.start || ''}" data-event-end="${ev.endTime || ev.end || ''}" data-event-allday="${ev.isAllDay ? 'true' : 'false'}" data-event-desc="${escapeHtml(ev.description || '')}" data-event-recurring="${ev.recurring ? 'true' : 'false'}" data-event-occ="${occDateStr}" data-event-location="${escapeHtml(ev.location || '')}" data-event-location-id="${ev.locationId || (ev.locationObj ? ev.locationObj.id : '')}" data-event-location-obj="${escapeHtml(JSON.stringify(ev.locationObj || null))}" data-event-persons="${escapeHtml(JSON.stringify(ev.persons || []))}" data-event-media="${escapeHtml(JSON.stringify(ev.media || []))}"`;
 
                         html += `
                             <div class="${stepClass}">
@@ -815,7 +831,7 @@
             // Leerer Zustand nur wenn weder Termine, noch Aufgaben, noch Tagebucheinträge vorhanden sind
             if (rawEvents.length === 0 && overdueTasks.length === 0 && diaryEntries.length === 0) {
                 html += `
-                    <div class="calendar-empty-day glass-card" style="margin-top: 10px; padding: 22px 15px; text-align: center; border-radius: 12px; border: 1px dashed rgba(255, 255, 255, 0.12); color: rgba(255, 255, 255, 0.6); font-size: 0.82rem;">
+                    <div class="calendar-empty-day" style="margin-top: 10px; padding: 22px 15px; text-align: center; color: rgba(255, 255, 255, 0.6); font-size: 0.82rem;">
                         ✨ Keine Termine oder Aufgaben für diesen Tag vorhanden.
                     </div>
                 `;

@@ -502,6 +502,24 @@ function renderProjectsWidget(data, container) {
                         `;
             }
 
+            let taskMetaChipsHtml = '';
+            if (t.locationObj) {
+                const locId = t.locationObj.id;
+                const locName = t.locationObj.name || t.locationObj.formattedAddress;
+                taskMetaChipsHtml += `<span class="meta-chip location" onclick="event.stopPropagation(); handleEntityClick(event, 'location', ${locId});" title="Ort: ${escapeHtml(locName)}">📍 ${escapeHtml(locName)}</span>`;
+            }
+            if (t.persons && t.persons.length > 0) {
+                t.persons.forEach(p => {
+                    taskMetaChipsHtml += `<span class="meta-chip person" onclick="event.stopPropagation(); openPersonProfileModal(${p.id});" title="Person: ${escapeHtml(p.name)}">👤 ${escapeHtml(p.name)}</span>`;
+                });
+            }
+            if (t.media && t.media.length > 0) {
+                t.media.forEach(m => {
+                    const isImg = m.category === 'image' || (m.mimeType && m.mimeType.startsWith('image/')) || /\.(jpe?g|png|gif|webp|svg)$/i.test(m.fileName || '');
+                    taskMetaChipsHtml += `<span class="meta-chip media" onclick="event.stopPropagation(); handleEntityClick(event, 'media', ${m.id});" title="Datei: ${escapeHtml(m.title || m.fileName)}">${isImg ? '🖼️' : '📄'} ${escapeHtml(m.title || m.fileName)}</span>`;
+                });
+            }
+
             const itemHtml = `
                         <div class="project-task-item">
                             <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
@@ -516,11 +534,11 @@ function renderProjectsWidget(data, container) {
                                     ${t.isStarred ? `<span class="pinned-task-indicator" title="Angepinnt">📌</span>` : ''}
                                 </div>
                             </div>
-                            ${dueBadge ? `<div style="margin-left: 22px;">${dueBadge}</div>` : ''}
+                            ${(dueBadge || taskMetaChipsHtml) ? `<div style="margin-left: 22px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 4px;">${dueBadge || ''}${taskMetaChipsHtml}</div>` : ''}
                         </div>
                     `;
             const effectiveStatus = t.status || currentCol || 'in_progress';
-            const extraData = `data-task-id="${rawId}" data-task-title="${escT.replace(/"/g, '&quot;')}" data-task-notes="${escN.replace(/"/g, '&quot;')}" data-task-due="${t.due || ''}" data-task-list="Standard" data-task-recurrence="${t.recurrence || 'none'}" data-task-project="${p.id}" data-task-project-id="${p.isUnassigned ? '' : p.id}" data-task-status="${effectiveStatus}" data-task-completed="${isDone}" data-task-starred="${!!t.isStarred}" data-task-planned="${!!(t.isPlanned || t.status === 'suggestion')}"`;
+            const extraData = `data-task-id="${rawId}" data-task-title="${escT.replace(/"/g, '&quot;')}" data-task-notes="${escN.replace(/"/g, '&quot;')}" data-task-due="${t.due || ''}" data-task-list="Standard" data-task-recurrence="${t.recurrence || 'none'}" data-task-project="${p.id}" data-task-project-id="${p.isUnassigned ? '' : p.id}" data-task-status="${effectiveStatus}" data-task-completed="${isDone}" data-task-starred="${!!t.isStarred}" data-task-planned="${!!(t.isPlanned || t.status === 'suggestion')}" data-task-location-id="${t.locationId || (t.locationObj ? t.locationObj.id : '')}" data-task-location-obj="${escapeHtml(JSON.stringify(t.locationObj || null))}" data-task-persons="${escapeHtml(JSON.stringify(t.persons || []))}" data-task-media="${escapeHtml(JSON.stringify(t.media || []))}"`;
             return renderSwipeLinkWrapper(itemHtml, t.title, 'task', rawId, '', '', 'margin-bottom: 0;', extraData);
         }
 
