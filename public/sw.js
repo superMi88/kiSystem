@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gemini-light-v10';
+const CACHE_NAME = 'gemini-light-v11';
 const ASSETS = [
   '/',
   '/#chat',

@@ -19,7 +19,7 @@ import { getSettings, saveSettings, AVAILABLE_TRIGGERS, saveAgentConfig, deleteA
 import { runAutomaticMigration } from "./migrate.js";
 import { getEventsForRange, getTimelineRangeData } from "./plugins/Calendar/index.js";
 import { calculateNextDueDate } from "./plugins/Tasks/index.js";
-import { syncProjectStates } from "./plugins/Projects/index.js";
+import { syncProjectStates, attachProjectStatesToProjects, ensureProjectStateSchema } from "./plugins/Projects/index.js";
 import { getDaySummaryData, getRangeSummaryData, parseLocalDate } from "./plugins/Journal/index.js";
 import { MailService } from "./plugins/Mail/service.js";
 import { runTrainTripMonitor } from "./plugins/Mail/dbBahnService.js";
@@ -170,7 +170,7 @@ app.get("/conversations/:id/meta", async (req, res) => {
         where: { conversationId: req.params.id },
         orderBy: { createdAt: 'asc' }
       });
-    } catch (_) {}
+    } catch (_) { }
     res.json({ conversation, messages, notifications });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -1048,20 +1048,20 @@ app.post("/api/projects/:id/pin", handleProjectPin);
 app.get("/api/projects/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const project = await prisma.project.findUnique({
+    const project: any = await prisma.project.findUnique({
       where: { id },
       include: {
-        states: { orderBy: { sortOrder: "asc" } },
-        tasks: { where: { isDeleted: false }, include: { state: true }, orderBy: [{ isStarred: "desc" }, { createdAt: "desc" }] },
+        tasks: { where: { isDeleted: false }, orderBy: [{ isStarred: "desc" }, { createdAt: "desc" }] },
         notes: { where: { isDeleted: false }, orderBy: { updatedAt: "desc" } }
       }
     });
     if (!project) return res.status(404).json({ error: "Projekt nicht gefunden." });
-    const pStates = (project as any).states || [];
+    await attachProjectStatesToProjects(prisma, [project]);
+    const pStates = project.states || [];
     const defState = pStates.find((s: any) => s.isDefault) || pStates[0] || null;
     const syncedCats = pStates.length > 0
       ? { items: pStates.map((s: any) => ({ id: s.id, name: s.name, icon: s.icon, isDefault: s.isDefault })), defaultId: defState.id }
-      : null;
+      : (project.categories || null);
     res.json({
       ...project,
       categories: syncedCats
@@ -1076,10 +1076,12 @@ const handleSaveProjectStates = async (req: any, res: any) => {
     const id = Number(req.params.id);
     const rawInput = req.body.states !== undefined ? req.body.states : req.body.categories;
     const states = await syncProjectStates(prisma, id, rawInput || null);
-    const updated = await prisma.project.findUnique({
-      where: { id },
-      include: { states: { orderBy: { sortOrder: "asc" } } }
+    const updated: any = await prisma.project.findUnique({
+      where: { id }
     });
+    if (updated) {
+      updated.states = states;
+    }
     res.json({ success: true, project: updated, states });
   } catch (e: any) {
     console.error("Fehler beim Speichern der Projekt-Zustände:", e);
@@ -1123,11 +1125,25 @@ app.post("/api/tasks/:id/status", async (req, res) => {
     const now = new Date();
     const updateData: any = {};
 
+    await ensureProjectStateSchema(prisma);
+
     if (/^\d+$/.test(statusStr)) {
       const numStateId = Number(statusStr);
-      const stateRecord = await (prisma as any).projectState.findUnique({ where: { id: numStateId } });
-      if (stateRecord) {
-        updateData.stateId = stateRecord.id;
+      const stRows: any[] = await (prisma as any).$queryRawUnsafe(
+        `SELECT "id", "name", "icon" FROM "ProjectState" WHERE "id" = $1`,
+        numStateId
+      ).catch(() => []);
+      if (stRows[0]) {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "Task" SET "stateId" = $1, "listTitle" = 'Standard' WHERE "id" = $2`,
+          Number(stRows[0].id),
+          id
+        );
+        const taskAfter = await prisma.task.findUnique({ where: { id } });
+        return res.json({
+          success: true,
+          task: { ...taskAfter, stateId: Number(stRows[0].id), state: stRows[0] }
+        });
       } else {
         updateData.status = statusStr;
       }
@@ -1150,8 +1166,7 @@ app.post("/api/tasks/:id/status", async (req, res) => {
 
     const updated = await prisma.task.update({
       where: { id },
-      data: updateData,
-      include: { state: true }
+      data: updateData
     });
     res.json({ success: true, task: updated });
   } catch (e: any) {
@@ -2430,7 +2445,7 @@ app.post("/api/media/upload", upload.array("files"), async (req, res) => {
       if (file.mimetype.includes("text") || [".txt", ".md", ".json", ".csv"].includes(ext)) {
         try {
           extractedText = fs.readFileSync(file.path, "utf-8");
-        } catch {}
+        } catch { }
       }
 
       const item = await (prisma as any).mediaItem.create({
@@ -2807,7 +2822,7 @@ app.post("/api/mail/send", async (req, res) => {
             selectedButton: "Im Editor gesendet"
           }
         });
-      } catch (_) {}
+      } catch (_) { }
     }
 
     res.json(sendRes);
@@ -3589,8 +3604,8 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
       console.log(`Verarbeite ${attachments.length} Anhänge für Gemini...`);
       attachments.forEach((att: any, index: number) => {
         if (att.base64 && att.mimeType) {
-          const isText = att.mimeType.startsWith("text/") || 
-                         (att.name && (att.name.endsWith(".txt") || att.name.endsWith(".md") || att.name.endsWith(".csv")));
+          const isText = att.mimeType.startsWith("text/") ||
+            (att.name && (att.name.endsWith(".txt") || att.name.endsWith(".md") || att.name.endsWith(".csv")));
           if (isText) {
             try {
               const textContent = Buffer.from(att.base64, "base64").toString("utf-8");
@@ -3694,7 +3709,7 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
                     where: { id: toolResult.notificationId },
                     data: { conversationId }
                   });
-                } catch (_) {}
+                } catch (_) { }
               }
             }
 
@@ -3794,7 +3809,7 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
     const latestNotif = createdNotifications.length > 0 ? createdNotifications[0] : null;
 
     // Wenn ein E-Mail-Entwurf erstellt wurde, entferne eine evtl. noch enthaltene doppelte Wiedergabe des E-Mail-Inhalts aus dem KI-Freitext
-    const hasMailDraft = createdNotifications.some((n: any) => 
+    const hasMailDraft = createdNotifications.some((n: any) =>
       (n.actionData && ((n.actionData as any).actionType === "send_mail" || (n.actionData as any).actionType === "send_mail_reply")) ||
       (n.title && n.title.toLowerCase().includes("mail"))
     );
@@ -3844,9 +3859,9 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
       });
     }
 
-    res.json({ 
-      text: aiText, 
-      conversationId, 
+    res.json({
+      text: aiText,
+      conversationId,
       widget: widgetData,
       notification: latestNotif,
       notifications: createdNotifications

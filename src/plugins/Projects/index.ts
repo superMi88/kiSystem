@@ -81,7 +81,146 @@ function inferStateIcon(name: string, fallback = "📌"): string {
   return fallback;
 }
 
+let projectStateSchemaInitialized = false;
+export async function ensureProjectStateSchema(prisma: any): Promise<void> {
+  if (projectStateSchemaInitialized) return;
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "ProjectState" (
+        "id" SERIAL PRIMARY KEY,
+        "projectId" INTEGER NOT NULL REFERENCES "Project"("id") ON DELETE CASCADE,
+        "name" TEXT NOT NULL,
+        "icon" TEXT NOT NULL DEFAULT '📌',
+        "color" TEXT,
+        "sortOrder" INTEGER NOT NULL DEFAULT 0,
+        "isDefault" BOOLEAN NOT NULL DEFAULT false,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "stateId" INTEGER REFERENCES "ProjectState"("id") ON DELETE SET NULL;`);
+    projectStateSchemaInitialized = true;
+  } catch (err: any) {
+    console.warn("[Projects] Schema-Check für ProjectState:", err?.message || err);
+  }
+}
+
+export async function queryProjectStates(prisma: any, projectId?: number): Promise<any[]> {
+  await ensureProjectStateSchema(prisma);
+  try {
+    const rows: any[] = projectId !== undefined
+      ? await prisma.$queryRawUnsafe(
+          `SELECT "id", "projectId", "name", "icon", "color", "sortOrder", "isDefault" FROM "ProjectState" WHERE "projectId" = $1 ORDER BY "sortOrder" ASC, "id" ASC`,
+          Number(projectId)
+        )
+      : await prisma.$queryRawUnsafe(
+          `SELECT "id", "projectId", "name", "icon", "color", "sortOrder", "isDefault" FROM "ProjectState" ORDER BY "sortOrder" ASC, "id" ASC`
+        );
+    return (rows || []).map(r => ({
+      id: Number(r.id),
+      projectId: Number(r.projectId),
+      name: String(r.name),
+      icon: r.icon || "📌",
+      color: r.color || null,
+      sortOrder: Number(r.sortOrder || 0),
+      isDefault: !!r.isDefault
+    }));
+  } catch (err: any) {
+    console.warn("[Projects] Fehler beim Abrufen von ProjectState:", err?.message || err);
+    return [];
+  }
+}
+
+export async function attachProjectStatesToProjects(prisma: any, projects: any[]): Promise<any[]> {
+  if (!Array.isArray(projects) || projects.length === 0) return projects;
+  await ensureProjectStateSchema(prisma);
+
+  try {
+    let allStates = await queryProjectStates(prisma);
+    const taskStateRows: any[] = await prisma.$queryRawUnsafe(
+      `SELECT "id", "stateId", "listTitle" FROM "Task" WHERE "projectId" IS NOT NULL AND "isDeleted" = false`
+    );
+    const taskStateMap = new Map<number, number | null>();
+    for (const r of taskStateRows) {
+      taskStateMap.set(Number(r.id), r.stateId !== null && r.stateId !== undefined ? Number(r.stateId) : null);
+    }
+
+    for (const proj of projects) {
+      let pStates = allStates.filter(s => s.projectId === Number(proj.id));
+
+      // Falls noch keine ProjectState-Zeilen existieren, aber categories JSON oder Aufgaben mit listTitle != 'Standard' vorhanden sind -> automatisch anlegen!
+      if (pStates.length === 0) {
+        let rawCats = proj.categories;
+        if (typeof rawCats === "string") {
+          try { rawCats = JSON.parse(rawCats); } catch (_) {}
+        }
+        const catItems = rawCats && typeof rawCats === "object"
+          ? (Array.isArray(rawCats) ? rawCats : (Array.isArray(rawCats.items) ? rawCats.items : []))
+          : [];
+        if (catItems.length > 0) {
+          pStates = await syncProjectStates(prisma, Number(proj.id), rawCats);
+        } else if (Array.isArray(proj.tasks) && proj.tasks.length > 0) {
+          const customListTitles: string[] = [];
+          for (const t of proj.tasks) {
+            const lt = String(t.listTitle || "").trim();
+            if (lt && lt.toLowerCase() !== "standard" && !customListTitles.some(x => x.toLowerCase() === lt.toLowerCase())) {
+              customListTitles.push(lt);
+            }
+          }
+          if (customListTitles.length > 0) {
+            pStates = await syncProjectStates(
+              prisma,
+              Number(proj.id),
+              customListTitles.map((name, idx) => ({ name, icon: inferStateIcon(name), isDefault: idx === 0 }))
+            );
+            // Aktualisiere taskStateMap nach dem Sync
+            const refreshedTaskRows: any[] = await prisma.$queryRawUnsafe(
+              `SELECT "id", "stateId" FROM "Task" WHERE "projectId" = $1 AND "isDeleted" = false`,
+              Number(proj.id)
+            );
+            for (const r of refreshedTaskRows) {
+              taskStateMap.set(Number(r.id), r.stateId !== null && r.stateId !== undefined ? Number(r.stateId) : null);
+            }
+          }
+        }
+      }
+
+      proj.states = pStates;
+      const stateById = new Map<number, any>();
+      for (const s of pStates) stateById.set(Number(s.id), s);
+      const defState = pStates.find(s => s.isDefault) || pStates[0] || null;
+
+      if (Array.isArray(proj.tasks)) {
+        for (const t of proj.tasks) {
+          let stId = taskStateMap.get(Number(t.id)) ?? (t.stateId ? Number(t.stateId) : null);
+          if (!stId && pStates.length > 0) {
+            const byName = pStates.find(
+              s =>
+                (t.listTitle && s.name.toLowerCase() === String(t.listTitle).trim().toLowerCase()) ||
+                (t.status && (s.name.toLowerCase() === String(t.status).trim().toLowerCase() || String(s.id) === String(t.status).trim()))
+            );
+            stId = byName ? Number(byName.id) : (defState ? Number(defState.id) : null);
+            if (stId) {
+              await prisma.$executeRawUnsafe(
+                `UPDATE "Task" SET "stateId" = $1, "listTitle" = 'Standard' WHERE "id" = $2`,
+                stId,
+                Number(t.id)
+              ).catch(() => {});
+            }
+          }
+          t.stateId = stId || null;
+          t.state = stId ? (stateById.get(stId) || null) : null;
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn("[Projects] Fehler bei attachProjectStatesToProjects:", err?.message || err);
+  }
+  return projects;
+}
+
 export async function syncProjectStates(prisma: any, projectId: number, rawInput: any): Promise<any[]> {
+  await ensureProjectStateSchema(prisma);
   let parsed = rawInput;
   if (typeof parsed === "string") {
     const trimmed = parsed.trim();
@@ -143,16 +282,11 @@ export async function syncProjectStates(prisma: any, projectId: number, rawInput
   });
 
   if (normalized.length === 0) {
-    await prisma.task.updateMany({
-      where: { projectId },
-      data: { stateId: null }
-    });
-    await prisma.projectState.deleteMany({
-      where: { projectId }
-    });
+    await prisma.$executeRawUnsafe(`UPDATE "Task" SET "stateId" = NULL WHERE "projectId" = $1`, Number(projectId));
+    await prisma.$executeRawUnsafe(`DELETE FROM "ProjectState" WHERE "projectId" = $1`, Number(projectId));
     await prisma.project.update({
-      where: { id: projectId },
-      data: { categories: null }
+      where: { id: Number(projectId) },
+      data: { categories: null as any }
     });
     return [];
   }
@@ -169,10 +303,7 @@ export async function syncProjectStates(prisma: any, projectId: number, rawInput
     }
   }
 
-  const existingStates: any[] = await prisma.projectState.findMany({
-    where: { projectId },
-    orderBy: { sortOrder: "asc" }
-  });
+  const existingStates: any[] = await queryProjectStates(prisma, projectId);
 
   const usedExistingIds = new Set<number>();
   const finalStates: any[] = [];
@@ -184,109 +315,112 @@ export async function syncProjectStates(prisma: any, projectId: number, rawInput
 
     if (item.rawId !== undefined && /^\d+$/.test(String(item.rawId))) {
       const numId = Number(item.rawId);
-      matched = existingStates.find(s => s.id === numId && !usedExistingIds.has(s.id));
+      matched = existingStates.find(s => Number(s.id) === numId && !usedExistingIds.has(Number(s.id)));
     }
     if (!matched) {
-      matched = existingStates.find(s => s.name.toLowerCase() === item.name.toLowerCase() && !usedExistingIds.has(s.id));
+      matched = existingStates.find(s => s.name.toLowerCase() === item.name.toLowerCase() && !usedExistingIds.has(Number(s.id)));
     }
 
     let savedState: any;
     if (matched) {
-      usedExistingIds.add(matched.id);
-      savedState = await prisma.projectState.update({
-        where: { id: matched.id },
-        data: {
-          name: item.name,
-          icon: item.icon,
-          color: item.color ?? matched.color,
-          sortOrder: i,
-          isDefault: item.isDefault
-        }
-      });
+      usedExistingIds.add(Number(matched.id));
+      const updatedRows: any[] = await prisma.$queryRawUnsafe(
+        `UPDATE "ProjectState"
+         SET "name" = $1, "icon" = $2, "color" = $3, "sortOrder" = $4, "isDefault" = $5, "updatedAt" = CURRENT_TIMESTAMP
+         WHERE "id" = $6
+         RETURNING "id", "projectId", "name", "icon", "color", "sortOrder", "isDefault"`,
+        item.name,
+        item.icon,
+        item.color ?? matched.color ?? null,
+        i,
+        !!item.isDefault,
+        Number(matched.id)
+      );
+      savedState = updatedRows[0] || { ...matched, name: item.name, icon: item.icon, sortOrder: i, isDefault: !!item.isDefault };
     } else {
-      savedState = await prisma.projectState.create({
-        data: {
-          projectId,
-          name: item.name,
-          icon: item.icon,
-          color: item.color || null,
-          sortOrder: i,
-          isDefault: item.isDefault
-        }
-      });
+      const insertedRows: any[] = await prisma.$queryRawUnsafe(
+        `INSERT INTO "ProjectState" ("projectId", "name", "icon", "color", "sortOrder", "isDefault", "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         RETURNING "id", "projectId", "name", "icon", "color", "sortOrder", "isDefault"`,
+        Number(projectId),
+        item.name,
+        item.icon,
+        item.color || null,
+        i,
+        !!item.isDefault
+      );
+      savedState = insertedRows[0];
     }
 
+    savedState.id = Number(savedState.id);
     finalStates.push(savedState);
     lookupMap.set(String(savedState.id), savedState.id);
-    lookupMap.set(savedState.name.toLowerCase(), savedState.id);
+    lookupMap.set(String(savedState.name).toLowerCase(), savedState.id);
     if (item.rawId !== undefined) {
       lookupMap.set(String(item.rawId).toLowerCase(), savedState.id);
     }
   }
 
   const defaultState = finalStates.find(s => s.isDefault) || finalStates[0];
-  const removedStateIds = existingStates.filter(s => !usedExistingIds.has(s.id)).map(s => s.id);
+  const removedStateIds = existingStates.filter(s => !usedExistingIds.has(Number(s.id))).map(s => Number(s.id));
 
-  if (removedStateIds.length > 0) {
-    await prisma.task.updateMany({
-      where: { projectId, stateId: { in: removedStateIds } },
-      data: { stateId: defaultState.id }
-    });
-    await prisma.projectState.deleteMany({
-      where: { id: { in: removedStateIds } }
-    });
+  for (const remId of removedStateIds) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "Task" SET "stateId" = $1 WHERE "projectId" = $2 AND "stateId" = $3`,
+      Number(defaultState.id),
+      Number(projectId),
+      remId
+    );
+    await prisma.$executeRawUnsafe(`DELETE FROM "ProjectState" WHERE "id" = $1`, remId);
   }
 
   // Ordne alle Aufgaben des Projekts ohne gültige stateId einem ProjectState per ID zu
-  const projectTasks = await prisma.task.findMany({
-    where: { projectId, isDeleted: false }
-  });
+  const projectTasks: any[] = await prisma.$queryRawUnsafe(
+    `SELECT "id", "stateId", "listTitle", "status" FROM "Task" WHERE "projectId" = $1 AND "isDeleted" = false`,
+    Number(projectId)
+  );
   for (const t of projectTasks) {
-    if (!t.stateId || !finalStates.some(s => s.id === t.stateId)) {
-      const byList = t.listTitle && t.listTitle.toLowerCase() !== "standard"
-        ? lookupMap.get(t.listTitle.trim().toLowerCase())
+    const currentStId = t.stateId !== null && t.stateId !== undefined ? Number(t.stateId) : null;
+    if (!currentStId || !finalStates.some(s => Number(s.id) === currentStId)) {
+      const byList = t.listTitle && String(t.listTitle).toLowerCase() !== "standard"
+        ? lookupMap.get(String(t.listTitle).trim().toLowerCase())
         : undefined;
       const byStatus = t.status
         ? lookupMap.get(String(t.status).trim().toLowerCase())
         : undefined;
-      const resolvedStateId = byList || byStatus || defaultState.id;
-      await prisma.task.update({
-        where: { id: t.id },
-        data: {
-          stateId: resolvedStateId,
-          listTitle: "Standard"
-        }
-      });
+      const resolvedStateId = byList || byStatus || Number(defaultState.id);
+      await prisma.$executeRawUnsafe(
+        `UPDATE "Task" SET "stateId" = $1, "listTitle" = 'Standard' WHERE "id" = $2`,
+        Number(resolvedStateId),
+        Number(t.id)
+      );
     }
   }
 
   const syncedCategories = {
-    items: finalStates.map(s => ({ id: s.id, name: s.name, icon: s.icon, isDefault: s.isDefault })),
-    defaultId: defaultState.id
+    items: finalStates.map(s => ({ id: Number(s.id), name: s.name, icon: s.icon, isDefault: !!s.isDefault })),
+    defaultId: Number(defaultState.id)
   };
   await prisma.project.update({
-    where: { id: projectId },
-    data: { categories: syncedCategories }
+    where: { id: Number(projectId) },
+    data: { categories: syncedCategories as any }
   });
 
   return finalStates;
 }
 
 export async function syncProjectCategoriesCache(prisma: any, projectId: number): Promise<any[]> {
-  const states = await prisma.projectState.findMany({
-    where: { projectId },
-    orderBy: { sortOrder: "asc" }
-  });
+  const states = await queryProjectStates(prisma, projectId);
   if (states.length === 0) {
-    await prisma.project.update({ where: { id: projectId }, data: { categories: null } });
+    await prisma.project.update({ where: { id: Number(projectId) }, data: { categories: null as any } });
     return [];
   }
   const defaultState = states.find((s: any) => s.isDefault) || states[0];
   const syncedCategories = {
-    items: states.map((s: any) => ({ id: s.id, name: s.name, icon: s.icon, isDefault: s.isDefault })),
-    defaultId: defaultState.id
+    items: states.map((s: any) => ({ id: Number(s.id), name: s.name, icon: s.icon, isDefault: !!s.isDefault })),
+    defaultId: Number(defaultState.id)
   };
-  await prisma.project.update({ where: { id: projectId }, data: { categories: syncedCategories } });
+  await prisma.project.update({ where: { id: Number(projectId) }, data: { categories: syncedCategories as any } });
   return states;
 }
 
@@ -315,20 +449,19 @@ export const projectsPlugin: Plugin = {
           whereClause.isStarred = true;
         }
 
-        const projects = await prisma.project.findMany({
+        const rawProjects = await prisma.project.findMany({
           where: whereClause,
           include: {
-            states: { orderBy: { sortOrder: "asc" } },
             tasks: {
-              where: { isDeleted: false },
-              include: { state: true }
+              where: { isDeleted: false }
             },
             notes: { where: { isDeleted: false } }
           },
           orderBy: { createdAt: "desc" }
         });
 
-        const matchedProjects = await matchPersonsForProjects(projects, prisma);
+        const projectsWithStates = await attachProjectStatesToProjects(prisma, rawProjects);
+        const matchedProjects = await matchPersonsForProjects(projectsWithStates, prisma);
 
         return {
           status: "success",
@@ -464,7 +597,7 @@ export const projectsPlugin: Plugin = {
         } else if (args.categories !== undefined) {
           states = await syncProjectStates(prisma, id, args.categories);
         } else {
-          states = await prisma.projectState.findMany({ where: { projectId: id }, orderBy: { sortOrder: "asc" } });
+          states = await queryProjectStates(prisma, id);
         }
 
         return {
@@ -512,6 +645,7 @@ export const projectsPlugin: Plugin = {
       },
       handler: async (args, { prisma }) => {
         try {
+          await ensureProjectStateSchema(prisma);
           const projectId = Number(args.projectId);
           const proj = await prisma.project.findUnique({ where: { id: projectId } });
           if (!proj || proj.isDeleted) {
@@ -543,59 +677,69 @@ export const projectsPlugin: Plugin = {
               return { status: "error", message: "Name für den neuen Zustand fehlt." };
             }
             const name = String(args.name).trim();
-            const existing = await prisma.projectState.findMany({ where: { projectId }, orderBy: { sortOrder: "asc" } });
+            const existing = await queryProjectStates(prisma, projectId);
             const isDef = args.isDefault !== undefined ? !!args.isDefault : existing.length === 0;
             if (isDef && existing.length > 0) {
-              await prisma.projectState.updateMany({ where: { projectId }, data: { isDefault: false } });
+              await prisma.$executeRawUnsafe(`UPDATE "ProjectState" SET "isDefault" = false WHERE "projectId" = $1`, projectId);
             }
-            const created = await prisma.projectState.create({
-              data: {
-                projectId,
-                name,
-                icon: args.icon ? String(args.icon).trim() : inferStateIcon(name),
-                sortOrder: existing.length,
-                isDefault: isDef
-              }
-            });
+            const insertedRows: any[] = await prisma.$queryRawUnsafe(
+              `INSERT INTO "ProjectState" ("projectId", "name", "icon", "sortOrder", "isDefault", "createdAt", "updatedAt")
+               VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+               RETURNING "id", "projectId", "name", "icon", "sortOrder", "isDefault"`,
+              projectId,
+              name,
+              args.icon ? String(args.icon).trim() : inferStateIcon(name),
+              existing.length,
+              isDef
+            );
+            const created = insertedRows[0];
             const allStates = await syncProjectCategoriesCache(prisma, projectId);
             return {
               status: "success",
               message: `Zustand '${created.name}' (zustandId: ${created.id}) wurde zum Projekt '${proj.name}' hinzugefügt.`,
-              zustand: { id: created.id, zustandId: created.id, name: created.name, icon: created.icon, isDefault: created.isDefault },
+              zustand: { id: Number(created.id), zustandId: Number(created.id), name: created.name, icon: created.icon, isDefault: !!created.isDefault },
               zustaende: allStates.map((s: any) => ({ id: s.id, zustandId: s.id, name: s.name, icon: s.icon, sortOrder: s.sortOrder, isDefault: s.isDefault }))
             };
           } else if (aktion === "update") {
             const stateId = Number(args.zustandId);
             if (!stateId) return { status: "error", message: "zustandId ist für 'update' erforderlich." };
+            const existing = await queryProjectStates(prisma, projectId);
+            const target = existing.find(s => Number(s.id) === stateId);
+            if (!target) return { status: "error", message: `Zustand mit ID ${stateId} nicht gefunden.` };
             if (args.isDefault) {
-              await prisma.projectState.updateMany({ where: { projectId }, data: { isDefault: false } });
+              await prisma.$executeRawUnsafe(`UPDATE "ProjectState" SET "isDefault" = false WHERE "projectId" = $1`, projectId);
             }
-            const updateData: any = {};
-            if (args.name !== undefined) updateData.name = String(args.name).trim();
-            if (args.icon !== undefined) updateData.icon = String(args.icon).trim();
-            if (args.isDefault !== undefined) updateData.isDefault = !!args.isDefault;
-            const updated = await prisma.projectState.update({
-              where: { id: stateId },
-              data: updateData
-            });
+            const newName = args.name !== undefined ? String(args.name).trim() : target.name;
+            const newIcon = args.icon !== undefined ? String(args.icon).trim() : target.icon;
+            const newDef = args.isDefault !== undefined ? !!args.isDefault : !!target.isDefault;
+            const updatedRows: any[] = await prisma.$queryRawUnsafe(
+              `UPDATE "ProjectState" SET "name" = $1, "icon" = $2, "isDefault" = $3, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = $4
+               RETURNING "id", "projectId", "name", "icon", "sortOrder", "isDefault"`,
+              newName,
+              newIcon,
+              newDef,
+              stateId
+            );
+            const updated = updatedRows[0] || { id: stateId, name: newName, icon: newIcon, isDefault: newDef };
             const allStates = await syncProjectCategoriesCache(prisma, projectId);
             return {
               status: "success",
               message: `Zustand '${updated.name}' (zustandId: ${updated.id}) wurde aktualisiert.`,
-              zustand: { id: updated.id, zustandId: updated.id, name: updated.name, icon: updated.icon, isDefault: updated.isDefault },
+              zustand: { id: Number(updated.id), zustandId: Number(updated.id), name: updated.name, icon: updated.icon, isDefault: !!updated.isDefault },
               zustaende: allStates.map((s: any) => ({ id: s.id, zustandId: s.id, name: s.name, icon: s.icon, sortOrder: s.sortOrder, isDefault: s.isDefault }))
             };
           } else if (aktion === "delete") {
             const stateId = Number(args.zustandId);
             if (!stateId) return { status: "error", message: "zustandId ist für 'delete' erforderlich." };
-            await prisma.projectState.delete({ where: { id: stateId } });
+            await prisma.$executeRawUnsafe(`DELETE FROM "ProjectState" WHERE "id" = $1`, stateId);
             const allStates = await syncProjectCategoriesCache(prisma, projectId);
             if (allStates.length > 0) {
               const defState = allStates.find((s: any) => s.isDefault) || allStates[0];
-              await prisma.task.updateMany({
-                where: { projectId, stateId: null },
-                data: { stateId: defState.id }
-              });
+              await prisma.$executeRawUnsafe(
+                `UPDATE "Task" SET "stateId" = $1 WHERE "projectId" = $2 AND "stateId" IS NULL`,
+                Number(defState.id),
+                projectId
+              );
             }
             return {
               status: "success",
@@ -818,16 +962,12 @@ export const projectsPlugin: Plugin = {
     }
   ],
   getTopWidgets: async ({ prisma }) => {
-    const projects = await prisma.project.findMany({
+    const rawProjects = await prisma.project.findMany({
       where: { isDeleted: false },
       include: {
-        states: {
-          orderBy: { sortOrder: "asc" }
-        },
         tasks: {
           where: { isDeleted: false },
           include: {
-            state: true,
             location: true,
             persons: { include: { person: { include: { aliases: true } } } },
             media: { include: { media: true } }
@@ -843,6 +983,8 @@ export const projectsPlugin: Plugin = {
       },
       orderBy: { createdAt: "desc" }
     });
+
+    const projects = await attachProjectStatesToProjects(prisma, rawProjects);
 
     const unassignedTasks = await prisma.task.findMany({
       where: { projectId: null, due: null, isDeleted: false },
@@ -883,7 +1025,7 @@ export const projectsPlugin: Plugin = {
             const defState = pStates.find((s: any) => s.isDefault) || pStates[0] || null;
             const syncedCats = pStates.length > 0
               ? { items: pStates.map((s: any) => ({ id: s.id, name: s.name, icon: s.icon, isDefault: s.isDefault })), defaultId: defState.id }
-              : null;
+              : (p.categories || null);
 
             return {
               id: p.id,
@@ -972,13 +1114,15 @@ export const projectsPlugin: Plugin = {
     displayName: "Projekt"
   },
   resolveEntity: async (id, { prisma }) => {
-    return prisma.project.findUnique({
+    const proj = await prisma.project.findUnique({
       where: { id },
       include: {
-        states: { orderBy: { sortOrder: "asc" } },
-        tasks: { where: { isDeleted: false }, include: { state: true } },
+        tasks: { where: { isDeleted: false } },
         notes: { where: { isDeleted: false } }
       }
     });
+    if (!proj) return null;
+    await attachProjectStatesToProjects(prisma, [proj]);
+    return proj;
   }
 };

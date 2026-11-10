@@ -1,5 +1,6 @@
 import { Plugin } from "../types.js";
 import { SchemaType } from "@google/generative-ai";
+import { queryProjectStates, ensureProjectStateSchema } from "../Projects/index.js";
 
 export function calculateNextDueDate(currentDue: Date, recurrence: string): Date {
   const next = new Date(currentDue);
@@ -39,16 +40,13 @@ async function resolveProjectStateForTask(
   allowDefaultFallback = false
 ): Promise<{ id: number; name: string; icon: string } | null> {
   if (!projectId) return null;
-  const states: any[] = await prisma.projectState.findMany({
-    where: { projectId },
-    orderBy: { sortOrder: "asc" }
-  });
+  const states: any[] = await queryProjectStates(prisma, Number(projectId));
   if (states.length === 0) return null;
 
   if (zustandIdArg !== undefined && zustandIdArg !== null && zustandIdArg !== "" && zustandIdArg !== "null") {
     const numId = Number(zustandIdArg);
     if (!isNaN(numId)) {
-      const byId = states.find(s => s.id === numId);
+      const byId = states.find(s => Number(s.id) === numId);
       if (byId) return byId;
     }
   }
@@ -61,7 +59,7 @@ async function resolveProjectStateForTask(
 
   for (const cand of candidates) {
     if (/^\d+$/.test(cand)) {
-      const byNum = states.find(s => s.id === Number(cand));
+      const byNum = states.find(s => Number(s.id) === Number(cand));
       if (byNum) return byNum;
     }
     const lower = cand.toLowerCase();
@@ -119,7 +117,6 @@ export const tasksPlugin: Plugin = {
           where: whereClause,
           include: {
             project: true,
-            state: true,
             location: true,
             persons: {
               include: {
@@ -136,40 +133,57 @@ export const tasksPlugin: Plugin = {
           },
           orderBy: { updatedAt: "desc" }
         });
+
+        await ensureProjectStateSchema(prisma);
+        const allStates = await queryProjectStates(prisma);
+        const stateById = new Map<number, any>();
+        for (const s of allStates) stateById.set(Number(s.id), s);
+        const taskStateRows: any[] = await (prisma as any).$queryRawUnsafe(
+          `SELECT "id", "stateId" FROM "Task" WHERE "isDeleted" = false`
+        ).catch(() => []);
+        const taskStateMap = new Map<number, number | null>();
+        for (const r of taskStateRows) {
+          taskStateMap.set(Number(r.id), r.stateId !== null && r.stateId !== undefined ? Number(r.stateId) : null);
+        }
+
         return {
           status: "success",
-          tasks: tasks.map(t => ({
-            id: String(t.id),
-            titel: t.title,
-            notizen: t.notes || "",
-            faellig: t.due ? t.due.toISOString() : null,
-            projectId: t.projectId || null,
-            projektName: t.project ? t.project.name : null,
-            zustandId: t.stateId || null,
-            zustandName: t.state ? t.state.name : null,
-            aufgabenlisteId: t.listTitle,
-            aufgabenlisteTitel: t.listTitle,
-            wiederholung: t.recurrence || null,
-            erledigt: t.completed,
-            geloescht: t.isDeleted,
-            inPlanung: t.isPlanned,
-            isStarred: t.isStarred,
-            status: t.status || (t.completed ? "done" : (t.isPlanned ? "suggestion" : "in_progress")),
-            location: t.location ? t.location.name : null,
-            locationId: t.locationId || null,
-            locationObj: t.location ? { id: t.location.id, name: t.location.name, address: t.location.formattedAddress || t.location.address || t.location.name } : null,
-            persons: (t.persons || []).map((tp: any) => ({
-              id: tp.person.id,
-              name: tp.person.aliases?.find((a: any) => a.isPrimary)?.name || tp.person.aliases?.[0]?.name || tp.person.name || "Person"
-            })),
-            media: (t.media || []).map((tm: any) => ({
-              id: tm.media.id,
-              title: tm.media.title,
-              fileName: tm.media.fileName,
-              filePath: tm.media.filePath,
-              category: tm.media.category
-            }))
-          }))
+          tasks: tasks.map(t => {
+            const stId = taskStateMap.get(Number(t.id)) ?? ((t as any).stateId ? Number((t as any).stateId) : null);
+            const stObj = stId ? (stateById.get(stId) || null) : null;
+            return {
+              id: String(t.id),
+              titel: t.title,
+              notizen: t.notes || "",
+              faellig: t.due ? t.due.toISOString() : null,
+              projectId: t.projectId || null,
+              projektName: t.project ? t.project.name : null,
+              zustandId: stId || null,
+              zustandName: stObj ? stObj.name : null,
+              aufgabenlisteId: t.listTitle,
+              aufgabenlisteTitel: t.listTitle,
+              wiederholung: t.recurrence || null,
+              erledigt: t.completed,
+              geloescht: t.isDeleted,
+              inPlanung: t.isPlanned,
+              isStarred: t.isStarred,
+              status: t.status || (t.completed ? "done" : (t.isPlanned ? "suggestion" : "in_progress")),
+              location: t.location ? t.location.name : null,
+              locationId: t.locationId || null,
+              locationObj: t.location ? { id: t.location.id, name: t.location.name, address: t.location.formattedAddress || t.location.address || t.location.name } : null,
+              persons: (t.persons || []).map((tp: any) => ({
+                id: tp.person.id,
+                name: tp.person.aliases?.find((a: any) => a.isPrimary)?.name || tp.person.aliases?.[0]?.name || tp.person.name || "Person"
+              })),
+              media: (t.media || []).map((tm: any) => ({
+                id: tm.media.id,
+                title: tm.media.title,
+                fileName: tm.media.fileName,
+                filePath: tm.media.filePath,
+                category: tm.media.category
+              }))
+            };
+          })
         };
       }
     },
@@ -219,7 +233,7 @@ export const tasksPlugin: Plugin = {
           ? args.status
           : (isPlanned ? "suggestion" : "in_progress");
         const completed = taskStatus === "done";
-        
+
         // If recurrence is set but no due date is provided, default to today
         if (recurrence && !due) {
           due = new Date();
@@ -235,7 +249,6 @@ export const tasksPlugin: Plugin = {
               listTitle: projectId ? "Standard" : (args.aufgabenlisteTitel || "Standard"),
               recurrence: recurrence,
               projectId: projectId,
-              stateId: resolvedState ? resolvedState.id : null,
               locationId: args.locationId ? Number(args.locationId) : null,
               isPlanned: isPlanned,
               isStarred: isStarred,
@@ -245,17 +258,26 @@ export const tasksPlugin: Plugin = {
             }
           });
 
+          if (resolvedState) {
+            await ensureProjectStateSchema(prisma);
+            await prisma.$executeRawUnsafe(
+              `UPDATE "Task" SET "stateId" = $1 WHERE "id" = $2`,
+              Number(resolvedState.id),
+              Number(task.id)
+            ).catch(() => {});
+          }
+
           if (args.personIds) {
             const pIds = Array.isArray(args.personIds) ? args.personIds : String(args.personIds).split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
             for (const pid of pIds) {
-              await prisma.taskPerson.create({ data: { taskId: task.id, personId: Number(pid) } }).catch(() => {});
+              await prisma.taskPerson.create({ data: { taskId: task.id, personId: Number(pid) } }).catch(() => { });
             }
           }
 
           if (args.mediaIds) {
             const mIds = Array.isArray(args.mediaIds) ? args.mediaIds : String(args.mediaIds).split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
             for (const mid of mIds) {
-              await prisma.mediaTask.create({ data: { taskId: task.id, mediaId: Number(mid) } }).catch(() => {});
+              await prisma.mediaTask.create({ data: { taskId: task.id, mediaId: Number(mid) } }).catch(() => { });
             }
           }
           return {
@@ -267,7 +289,7 @@ export const tasksPlugin: Plugin = {
               notizen: task.notes || "",
               faellig: task.due ? task.due.toISOString() : null,
               projectId: task.projectId,
-              zustandId: task.stateId || null,
+              zustandId: resolvedState ? Number(resolvedState.id) : null,
               zustandName: resolvedState ? resolvedState.name : null,
               recurrence: task.recurrence,
               inPlanung: task.isPlanned,
@@ -466,10 +488,13 @@ export const tasksPlugin: Plugin = {
             ? (args.projectId === "null" || args.projectId === null ? null : Number(args.projectId))
             : existingTask.projectId;
 
+          let targetStateIdToSet: number | null | undefined = undefined;
+          let targetStateObj: { id: number; name: string; icon: string } | null = null;
+
           if (args.projectId !== undefined) {
             updateData.projectId = effectiveProjectId;
             if (!effectiveProjectId) {
-              updateData.stateId = null;
+              targetStateIdToSet = null;
             }
           }
 
@@ -493,7 +518,8 @@ export const tasksPlugin: Plugin = {
                 args.projectId !== undefined && existingTask.projectId !== effectiveProjectId
               );
               if (resolvedState) {
-                updateData.stateId = resolvedState.id;
+                targetStateIdToSet = Number(resolvedState.id);
+                targetStateObj = resolvedState;
                 updateData.listTitle = "Standard";
               }
             }
@@ -534,15 +560,39 @@ export const tasksPlugin: Plugin = {
           const updatedTask = await prisma.task.update({
             where: { id: Number(args.taskId) },
             data: updateData,
-            include: { state: true, project: true }
+            include: { project: true }
           });
+
+          await ensureProjectStateSchema(prisma);
+          if (targetStateIdToSet !== undefined) {
+            await prisma.$executeRawUnsafe(
+              `UPDATE "Task" SET "stateId" = $1 WHERE "id" = $2`,
+              targetStateIdToSet,
+              Number(updatedTask.id)
+            ).catch(() => {});
+          }
+
+          let finalStateId: number | null = targetStateIdToSet !== undefined ? targetStateIdToSet : null;
+          if (targetStateIdToSet === undefined) {
+            const stRows: any[] = await (prisma as any).$queryRawUnsafe(
+              `SELECT "stateId" FROM "Task" WHERE "id" = $1`,
+              Number(updatedTask.id)
+            ).catch(() => []);
+            if (stRows[0] && stRows[0].stateId !== null && stRows[0].stateId !== undefined) {
+              finalStateId = Number(stRows[0].stateId);
+            }
+          }
+          if (!targetStateObj && finalStateId && updatedTask.projectId) {
+            const projStates = await queryProjectStates(prisma, Number(updatedTask.projectId));
+            targetStateObj = projStates.find(s => Number(s.id) === finalStateId) || null;
+          }
 
           if (args.personIds !== undefined) {
             await prisma.taskPerson.deleteMany({ where: { taskId: updatedTask.id } });
             if (args.personIds && args.personIds !== "null") {
               const pIds = Array.isArray(args.personIds) ? args.personIds : String(args.personIds).split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
               for (const pid of pIds) {
-                await prisma.taskPerson.create({ data: { taskId: updatedTask.id, personId: Number(pid) } }).catch(() => {});
+                await prisma.taskPerson.create({ data: { taskId: updatedTask.id, personId: Number(pid) } }).catch(() => { });
               }
             }
           }
@@ -552,21 +602,21 @@ export const tasksPlugin: Plugin = {
             if (args.mediaIds && args.mediaIds !== "null") {
               const mIds = Array.isArray(args.mediaIds) ? args.mediaIds : String(args.mediaIds).split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
               for (const mid of mIds) {
-                await prisma.mediaTask.create({ data: { taskId: updatedTask.id, mediaId: Number(mid) } }).catch(() => {});
+                await prisma.mediaTask.create({ data: { taskId: updatedTask.id, mediaId: Number(mid) } }).catch(() => { });
               }
             }
           }
           return {
             status: "success",
-            message: `Aufgabe erfolgreich aktualisiert.${(updatedTask as any).state ? ` Aktueller Projekt-Zustand: '${(updatedTask as any).state.name}' (zustandId: ${updatedTask.stateId}).` : ""}`,
+            message: `Aufgabe erfolgreich aktualisiert.${targetStateObj ? ` Aktueller Projekt-Zustand: '${targetStateObj.name}' (zustandId: ${finalStateId}).` : ""}`,
             aufgabe: {
               id: String(updatedTask.id),
               titel: updatedTask.title,
               notizen: updatedTask.notes || "",
               faellig: updatedTask.due ? updatedTask.due.toISOString() : null,
               projectId: updatedTask.projectId || null,
-              zustandId: updatedTask.stateId || null,
-              zustandName: (updatedTask as any).state ? (updatedTask as any).state.name : null,
+              zustandId: finalStateId || null,
+              zustandName: targetStateObj ? targetStateObj.name : null,
               inPlanung: updatedTask.isPlanned,
               isStarred: updatedTask.isStarred,
               status: updatedTask.status,
@@ -591,15 +641,10 @@ export const tasksPlugin: Plugin = {
     displayName: "Aufgabe"
   },
   resolveEntity: async (id, { prisma }) => {
-    return prisma.task.findUnique({
+    const task: any = await prisma.task.findUnique({
       where: { id: Number(id) },
       include: {
-        project: {
-          include: {
-            states: { orderBy: { sortOrder: "asc" } }
-          }
-        },
-        state: true,
+        project: true,
         location: true,
         persons: {
           include: {
@@ -615,5 +660,19 @@ export const tasksPlugin: Plugin = {
         }
       }
     });
+    if (!task) return null;
+    await ensureProjectStateSchema(prisma);
+    if (task.project) {
+      const states = await queryProjectStates(prisma, Number(task.project.id));
+      task.project.states = states;
+      const stRows: any[] = await (prisma as any).$queryRawUnsafe(
+        `SELECT "stateId" FROM "Task" WHERE "id" = $1`,
+        Number(task.id)
+      ).catch(() => []);
+      const stId = stRows[0]?.stateId !== null && stRows[0]?.stateId !== undefined ? Number(stRows[0].stateId) : null;
+      task.stateId = stId;
+      task.state = stId ? (states.find(s => Number(s.id) === stId) || null) : null;
+    }
+    return task;
   }
 };

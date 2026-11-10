@@ -353,17 +353,27 @@ export async function runAutomaticMigration(prisma: PrismaClient) {
     `);
     await prisma.$executeRawUnsafe(`ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "stateId" INTEGER REFERENCES "ProjectState"("id") ON DELETE SET NULL;`);
 
-    // Migriere bestehende Projekte (categories JSON oder Aufgaben mit listTitle-Kategorien) in echte ProjectState-Datensätze
-    const allProjects = await (prisma as any).project.findMany({
+    // Migriere bestehende Projekte (categories JSON oder Aufgaben mit listTitle-Kategorien) in echte ProjectState-Datensätze (per Raw-SQL unabhängig vom PrismaClient-Stand)
+    const allProjects = await prisma.project.findMany({
       include: {
-        states: { orderBy: { sortOrder: "asc" } },
         tasks: { where: { isDeleted: false } }
       }
     });
 
+    const allDbStates: any[] = await prisma.$queryRawUnsafe(
+      `SELECT "id", "projectId", "name", "icon", "color", "sortOrder", "isDefault" FROM "ProjectState" ORDER BY "sortOrder" ASC, "id" ASC`
+    );
+    const taskStateRows: any[] = await prisma.$queryRawUnsafe(
+      `SELECT "id", "stateId" FROM "Task" WHERE "isDeleted" = false`
+    );
+    const taskStateMap = new Map<number, number | null>();
+    for (const r of taskStateRows) {
+      taskStateMap.set(Number(r.id), r.stateId !== null && r.stateId !== undefined ? Number(r.stateId) : null);
+    }
+
     for (const proj of allProjects) {
-      let existingStates: any[] = proj.states || [];
-      let rawCats = proj.categories;
+      let existingStates: any[] = allDbStates.filter(s => Number(s.projectId) === Number(proj.id));
+      let rawCats: any = (proj as any).categories;
       if (typeof rawCats === "string") {
         try { rawCats = JSON.parse(rawCats); } catch (_) {}
       }
@@ -424,26 +434,30 @@ export async function runAutomaticMigration(prisma: PrismaClient) {
           }
           for (let i = 0; i < itemsToCreate.length; i++) {
             const it = itemsToCreate[i];
-            const createdState = await (prisma as any).projectState.create({
-              data: {
-                projectId: proj.id,
-                name: it.name,
-                icon: it.icon || "📌",
-                sortOrder: i,
-                isDefault: it.isDefault
+            const insertedRows: any[] = await prisma.$queryRawUnsafe(
+              `INSERT INTO "ProjectState" ("projectId", "name", "icon", "sortOrder", "isDefault", "createdAt", "updatedAt")
+               VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+               RETURNING "id", "projectId", "name", "icon", "color", "sortOrder", "isDefault"`,
+              Number(proj.id),
+              it.name,
+              it.icon || "📌",
+              i,
+              !!it.isDefault
+            );
+            const createdState = insertedRows[0];
+            if (createdState) {
+              existingStates.push(createdState);
+              if (it.legacyId) {
+                legacyIdToNewStateId.set(it.legacyId.toLowerCase(), Number(createdState.id));
               }
-            });
-            existingStates.push(createdState);
-            if (it.legacyId) {
-              legacyIdToNewStateId.set(it.legacyId.toLowerCase(), createdState.id);
+              legacyIdToNewStateId.set(it.name.toLowerCase(), Number(createdState.id));
             }
-            legacyIdToNewStateId.set(it.name.toLowerCase(), createdState.id);
           }
         }
       } else {
         for (const st of existingStates) {
-          legacyIdToNewStateId.set(String(st.id), st.id);
-          legacyIdToNewStateId.set(st.name.toLowerCase(), st.id);
+          legacyIdToNewStateId.set(String(st.id), Number(st.id));
+          legacyIdToNewStateId.set(String(st.name).toLowerCase(), Number(st.id));
         }
       }
 
@@ -451,29 +465,31 @@ export async function runAutomaticMigration(prisma: PrismaClient) {
         const defaultState = existingStates.find((s: any) => s.isDefault) || existingStates[0];
         // Synchronisiere proj.categories mit den echten DB-IDs für Abwärtskompatibilität
         const syncedCats = {
-          items: existingStates.map((s: any) => ({ id: s.id, name: s.name, icon: s.icon, isDefault: s.isDefault })),
-          defaultId: defaultState.id
+          items: existingStates.map((s: any) => ({ id: Number(s.id), name: s.name, icon: s.icon, isDefault: !!s.isDefault })),
+          defaultId: Number(defaultState.id)
         };
-        await (prisma as any).project.update({
+        await prisma.project.update({
           where: { id: proj.id },
-          data: { categories: syncedCats }
+          data: { categories: syncedCats as any }
         });
 
         // Ordne Aufgaben im Projekt, die noch keine stateId haben, dem passenden ProjectState per ID zu
         for (const t of (proj.tasks || [])) {
-          if (!t.stateId) {
+          const currentStateId = taskStateMap.get(Number(t.id));
+          if (!currentStateId) {
             const byListTitle = t.listTitle && t.listTitle.toLowerCase() !== "standard"
               ? legacyIdToNewStateId.get(t.listTitle.trim().toLowerCase())
               : undefined;
-            const byStatus = t.status
-              ? (legacyIdToNewStateId.get(String(t.status).trim().toLowerCase()) || legacyIdToNewStateId.get(String(t.status).trim()))
+            const byStatus = (t as any).status
+              ? (legacyIdToNewStateId.get(String((t as any).status).trim().toLowerCase()) || legacyIdToNewStateId.get(String((t as any).status).trim()))
               : undefined;
-            const targetStateId = byListTitle || byStatus || defaultState.id;
+            const targetStateId = byListTitle || byStatus || Number(defaultState.id);
             if (targetStateId) {
-              await (prisma as any).task.update({
-                where: { id: t.id },
-                data: { stateId: targetStateId }
-              });
+              await prisma.$executeRawUnsafe(
+                `UPDATE "Task" SET "stateId" = $1, "listTitle" = 'Standard' WHERE "id" = $2`,
+                Number(targetStateId),
+                Number(t.id)
+              );
             }
           }
         }

@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "postinstall": "npx prisma generate",
+    "build": "npx prisma generate && tsc",
     "start": "node build/index.js",
     "server": "npm run build && node build/index.js",
     "dev:server": "npm run build && node build/index.js",
