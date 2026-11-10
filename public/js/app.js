@@ -549,3 +549,218 @@
                 console.error("Capacitor backButton listener registration error:", err);
             }
         }
+
+        // =========================================================================
+        // Universal Pull-to-Refresh (Swipe Down at Top of Any View)
+        // =========================================================================
+        function initPullToRefresh() {
+            if (document.getElementById('pull-to-refresh-indicator')) return;
+
+            const indicator = document.createElement('div');
+            indicator.id = 'pull-to-refresh-indicator';
+            indicator.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <polyline points="1 20 1 14 7 14"></polyline>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
+            `;
+            document.body.appendChild(indicator);
+            const iconSvg = indicator.querySelector('svg');
+
+            let startY = 0;
+            let startX = 0;
+            let currentPull = 0;
+            let isPulling = false;
+            let isRefreshing = false;
+            let activeScrollEl = null;
+
+            const PULL_THRESHOLD = 72;
+            const MAX_PULL = 125;
+
+            function getActiveScrollableContainer(target) {
+                // Ignore pulls starting inside open popup modals, inputs, or the side drawer
+                if (!target || target.closest('#mobile-drawer, .glass-card[id$="-modal"]:not(#mail-read-modal), .input-area, input, textarea, select')) {
+                    return null;
+                }
+
+                const setSec = document.getElementById('settings-section');
+                if (setSec && setSec.style.display !== 'none' && target.closest('#settings-section')) {
+                    return setSec.querySelector('.settings-body') || setSec;
+                }
+
+                const histSec = document.getElementById('history-section');
+                if (histSec && histSec.style.display !== 'none' && target.closest('#history-section')) {
+                    return document.getElementById('history-list') || histSec;
+                }
+
+                if (document.body.classList.contains('view-chat') && target.closest('#chat-box')) {
+                    return document.getElementById('chat-box');
+                }
+
+                const topPanel = document.querySelector('.top-panel');
+                if (topPanel && target.closest('.top-panel')) {
+                    return topPanel;
+                }
+
+                return null;
+            }
+
+            async function performActiveViewRefresh() {
+                const setSec = document.getElementById('settings-section');
+                if (setSec && setSec.style.display !== 'none') {
+                    if (typeof loadSettings === 'function') await loadSettings();
+                    if (typeof loadRegisteredToolsOverview === 'function') await loadRegisteredToolsOverview();
+                    return;
+                }
+
+                const histSec = document.getElementById('history-section');
+                if (histSec && histSec.style.display !== 'none') {
+                    if (typeof loadHistory === 'function') await loadHistory();
+                    return;
+                }
+
+                if (document.body.classList.contains('view-chat')) {
+                    if (window.currentConversationId && typeof loadConversation === 'function') {
+                        await loadConversation(window.currentConversationId);
+                    }
+                    await loadTopWidgets();
+                    return;
+                }
+
+                // Mail-Ansicht: E-Mails vom Server synchronisieren (wie früher der Sync-Button)
+                if (document.body.classList.contains('view-mail')) {
+                    if (document.body.classList.contains('mail-read-active') && window.currentReadMailId && typeof openMailReadModal === 'function') {
+                        await openMailReadModal(window.currentReadMailId);
+                    } else if (typeof syncAllMailsManual === 'function') {
+                        await syncAllMailsManual(false);
+                    } else {
+                        await loadTopWidgets();
+                    }
+                    return;
+                }
+
+                // Kalender: Timeline-Cache für den aktuellen Tag leeren und neu laden
+                if (document.body.classList.contains('view-calendar') || document.body.classList.contains('view-dashboard')) {
+                    if (window.calendarTimelineCache) {
+                        window.calendarTimelineCache = {};
+                    }
+                    await loadTopWidgets();
+                    return;
+                }
+
+                // Orte
+                if (document.body.classList.contains('view-locations') && typeof refreshLocationsData === 'function') {
+                    await refreshLocationsData();
+                    await loadTopWidgets();
+                    return;
+                }
+
+                // Fotos / Dokumente / Medien
+                if ((document.body.classList.contains('view-photos') || document.body.classList.contains('view-docs') || document.body.classList.contains('view-media')) && typeof refreshMediaData === 'function') {
+                    await refreshMediaData();
+                    await loadTopWidgets();
+                    return;
+                }
+
+                // Alle anderen Ansichten (insb. Agent-Briefing, Projekte, Personen, Timer, Aufgaben)
+                await loadTopWidgets();
+            }
+
+            document.addEventListener('touchstart', (e) => {
+                if (isRefreshing || e.touches.length !== 1) return;
+                const scrollEl = getActiveScrollableContainer(e.target);
+                if (!scrollEl || scrollEl.scrollTop > 2) {
+                    activeScrollEl = null;
+                    isPulling = false;
+                    return;
+                }
+                activeScrollEl = scrollEl;
+                startY = e.touches[0].clientY;
+                startX = e.touches[0].clientX;
+                currentPull = 0;
+                isPulling = false;
+            }, { passive: true });
+
+            document.addEventListener('touchmove', (e) => {
+                if (isRefreshing || !activeScrollEl || e.touches.length !== 1) return;
+                if (activeScrollEl.scrollTop > 2) {
+                    if (isPulling) {
+                        isPulling = false;
+                        indicator.classList.remove('dragging', 'ready');
+                        indicator.style.transform = 'translate(-50%, -80px) scale(0.6)';
+                        indicator.style.opacity = '0';
+                    }
+                    return;
+                }
+
+                const dy = e.touches[0].clientY - startY;
+                const dx = Math.abs(e.touches[0].clientX - startX);
+
+                if (dy <= 8) return;
+                if (!isPulling && dx > dy) {
+                    // Horizontal swipe (e.g. swipe-to-link or day navigation), ignore pull-to-refresh
+                    activeScrollEl = null;
+                    return;
+                }
+
+                isPulling = true;
+                if (e.cancelable) {
+                    e.preventDefault();
+                }
+
+                // gedämpfte Zugkurve wie in nativen Apps
+                currentPull = Math.min(MAX_PULL, Math.pow(dy, 0.82) * 1.65);
+                const progress = Math.min(1, currentPull / PULL_THRESHOLD);
+                const topOffset = document.body.classList.contains('mobile-mode') ? 54 : 16;
+                const translateY = -60 + (currentPull * 0.75) + (topOffset * progress * 0.5);
+
+                indicator.classList.add('dragging');
+                indicator.classList.toggle('ready', currentPull >= PULL_THRESHOLD);
+                indicator.style.opacity = String(Math.min(1, progress * 1.15));
+                indicator.style.transform = `translate(-50%, ${translateY}px) scale(${0.65 + progress * 0.35})`;
+                if (iconSvg) {
+                    iconSvg.style.transform = `rotate(${currentPull * 3.2}deg)`;
+                }
+            }, { passive: false });
+
+            async function finishPull() {
+                if (!isPulling || isRefreshing) return;
+                isPulling = false;
+                indicator.classList.remove('dragging');
+
+                if (currentPull >= PULL_THRESHOLD) {
+                    isRefreshing = true;
+                    const restY = document.body.classList.contains('mobile-mode') ? 56 : 20;
+                    indicator.classList.remove('ready');
+                    indicator.classList.add('refreshing');
+                    indicator.style.opacity = '1';
+                    indicator.style.transform = `translate(-50%, ${restY}px) scale(1)`;
+
+                    try {
+                        await performActiveViewRefresh();
+                    } catch (err) {
+                        console.error('Pull-to-refresh Fehler:', err);
+                    } finally {
+                        setTimeout(() => {
+                            indicator.classList.remove('refreshing');
+                            indicator.style.opacity = '0';
+                            indicator.style.transform = 'translate(-50%, -80px) scale(0.6)';
+                            isRefreshing = false;
+                            currentPull = 0;
+                        }, 220);
+                    }
+                } else {
+                    indicator.classList.remove('ready');
+                    indicator.style.opacity = '0';
+                    indicator.style.transform = 'translate(-50%, -80px) scale(0.6)';
+                    currentPull = 0;
+                }
+                activeScrollEl = null;
+            }
+
+            document.addEventListener('touchend', finishPull, { passive: true });
+            document.addEventListener('touchcancel', finishPull, { passive: true });
+        }
+
+        initPullToRefresh();
