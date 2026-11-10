@@ -63,15 +63,60 @@ function updateProjectsHeader(activeProject) {
 
 window.updateProjectsHeader = updateProjectsHeader;
 
+function getProjectStateConfig(proj) {
+    if (!proj) return null;
+    if (Array.isArray(proj.states) && proj.states.length > 0) {
+        const items = proj.states.map(s => ({
+            id: String(s.id),
+            dbId: s.id,
+            name: s.name,
+            icon: s.icon || '📌',
+            isDefault: !!s.isDefault
+        }));
+        const defState = items.find(s => s.isDefault) || items[0];
+        return {
+            items,
+            defaultId: String(defState.id)
+        };
+    }
+    if (proj.categories) {
+        try {
+            const raw = typeof proj.categories === 'string' ? JSON.parse(proj.categories) : proj.categories;
+            const rawItems = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.items) ? raw.items : []);
+            if (rawItems.length > 0) {
+                const items = rawItems.map((c, idx) => {
+                    if (typeof c === 'string') {
+                        return { id: c, name: c, icon: '📌', isDefault: idx === 0 };
+                    }
+                    const idStr = String(c.id !== undefined && c.id !== null ? c.id : c.name);
+                    return {
+                        id: idStr,
+                        dbId: /^\d+$/.test(idStr) ? Number(idStr) : null,
+                        name: c.name || idStr,
+                        icon: c.icon || '📌',
+                        isDefault: !!c.isDefault
+                    };
+                });
+                const defId = (raw && raw.defaultId !== undefined && raw.defaultId !== null)
+                    ? String(raw.defaultId)
+                    : String((items.find(i => i.isDefault) || items[0]).id);
+                return { items, defaultId: defId };
+            }
+        } catch (e) { }
+    }
+    return null;
+}
+window.getProjectStateConfig = getProjectStateConfig;
+
 window.activeProjectStatusTab = 'in_progress';
 
 window.switchProjectStatusTab = function (tab) {
-    window.activeProjectStatusTab = tab || 'in_progress';
+    window.activeProjectStatusTab = String(tab || 'in_progress');
     document.querySelectorAll('.project-status-tab-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.statusTab === window.activeProjectStatusTab);
+        btn.classList.toggle('active', String(btn.dataset.statusTab) === String(window.activeProjectStatusTab));
     });
     document.querySelectorAll('.project-task-column').forEach(col => {
-        col.classList.toggle('is-active-tab', col.dataset.statusCol === window.activeProjectStatusTab);
+        col.classList.toggle('is-active-tab', String(col.dataset.statusCol) === String(window.activeProjectStatusTab));
     });
     const addBtn = document.getElementById('header-project-add-btn');
     if (addBtn && window.activeProjectDetailId !== null && window.activeProjectDetailId !== undefined) {
@@ -86,14 +131,9 @@ window.openProjectDetailPage = function (id) {
     window.activeProjectDetailId = id;
     const projects = (window.lastProjectsData && window.lastProjectsData.projects) || [];
     const proj = projects.find(p => String(p.id) === String(id));
-    let catConfig = null;
-    if (proj && proj.categories) {
-        try {
-            catConfig = typeof proj.categories === 'string' ? JSON.parse(proj.categories) : proj.categories;
-        } catch (e) { }
-    }
+    const catConfig = getProjectStateConfig(proj);
     if (catConfig && Array.isArray(catConfig.items) && catConfig.items.length > 0) {
-        window.activeProjectStatusTab = catConfig.defaultId || catConfig.items[0].id;
+        window.activeProjectStatusTab = String(catConfig.defaultId || catConfig.items[0].id);
     } else {
         window.activeProjectStatusTab = 'all';
     }
@@ -113,21 +153,19 @@ window.openProjectSettingsModal = async function (projectId) {
     const projects = (window.lastProjectsData && window.lastProjectsData.projects) || [];
     let proj = projects.find(p => String(p.id) === String(projectId));
 
-    if (!proj) {
-        try {
-            const res = await fetch(getApiUrl(`/api/projects/${projectId}`));
-            if (res.ok) {
-                proj = await res.json();
-            }
-        } catch (e) {
-            console.error("[Projects] Fehler beim Laden des Projekts:", e);
+    try {
+        const res = await fetch(getApiUrl(`/api/projects/${projectId}`));
+        if (res.ok) {
+            proj = await res.json();
         }
+    } catch (e) {
+        console.error("[Projects] Fehler beim Laden des Projekts:", e);
     }
 
     if (!proj) {
         const headerTitle = document.getElementById('project-detail-title');
         const projName = headerTitle ? headerTitle.textContent.trim() : 'Projekt';
-        proj = { id: Number(projectId), name: projName, categories: null };
+        proj = { id: Number(projectId), name: projName, states: [], categories: null };
     }
 
     const idInput = document.getElementById('project-settings-id-input');
@@ -135,12 +173,7 @@ window.openProjectSettingsModal = async function (projectId) {
     if (idInput) idInput.value = proj.id;
     if (titleEl) titleEl.textContent = `Zustände für „${proj.name}“`;
 
-    let catConfig = null;
-    if (proj.categories) {
-        try {
-            catConfig = typeof proj.categories === 'string' ? JSON.parse(proj.categories) : proj.categories;
-        } catch (e) { }
-    }
+    const catConfig = getProjectStateConfig(proj);
 
     renderProjectSettingsCategoryRows(catConfig);
 
@@ -163,7 +196,7 @@ window.renderProjectSettingsCategoryRows = function (catConfig) {
     listEl.innerHTML = '';
 
     const items = (catConfig && Array.isArray(catConfig.items)) ? catConfig.items : [];
-    const defaultId = (catConfig && catConfig.defaultId) ? catConfig.defaultId : (items[0]?.id || null);
+    const defaultId = (catConfig && catConfig.defaultId) ? String(catConfig.defaultId) : (items[0] ? String(items[0].id) : null);
 
     if (items.length === 0) {
         listEl.innerHTML = `
@@ -175,8 +208,8 @@ window.renderProjectSettingsCategoryRows = function (catConfig) {
     }
 
     items.forEach((cat, idx) => {
-        const isDefault = (cat.id === defaultId) || (!defaultId && idx === 0);
-        addProjectSettingCategoryRow(cat.id, cat.name, cat.icon, isDefault);
+        const isDefault = (String(cat.id) === String(defaultId)) || (!defaultId && idx === 0);
+        addProjectSettingCategoryRow(String(cat.id), cat.name, cat.icon, isDefault);
     });
 };
 
@@ -237,18 +270,21 @@ window.saveProjectSettingsCategories = async function () {
 
         rows.forEach((row, index) => {
             const id = row.getAttribute('data-cat-id') || `cat_${Date.now()}_${index}`;
+            const dbIdAttr = row.getAttribute('data-cat-db-id');
+            const dbId = dbIdAttr && /^\d+$/.test(dbIdAttr) ? Number(dbIdAttr) : (/^\d+$/.test(String(id)) ? Number(id) : null);
             const icon = row.querySelector('.cat-icon-input')?.value?.trim() || '📌';
             const name = row.querySelector('.cat-name-input')?.value?.trim() || `Zustand ${index + 1}`;
-            const isDefault = row.querySelector('input[type="radio"]')?.checked;
+            const isDefault = !!row.querySelector('input[type="radio"]')?.checked;
             if (isDefault) {
                 defaultId = id;
             }
-            items.push({ id, name, icon });
+            items.push({ id: dbId || id, name, icon, isDefault });
         });
 
         if (items.length > 0) {
             if (!defaultId) {
-                defaultId = items[0].id;
+                defaultId = String(items[0].id);
+                items[0].isDefault = true;
             }
             categoriesPayload = {
                 items,
@@ -264,9 +300,15 @@ window.saveProjectSettingsCategories = async function () {
             body: JSON.stringify({ categories: categoriesPayload })
         });
         if (res.ok) {
+            const resData = await res.json().catch(() => ({}));
             closeProjectSettingsModal();
             if (String(window.activeProjectDetailId) === String(projectId)) {
-                window.activeProjectStatusTab = categoriesPayload?.defaultId || categoriesPayload?.items[0]?.id || 'in_progress';
+                if (resData && Array.isArray(resData.states) && resData.states.length > 0) {
+                    const defState = resData.states.find(s => s.isDefault) || resData.states[0];
+                    window.activeProjectStatusTab = String(defState.id);
+                } else {
+                    window.activeProjectStatusTab = 'all';
+                }
             }
             if (typeof loadTopWidgets === 'function') {
                 loadTopWidgets();
@@ -355,10 +397,15 @@ window.updateTaskStatus = async function (id, status, ev) {
     }
     try {
         const rawId = String(id).replace('task-', '');
+        const statusStr = String(status);
+        const isNumericState = /^\d+$/.test(statusStr);
         const res = await fetch(getApiUrl(`/api/tasks/${rawId}/status`), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status })
+            body: JSON.stringify({
+                status: statusStr,
+                stateId: isNumericState ? Number(statusStr) : undefined
+            })
         });
         if (res.ok) {
             loadTopWidgets();
@@ -371,7 +418,8 @@ window.updateTaskStatus = async function (id, status, ev) {
 
 
 window.openTaskModalForProject = function (projectId, status = 'in_progress') {
-    const targetStatus = (status === 'all' || !status) ? 'in_progress' : status;
+    const statusStr = String(status || 'in_progress');
+    const targetStatus = (statusStr === 'all' || !statusStr) ? 'in_progress' : statusStr;
     openTaskModal(null, '', '', '', '', 'none', projectId, targetStatus === 'suggestion', targetStatus, false);
 };
 
@@ -412,12 +460,7 @@ function renderProjectsWidget(data, container) {
         const pTasks = p.tasks || [];
         const pNotes = p.notes || [];
 
-        let catConfig = null;
-        if (p.categories) {
-            try {
-                catConfig = typeof p.categories === 'string' ? JSON.parse(p.categories) : p.categories;
-            } catch (e) { }
-        }
+        let catConfig = getProjectStateConfig(p);
         let customCats = (catConfig && Array.isArray(catConfig.items) && catConfig.items.length > 0) ? catConfig.items : null;
 
         // For Inbox/Allgemein fallback to default 3 columns if not explicitly configured
@@ -430,10 +473,10 @@ function renderProjectsWidget(data, container) {
             catConfig = { items: customCats, defaultId: 'in_progress' };
         }
 
-        let activeTab = window.activeProjectStatusTab;
+        let activeTab = String(window.activeProjectStatusTab || '');
         if (customCats) {
-            if (!activeTab || !customCats.some(c => c.id === activeTab)) {
-                activeTab = (catConfig && catConfig.defaultId) || customCats[0].id;
+            if (!activeTab || !customCats.some(c => String(c.id) === activeTab)) {
+                activeTab = String((catConfig && catConfig.defaultId) || customCats[0].id);
                 window.activeProjectStatusTab = activeTab;
             }
         } else {
@@ -441,13 +484,16 @@ function renderProjectsWidget(data, container) {
             window.activeProjectStatusTab = 'all';
         }
 
-        // Partition tasks by category
+        // Partition tasks by ProjectState ID (stateId) first, then legacy status / listTitle
         const tasksByCat = {};
         if (customCats) {
-            customCats.forEach(c => { tasksByCat[c.id] = []; });
+            customCats.forEach(c => { tasksByCat[String(c.id)] = []; });
             pTasks.forEach(t => {
-                const st = t.status;
-                if (st && tasksByCat[st]) {
+                const stateIdStr = t.stateId !== undefined && t.stateId !== null ? String(t.stateId) : null;
+                const st = t.status !== undefined && t.status !== null ? String(t.status) : null;
+                if (stateIdStr && tasksByCat[stateIdStr]) {
+                    tasksByCat[stateIdStr].push(t);
+                } else if (st && tasksByCat[st]) {
                     tasksByCat[st].push(t);
                 } else if (tasksByCat['done'] && (t.completed || st === 'done')) {
                     tasksByCat['done'].push(t);
@@ -456,11 +502,20 @@ function renderProjectsWidget(data, container) {
                 } else if (tasksByCat['in_progress'] && (st === 'in_progress' || !st)) {
                     tasksByCat['in_progress'].push(t);
                 } else {
-                    const fallbackCat = (catConfig && catConfig.defaultId) || customCats[0].id;
-                    if (tasksByCat[fallbackCat]) {
-                        tasksByCat[fallbackCat].push(t);
+                    // Check if state name matches listTitle or status
+                    const matchedByName = customCats.find(c =>
+                        (t.listTitle && c.name.toLowerCase() === String(t.listTitle).toLowerCase()) ||
+                        (st && c.name.toLowerCase() === st.toLowerCase())
+                    );
+                    if (matchedByName && tasksByCat[String(matchedByName.id)]) {
+                        tasksByCat[String(matchedByName.id)].push(t);
                     } else {
-                        tasksByCat[customCats[0].id].push(t);
+                        const fallbackCat = String((catConfig && catConfig.defaultId) || customCats[0].id);
+                        if (tasksByCat[fallbackCat]) {
+                            tasksByCat[fallbackCat].push(t);
+                        } else {
+                            tasksByCat[String(customCats[0].id)].push(t);
+                        }
                     }
                 }
             });
@@ -490,11 +545,11 @@ function renderProjectsWidget(data, container) {
 
             let catSelectHtml = '';
             if (customCats && customCats.length > 1) {
-                const currentCatVal = t.status || currentCol || customCats[0].id;
+                const currentCatVal = String((t.stateId !== undefined && t.stateId !== null ? t.stateId : null) || currentCol || t.status || customCats[0].id);
                 catSelectHtml = `
                             <select class="task-category-select" onclick="event.stopPropagation()" onchange="updateTaskStatus('${rawId}', this.value, event)" title="Zustand ändern" style="font-size: 0.68rem; padding: 2px 4px; border-radius: 6px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.85); cursor: pointer; outline: none; max-width: 110px;">
                                 ${customCats.map(c => `
-                                    <option value="${escapeHtml(c.id)}" ${c.id === currentCatVal ? 'selected' : ''} style="background: #1e1e2e; color: #fff;">
+                                    <option value="${escapeHtml(String(c.id))}" ${String(c.id) === currentCatVal ? 'selected' : ''} style="background: #1e1e2e; color: #fff;">
                                         ${escapeHtml(c.icon || '📌')} ${escapeHtml(c.name)}
                                     </option>
                                 `).join('')}
@@ -537,8 +592,8 @@ function renderProjectsWidget(data, container) {
                             ${(dueBadge || taskMetaChipsHtml) ? `<div style="margin-left: 22px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 4px;">${dueBadge || ''}${taskMetaChipsHtml}</div>` : ''}
                         </div>
                     `;
-            const effectiveStatus = t.status || currentCol || 'in_progress';
-            const extraData = `data-task-id="${rawId}" data-task-title="${escT.replace(/"/g, '&quot;')}" data-task-notes="${escN.replace(/"/g, '&quot;')}" data-task-due="${t.due || ''}" data-task-list="Standard" data-task-recurrence="${t.recurrence || 'none'}" data-task-project="${p.id}" data-task-project-id="${p.isUnassigned ? '' : p.id}" data-task-status="${effectiveStatus}" data-task-completed="${isDone}" data-task-starred="${!!t.isStarred}" data-task-planned="${!!(t.isPlanned || t.status === 'suggestion')}" data-task-location-id="${t.locationId || (t.locationObj ? t.locationObj.id : '')}" data-task-location-obj="${escapeHtml(JSON.stringify(t.locationObj || null))}" data-task-persons="${escapeHtml(JSON.stringify(t.persons || []))}" data-task-media="${escapeHtml(JSON.stringify(t.media || []))}"`;
+            const effectiveStatus = String((t.stateId !== undefined && t.stateId !== null ? t.stateId : null) || currentCol || t.status || 'in_progress');
+            const extraData = `data-task-id="${rawId}" data-task-title="${escT.replace(/"/g, '&quot;')}" data-task-notes="${escN.replace(/"/g, '&quot;')}" data-task-due="${t.due || ''}" data-task-list="Standard" data-task-recurrence="${t.recurrence || 'none'}" data-task-project="${p.id}" data-task-project-id="${p.isUnassigned ? '' : p.id}" data-task-state-id="${t.stateId || ''}" data-task-status="${effectiveStatus}" data-task-completed="${isDone}" data-task-starred="${!!t.isStarred}" data-task-planned="${!!(t.isPlanned || t.status === 'suggestion')}" data-task-location-id="${t.locationId || (t.locationObj ? t.locationObj.id : '')}" data-task-location-obj="${escapeHtml(JSON.stringify(t.locationObj || null))}" data-task-persons="${escapeHtml(JSON.stringify(t.persons || []))}" data-task-media="${escapeHtml(JSON.stringify(t.media || []))}"`;
             return renderSwipeLinkWrapper(itemHtml, t.title, 'task', rawId, '', '', 'margin-bottom: 0;', extraData);
         }
 
@@ -570,12 +625,13 @@ function renderProjectsWidget(data, container) {
                         <div class="project-mobile-status-tabs" style="grid-template-columns: repeat(${customCats.length}, minmax(0, 1fr));">
                     `;
             customCats.forEach(cat => {
-                const count = (tasksByCat[cat.id] || []).length;
-                const isActive = activeTab === cat.id;
+                const catIdStr = String(cat.id);
+                const count = (tasksByCat[catIdStr] || []).length;
+                const isActive = activeTab === catIdStr;
                 const escCatName = escapeHtml(cat.name);
                 const catIcon = escapeHtml(cat.icon || '📌');
                 html += `
-                            <button type="button" class="project-status-tab-btn tab-${escapeHtml(cat.id)} ${isActive ? 'active' : ''}" data-status-tab="${escapeHtml(cat.id)}" onclick="switchProjectStatusTab('${escapeHtml(cat.id)}')">
+                            <button type="button" class="project-status-tab-btn tab-${escapeHtml(catIdStr)} ${isActive ? 'active' : ''}" data-status-tab="${escapeHtml(catIdStr)}" onclick="switchProjectStatusTab('${escapeHtml(catIdStr)}')">
                                 <span>${catIcon}</span>
                                 <span>${escCatName}</span>
                                 <span class="project-tag-badge in_progress" style="padding: 1px 6px;">${count}</span>
@@ -589,22 +645,23 @@ function renderProjectsWidget(data, container) {
                         <div class="project-task-columns" style="grid-template-columns: repeat(${customCats.length}, minmax(0, 1fr));">
                     `;
             customCats.forEach(cat => {
-                const catTasks = tasksByCat[cat.id] || [];
-                const isActive = activeTab === cat.id;
+                const catIdStr = String(cat.id);
+                const catTasks = tasksByCat[catIdStr] || [];
+                const isActive = activeTab === catIdStr;
                 const escCatName = escapeHtml(cat.name);
                 const catIcon = escapeHtml(cat.icon || '📌');
                 html += `
-                            <div class="project-task-column ${isActive ? 'is-active-tab' : ''}" data-status-col="${escapeHtml(cat.id)}">
-                                <div class="project-column-header col-${escapeHtml(cat.id)}">
+                            <div class="project-task-column ${isActive ? 'is-active-tab' : ''}" data-status-col="${escapeHtml(catIdStr)}">
+                                <div class="project-column-header col-${escapeHtml(catIdStr)}">
                                     <div class="project-column-title">
                                         <span>${catIcon}</span>
                                         <span>${escCatName}</span>
                                         <span class="project-tag-badge in_progress" style="padding: 1px 6px;">${catTasks.length}</span>
                                     </div>
-                                    <button type="button" class="task-action-btn" onclick="openTaskModalForProject(${p.isUnassigned ? 'null' : p.id}, '${escapeHtml(cat.id)}')" title="Aufgabe für „${escCatName}“ hinzufügen">➕</button>
+                                    <button type="button" class="task-action-btn" onclick="openTaskModalForProject(${p.isUnassigned ? 'null' : p.id}, '${escapeHtml(catIdStr)}')" title="Aufgabe für „${escCatName}“ hinzufügen">➕</button>
                                 </div>
                                 <div class="project-column-body">
-                                    ${catTasks.length === 0 ? `<div style="font-size: 0.75rem; opacity: 0.45; text-align: center; padding: 25px 0;">Keine Aufgaben in „${escCatName}“</div>` : catTasks.map(t => renderColumnTask(t, cat.id)).join('')}
+                                    ${catTasks.length === 0 ? `<div style="font-size: 0.75rem; opacity: 0.45; text-align: center; padding: 25px 0;">Keine Aufgaben in „${escCatName}“</div>` : catTasks.map(t => renderColumnTask(t, catIdStr)).join('')}
                                 </div>
                             </div>
                         `;
@@ -711,28 +768,27 @@ function renderProjectsWidget(data, container) {
             }
 
             let badgesHtml = '';
-            let pCatConfig = null;
-            if (p.categories) {
-                try {
-                    pCatConfig = typeof p.categories === 'string' ? JSON.parse(p.categories) : p.categories;
-                } catch (e) { }
-            }
+            const pCatConfig = getProjectStateConfig(p);
             const pCustomCats = (pCatConfig && Array.isArray(pCatConfig.items) && pCatConfig.items.length > 0) ? pCatConfig.items : null;
 
             if (pCustomCats) {
                 const tasksByCat = {};
-                pCustomCats.forEach(c => { tasksByCat[c.id] = 0; });
+                pCustomCats.forEach(c => { tasksByCat[String(c.id)] = 0; });
                 pTasks.forEach(t => {
-                    if (t.status && tasksByCat[t.status] !== undefined) {
-                        tasksByCat[t.status]++;
+                    const stId = t.stateId !== undefined && t.stateId !== null ? String(t.stateId) : null;
+                    const st = t.status !== undefined && t.status !== null ? String(t.status) : null;
+                    if (stId && tasksByCat[stId] !== undefined) {
+                        tasksByCat[stId]++;
+                    } else if (st && tasksByCat[st] !== undefined) {
+                        tasksByCat[st]++;
                     } else {
-                        const fallback = pCatConfig.defaultId || pCustomCats[0].id;
+                        const fallback = String(pCatConfig.defaultId || pCustomCats[0].id);
                         if (tasksByCat[fallback] !== undefined) tasksByCat[fallback]++;
-                        else tasksByCat[pCustomCats[0].id]++;
+                        else tasksByCat[String(pCustomCats[0].id)]++;
                     }
                 });
                 badgesHtml = pCustomCats.map(c => `
-                            <span class="project-tag-badge in_progress">${escapeHtml(c.icon || '📌')} ${tasksByCat[c.id] || 0} ${escapeHtml(c.name)}</span>
+                            <span class="project-tag-badge in_progress">${escapeHtml(c.icon || '📌')} ${tasksByCat[String(c.id)] || 0} ${escapeHtml(c.name)}</span>
                         `).join('');
             } else {
                 const completedCount = pTasks.filter(t => t.completed || t.status === 'done').length;

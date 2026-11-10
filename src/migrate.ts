@@ -334,4 +334,153 @@ export async function runAutomaticMigration(prisma: PrismaClient) {
   } catch (routeErr: any) {
     console.warn("[Migration] Hinweis: Spaltenmigration für Event/RouteCache:", routeErr.message);
   }
+
+  // Schema- & Daten-Migration für ProjectState (Eigene Tabelle für Projekt-Zustände per ID)
+  try {
+    console.log("[Migration] Überprüfe Tabelle ProjectState & Task.stateId...");
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "ProjectState" (
+        "id" SERIAL PRIMARY KEY,
+        "projectId" INTEGER NOT NULL REFERENCES "Project"("id") ON DELETE CASCADE,
+        "name" TEXT NOT NULL,
+        "icon" TEXT NOT NULL DEFAULT '📌',
+        "color" TEXT,
+        "sortOrder" INTEGER NOT NULL DEFAULT 0,
+        "isDefault" BOOLEAN NOT NULL DEFAULT false,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "stateId" INTEGER REFERENCES "ProjectState"("id") ON DELETE SET NULL;`);
+
+    // Migriere bestehende Projekte (categories JSON oder Aufgaben mit listTitle-Kategorien) in echte ProjectState-Datensätze
+    const allProjects = await (prisma as any).project.findMany({
+      include: {
+        states: { orderBy: { sortOrder: "asc" } },
+        tasks: { where: { isDeleted: false } }
+      }
+    });
+
+    for (const proj of allProjects) {
+      let existingStates: any[] = proj.states || [];
+      let rawCats = proj.categories;
+      if (typeof rawCats === "string") {
+        try { rawCats = JSON.parse(rawCats); } catch (_) {}
+      }
+
+      const legacyIdToNewStateId = new Map<string, number>();
+
+      if (existingStates.length === 0) {
+        const itemsToCreate: Array<{ legacyId?: string; name: string; icon: string; isDefault: boolean }> = [];
+
+        if (rawCats && typeof rawCats === "object") {
+          const rawItems = Array.isArray(rawCats) ? rawCats : (Array.isArray(rawCats.items) ? rawCats.items : []);
+          const defaultLegacyId = rawCats.defaultId || null;
+          rawItems.forEach((item: any, idx: number) => {
+            if (typeof item === "string" && item.trim()) {
+              itemsToCreate.push({
+                legacyId: item.trim(),
+                name: item.trim(),
+                icon: "📌",
+                isDefault: idx === 0
+              });
+            } else if (item && typeof item === "object" && (item.name || item.title || item.label || item.id)) {
+              const name = String(item.name || item.title || item.label || item.id).trim();
+              const legId = String(item.id || name).trim();
+              itemsToCreate.push({
+                legacyId: legId,
+                name,
+                icon: String(item.icon || "📌").trim() || "📌",
+                isDefault: defaultLegacyId ? legId === String(defaultLegacyId) : (!!item.isDefault || idx === 0)
+              });
+            }
+          });
+        }
+
+        // Falls keine categories gesetzt waren, prüfe ob Aufgaben im Projekt über listTitle (ungleich 'Standard') kategorisiert wurden
+        if (itemsToCreate.length === 0 && Array.isArray(proj.tasks) && proj.tasks.length > 0) {
+          const customListTitles: string[] = [];
+          for (const t of proj.tasks) {
+            const lt = (t.listTitle || "").trim();
+            if (lt && lt.toLowerCase() !== "standard" && !customListTitles.some(x => x.toLowerCase() === lt.toLowerCase())) {
+              customListTitles.push(lt);
+            }
+          }
+          if (customListTitles.length > 0) {
+            customListTitles.forEach((lt, idx) => {
+              itemsToCreate.push({
+                legacyId: lt,
+                name: lt,
+                icon: idx === 0 ? "📋" : (idx === 1 ? "⏳" : "📌"),
+                isDefault: idx === 0
+              });
+            });
+          }
+        }
+
+        if (itemsToCreate.length > 0) {
+          if (!itemsToCreate.some(i => i.isDefault)) {
+            itemsToCreate[0].isDefault = true;
+          }
+          for (let i = 0; i < itemsToCreate.length; i++) {
+            const it = itemsToCreate[i];
+            const createdState = await (prisma as any).projectState.create({
+              data: {
+                projectId: proj.id,
+                name: it.name,
+                icon: it.icon || "📌",
+                sortOrder: i,
+                isDefault: it.isDefault
+              }
+            });
+            existingStates.push(createdState);
+            if (it.legacyId) {
+              legacyIdToNewStateId.set(it.legacyId.toLowerCase(), createdState.id);
+            }
+            legacyIdToNewStateId.set(it.name.toLowerCase(), createdState.id);
+          }
+        }
+      } else {
+        for (const st of existingStates) {
+          legacyIdToNewStateId.set(String(st.id), st.id);
+          legacyIdToNewStateId.set(st.name.toLowerCase(), st.id);
+        }
+      }
+
+      if (existingStates.length > 0) {
+        const defaultState = existingStates.find((s: any) => s.isDefault) || existingStates[0];
+        // Synchronisiere proj.categories mit den echten DB-IDs für Abwärtskompatibilität
+        const syncedCats = {
+          items: existingStates.map((s: any) => ({ id: s.id, name: s.name, icon: s.icon, isDefault: s.isDefault })),
+          defaultId: defaultState.id
+        };
+        await (prisma as any).project.update({
+          where: { id: proj.id },
+          data: { categories: syncedCats }
+        });
+
+        // Ordne Aufgaben im Projekt, die noch keine stateId haben, dem passenden ProjectState per ID zu
+        for (const t of (proj.tasks || [])) {
+          if (!t.stateId) {
+            const byListTitle = t.listTitle && t.listTitle.toLowerCase() !== "standard"
+              ? legacyIdToNewStateId.get(t.listTitle.trim().toLowerCase())
+              : undefined;
+            const byStatus = t.status
+              ? (legacyIdToNewStateId.get(String(t.status).trim().toLowerCase()) || legacyIdToNewStateId.get(String(t.status).trim()))
+              : undefined;
+            const targetStateId = byListTitle || byStatus || defaultState.id;
+            if (targetStateId) {
+              await (prisma as any).task.update({
+                where: { id: t.id },
+                data: { stateId: targetStateId }
+              });
+            }
+          }
+        }
+      }
+    }
+    console.log("[Migration] ProjectState Tabelle & Aufgaben-Zustandszuordnung erfolgreich verifiziert.");
+  } catch (projStateErr: any) {
+    console.warn("[Migration] Hinweis: ProjectState Migration:", projStateErr.message);
+  }
 }

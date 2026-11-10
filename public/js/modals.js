@@ -3550,18 +3550,23 @@
                 const projects = (window.lastProjectsData && window.lastProjectsData.projects) || [];
                 const currentProj = projectId ? projects.find(p => String(p.id) === String(projectId)) : null;
                 let projCats = null;
-                if (currentProj && currentProj.categories) {
-                    try {
-                        projCats = typeof currentProj.categories === 'string' ? JSON.parse(currentProj.categories) : currentProj.categories;
-                    } catch(e) {}
+                if (currentProj) {
+                    if (typeof window.getProjectStateConfig === 'function') {
+                        projCats = window.getProjectStateConfig(currentProj);
+                    } else if (currentProj.categories) {
+                        try {
+                            projCats = typeof currentProj.categories === 'string' ? JSON.parse(currentProj.categories) : currentProj.categories;
+                        } catch(e) {}
+                    }
                 }
 
                 if (projCats && Array.isArray(projCats.items) && projCats.items.length > 0) {
                     if (statusGroup) statusGroup.style.display = 'block';
+                    const statusStr = String(status || projCats.defaultId || projCats.items[0].id);
                     statusInput.innerHTML = projCats.items.map(c => `
-                        <option value="${c.id}" ${status === c.id ? 'selected' : ''}>${c.icon || '📌'} ${escapeHtml(c.name)}</option>
+                        <option value="${c.id}" ${String(c.id) === statusStr ? 'selected' : ''}>${c.icon || '📌'} ${escapeHtml(c.name)}</option>
                     `).join('');
-                    statusInput.value = status || projCats.defaultId || projCats.items[0].id;
+                    statusInput.value = statusStr;
                 } else if (projectId) {
                     if (statusGroup) statusGroup.style.display = 'none';
                     statusInput.value = 'in_progress';
@@ -3656,6 +3661,9 @@
             const selectedPersonIds = getSelectedChipIds('task-persons-container');
             const selectedMediaIds = getSelectedChipIds('task-media-container');
 
+            const isNumericState = projectId && /^\d+$/.test(String(status));
+            const stateIdNum = isNumericState ? Number(status) : undefined;
+
             if (taskId) {
                 const args = {
                     taskId: taskId,
@@ -3664,6 +3672,7 @@
                     datum: due ? due : "null",
                     recurrence: recurrence,
                     projectId: projectId ? parseInt(projectId) : null,
+                    zustandId: stateIdNum,
                     inPlanung: isPlanned || status === 'suggestion',
                     status: status,
                     isStarred: isStarred,
@@ -3676,6 +3685,7 @@
                 const args = {
                     titel: title,
                     projectId: projectId ? parseInt(projectId) : null,
+                    zustandId: stateIdNum,
                     inPlanung: isPlanned || status === 'suggestion',
                     status: status,
                     isStarred: isStarred,

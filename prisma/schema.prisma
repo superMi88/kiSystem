@@ -217,26 +217,44 @@ model Task {
   createdAt   DateTime  @default(now()) // Erstellungszeitpunkt
   updatedAt   DateTime  @updatedAt // Zeitpunkt der letzten Aktualisierung
   isDeleted   Boolean   @default(false) // Soft-Delete-Flag
-  projectId   Int?      // Optionale ID eines zugeordneten Projekts
-  project     Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade) // Relation zum Projekt
-  locationId  Int?      // Optionale ID eines verknüpften Ortes aus dem Locations Plugin
-  location    Location? @relation(fields: [locationId], references: [id], onDelete: SetNull) // Relation zum Ort
+  projectId   Int?          // Optionale ID eines zugeordneten Projekts
+  project     Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade) // Relation zum Projekt
+  stateId     Int?          // Optionale ID des zugeordneten Projekt-Zustands (ProjectState)
+  state       ProjectState? @relation(fields: [stateId], references: [id], onDelete: SetNull) // Relation zum Projekt-Zustand
+  locationId  Int?          // Optionale ID eines verknüpften Ortes aus dem Locations Plugin
+  location    Location?     @relation(fields: [locationId], references: [id], onDelete: SetNull) // Relation zum Ort
   persons     TaskPerson[]  // Verknüpfte Personen (N:M)
   media       MediaTask[]   // Verknüpfte Medien / Dokumente (N:M)
 }
 
 /// [Projects Plugin] Verwaltet Projekte, die als Container für zusammengehörende Aufgaben und Notizen dienen.
 model Project {
-  id        Int      @id @default(autoincrement()) // Eindeutige ID des Projekts
-  name      String   // Name des Projekts
-  isStarred Boolean  @default(false) // Stern-Markierung für Arbeitstisch
-  categories Json?   // Konfigurierte Kategorien/Zustände für das Projekt
-  createdAt DateTime @default(now()) // Erstellungszeitpunkt
-  updatedAt DateTime @updatedAt // Zeitpunkt der letzten Aktualisierung
-  isDeleted Boolean  @default(false) // Soft-Delete-Flag
-  tasks     Task[]         // Alle dem Projekt zugeordneten Aufgaben
-  notes     Note[]         // Alle dem Projekt zugeordneten Notizen
-  media     MediaProject[] // Alle dem Projekt zugeordneten Dateien & Dokumente (N:M)
+  id         Int            @id @default(autoincrement()) // Eindeutige ID des Projekts
+  name       String         // Name des Projekts
+  isStarred  Boolean        @default(false) // Stern-Markierung für Arbeitstisch
+  categories Json?          // Konfigurierte Kategorien/Zustände für das Projekt
+  createdAt  DateTime       @default(now()) // Erstellungszeitpunkt
+  updatedAt  DateTime       @updatedAt // Zeitpunkt der letzten Aktualisierung
+  isDeleted  Boolean        @default(false) // Soft-Delete-Flag
+  states     ProjectState[] // Eigene Datenbank-Einträge für die Projekt-Zustände (Spalten/Phasen)
+  tasks      Task[]         // Alle dem Projekt zugeordneten Aufgaben
+  notes      Note[]         // Alle dem Projekt zugeordneten Notizen
+  media      MediaProject[] // Alle dem Projekt zugeordneten Dateien & Dokumente (N:M)
+}
+
+/// [Projects Plugin] Repräsentiert einen Zustand (Spalte/Phase) innerhalb eines Projekts mit eigener ID.
+model ProjectState {
+  id        Int      @id @default(autoincrement()) // Eindeutige ID des Projekt-Zustands
+  projectId Int      // ID des zugehörigen Projekts
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade) // Relation zum Projekt
+  name      String   // Anzeigename des Zustands (z. B. "Geplant", "Beworben", "Abgelehnt")
+  icon      String   @default("📌") // Emoji/Icon des Zustands
+  color     String?  // Optionale Farbe
+  sortOrder Int      @default(0) // Reihenfolge der Spalte im Projekt
+  isDefault Boolean  @default(false) // Ob neue Aufgaben im Projekt standardmäßig diesen Zustand erhalten
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tasks     Task[]   // Alle Aufgaben, die sich aktuell in diesem Zustand befinden
 }
 
 /// [Journal Plugin] Repräsentiert Notizen/Tagebucheinträge für spezifische Tage im Tagebuch mit Vektoreinbettung.

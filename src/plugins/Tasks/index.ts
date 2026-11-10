@@ -29,20 +29,69 @@ export function calculateNextDueDate(currentDue: Date, recurrence: string): Date
   return next;
 }
 
+async function resolveProjectStateForTask(
+  prisma: any,
+  projectId: number | null,
+  zustandIdArg?: any,
+  zustandNameArg?: any,
+  statusArg?: any,
+  listTitleArg?: any,
+  allowDefaultFallback = false
+): Promise<{ id: number; name: string; icon: string } | null> {
+  if (!projectId) return null;
+  const states: any[] = await prisma.projectState.findMany({
+    where: { projectId },
+    orderBy: { sortOrder: "asc" }
+  });
+  if (states.length === 0) return null;
+
+  if (zustandIdArg !== undefined && zustandIdArg !== null && zustandIdArg !== "" && zustandIdArg !== "null") {
+    const numId = Number(zustandIdArg);
+    if (!isNaN(numId)) {
+      const byId = states.find(s => s.id === numId);
+      if (byId) return byId;
+    }
+  }
+
+  const candidates = [
+    zustandNameArg,
+    statusArg,
+    (listTitleArg && String(listTitleArg).trim().toLowerCase() !== "standard") ? listTitleArg : null
+  ].filter(Boolean).map(v => String(v).trim());
+
+  for (const cand of candidates) {
+    if (/^\d+$/.test(cand)) {
+      const byNum = states.find(s => s.id === Number(cand));
+      if (byNum) return byNum;
+    }
+    const lower = cand.toLowerCase();
+    const byExactName = states.find(s => s.name.toLowerCase() === lower);
+    if (byExactName) return byExactName;
+    const byPartial = states.find(s => s.name.toLowerCase().includes(lower) || lower.includes(s.name.toLowerCase()));
+    if (byPartial) return byPartial;
+  }
+
+  if (allowDefaultFallback) {
+    return states.find(s => s.isDefault) || states[0] || null;
+  }
+  return null;
+}
+
 export const tasksPlugin: Plugin = {
   name: "Tasks",
-  description: "Ermöglicht das Verwalten und Erstellen von Aufgaben in der lokalen Datenbank.",
+  description: "Ermöglicht das Verwalten und Erstellen von Aufgaben in der lokalen Datenbank (inklusive Zuordnung zu Projekten per projectId und Projekt-Zuständen per zustandId).",
   tools: [
     {
       definition: {
         name: "hole_aufgaben",
-        description: "Ruft alle unvollständigen Aufgaben aus der lokalen Datenbank ab.",
+        description: "Ruft alle unvollständigen Aufgaben aus der lokalen Datenbank ab (inklusive Projekt-Zuordnung projectId und Projekt-Zustand zustandId / zustandName).",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
             zeigeGeloeschte: { type: SchemaType.BOOLEAN, description: "Wenn true, werden nur gelöschte Aufgaben zurückgegeben. Standard ist false." },
             nurInPlanung: { type: SchemaType.BOOLEAN, description: "Wenn true, werden nur Aufgaben zurückgegeben, die 'In Planung' / Vorschläge sind." },
-            nurMarkiert: { type: SchemaType.BOOLEAN, description: "Wenn true, werden nur mit Stern markierte Aufgaben zurückgegeben." }
+            nurMarkiert: { type: SchemaType.BOOLEAN, description: "Wenn true, werden nur mit Stern markierte Aufgaben zurückgegeben." },
+            projectId: { type: SchemaType.INTEGER, description: "Optional: Filtert Aufgaben nach einer bestimmten Projekt-ID." }
           }
         } as any
       },
@@ -62,10 +111,15 @@ export const tasksPlugin: Plugin = {
         if (nurMarkiert) {
           whereClause.isStarred = true;
         }
+        if (args.projectId !== undefined && args.projectId !== null) {
+          whereClause.projectId = Number(args.projectId);
+        }
 
         const tasks = await prisma.task.findMany({
           where: whereClause,
           include: {
+            project: true,
+            state: true,
             location: true,
             persons: {
               include: {
@@ -89,6 +143,10 @@ export const tasksPlugin: Plugin = {
             titel: t.title,
             notizen: t.notes || "",
             faellig: t.due ? t.due.toISOString() : null,
+            projectId: t.projectId || null,
+            projektName: t.project ? t.project.name : null,
+            zustandId: t.stateId || null,
+            zustandName: t.state ? t.state.name : null,
             aufgabenlisteId: t.listTitle,
             aufgabenlisteTitel: t.listTitle,
             wiederholung: t.recurrence || null,
@@ -118,19 +176,21 @@ export const tasksPlugin: Plugin = {
     {
       definition: {
         name: "erstelle_aufgabe",
-        description: "Erstellt eine neue Aufgabe in der lokalen Datenbank.",
+        description: "Erstellt eine neue Aufgabe in der lokalen Datenbank. Wenn die Aufgabe zu einem Projekt gehört, gib 'projectId' und für den Projekt-Zustand 'zustandId' (aus der Tabelle ProjectState) an.",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
             titel: { type: SchemaType.STRING, description: "Der Titel der Aufgabe" },
             notizen: { type: SchemaType.STRING, description: "Zusätzliche Notizen oder Beschreibung der Aufgabe (optional)" },
             datum: { type: SchemaType.STRING, description: "Fälligkeitsdatum im Format YYYY-MM-DD (optional)" },
-            aufgabenlisteTitel: { type: SchemaType.STRING, description: "Die Aufgabenliste/Kategorie. Standardwert ist 'Standard' (optional)" },
-            recurrence: { type: SchemaType.STRING, description: "Wiederholungsintervall: 'daily', 'weekly', 'monthly', 'yearly' oder 'none' (optional)" },
             projectId: { type: SchemaType.INTEGER, description: "Die ID des Projekts, dem die Aufgabe zugeordnet ist (optional)" },
+            zustandId: { type: SchemaType.INTEGER, description: "Die numerische ID des Projekt-Zustands (aus der ProjectState-Tabelle, z. B. aus hole_projekte oder verwalte_projekt_zustaende), dem die Aufgabe im Projekt zugeordnet wird (optional)" },
+            zustandName: { type: SchemaType.STRING, description: "Alternativ zu zustandId: Name des Projekt-Zustands im Projekt (wird automatisch in die passende zustandId aufgelöst) (optional)" },
+            recurrence: { type: SchemaType.STRING, description: "Wiederholungsintervall: 'daily', 'weekly', 'monthly', 'yearly' oder 'none' (optional)" },
             inPlanung: { type: SchemaType.BOOLEAN, description: "Ob die Aufgabe noch 'In Planung' / Vorschlag ist (optional)" },
             isStarred: { type: SchemaType.BOOLEAN, description: "Ob die Aufgabe mit einem Stern versehen und angepinnt werden soll (optional)" },
-            status: { type: SchemaType.STRING, description: "Status der Aufgabe: 'suggestion' (Vorschlag), 'in_progress' (In Arbeit) oder 'done' (Fertig). Standard ist 'in_progress'." },
+            status: { type: SchemaType.STRING, description: "Allgemeiner Status für Aufgaben ohne eigene Projekt-Zustände: 'suggestion' (Vorschlag), 'in_progress' (In Arbeit) oder 'done' (Fertig). Standard ist 'in_progress'." },
+            aufgabenlisteTitel: { type: SchemaType.STRING, description: "Nur für allgemeine Aufgaben ohne Projekt (Standard: 'Standard'). NIEMALS für Projekt-Zustände verwenden (nutze dafür zustandId)!" },
             locationId: { type: SchemaType.INTEGER, description: "Optionale ID des zugeordneten Ortes aus dem Locations-Plugin" },
             personIds: { type: SchemaType.ARRAY, items: { type: SchemaType.INTEGER }, description: "Optionale IDs zugeordneter Personen" },
             mediaIds: { type: SchemaType.ARRAY, items: { type: SchemaType.INTEGER }, description: "Optionale IDs zugeordneter Medien/Dokumente" }
@@ -144,7 +204,20 @@ export const tasksPlugin: Plugin = {
         const projectId = args.projectId ? Number(args.projectId) : null;
         const isPlanned = args.inPlanung !== undefined ? !!args.inPlanung : (args.status === "suggestion");
         const isStarred = args.isStarred !== undefined ? !!args.isStarred : false;
-        const taskStatus = args.status || (isPlanned ? "suggestion" : "in_progress");
+
+        const resolvedState = await resolveProjectStateForTask(
+          prisma,
+          projectId,
+          args.zustandId ?? args.stateId,
+          args.zustandName,
+          args.status,
+          args.aufgabenlisteTitel,
+          true
+        );
+
+        const taskStatus = (args.status === "suggestion" || args.status === "in_progress" || args.status === "done")
+          ? args.status
+          : (isPlanned ? "suggestion" : "in_progress");
         const completed = taskStatus === "done";
         
         // If recurrence is set but no due date is provided, default to today
@@ -159,9 +232,10 @@ export const tasksPlugin: Plugin = {
               title: args.titel,
               notes: args.notizen || null,
               due: due || null,
-              listTitle: args.aufgabenlisteTitel || "Standard",
+              listTitle: projectId ? "Standard" : (args.aufgabenlisteTitel || "Standard"),
               recurrence: recurrence,
               projectId: projectId,
+              stateId: resolvedState ? resolvedState.id : null,
               locationId: args.locationId ? Number(args.locationId) : null,
               isPlanned: isPlanned,
               isStarred: isStarred,
@@ -186,15 +260,16 @@ export const tasksPlugin: Plugin = {
           }
           return {
             status: "success",
-            message: `Aufgabe '${args.titel}' wurde erstellt.`,
+            message: `Aufgabe '${args.titel}' wurde erstellt.${resolvedState ? ` Zugeordneter Projekt-Zustand: '${resolvedState.name}' (zustandId: ${resolvedState.id}).` : ""}`,
             aufgabe: {
               id: String(task.id),
               titel: task.title,
               notizen: task.notes || "",
               faellig: task.due ? task.due.toISOString() : null,
-              aufgabenlisteTitel: task.listTitle,
-              recurrence: task.recurrence,
               projectId: task.projectId,
+              zustandId: task.stateId || null,
+              zustandName: resolvedState ? resolvedState.name : null,
+              recurrence: task.recurrence,
               inPlanung: task.isPlanned,
               isStarred: task.isStarred,
               status: task.status
@@ -348,7 +423,7 @@ export const tasksPlugin: Plugin = {
     {
       definition: {
         name: "aktualisiere_aufgabe",
-        description: "Aktualisiert eine bestehende Aufgabe in der lokalen Datenbank.",
+        description: "Aktualisiert eine bestehende Aufgabe in der lokalen Datenbank (inklusive Projekt-Zuordnung projectId und Projekt-Zustand zustandId).",
         parameters: {
           type: SchemaType.OBJECT,
           properties: {
@@ -356,12 +431,14 @@ export const tasksPlugin: Plugin = {
             titel: { type: SchemaType.STRING, description: "Der neue Titel der Aufgabe (optional)" },
             notizen: { type: SchemaType.STRING, description: "Zusätzliche Notizen oder Beschreibung der Aufgabe (optional)" },
             datum: { type: SchemaType.STRING, description: "Fälligkeitsdatum im Format YYYY-MM-DD (optional, 'null' zum Entfernen)" },
-            aufgabenlisteTitel: { type: SchemaType.STRING, description: "Die Aufgabenliste/Kategorie (optional)" },
-            recurrence: { type: SchemaType.STRING, description: "Neues Wiederholungsintervall: 'daily', 'weekly', 'monthly', 'yearly' oder 'none' (optional)" },
             projectId: { type: SchemaType.INTEGER, description: "Die neue ID des Projekts oder 'null' zum Entfernen (optional)" },
+            zustandId: { type: SchemaType.INTEGER, description: "Die numerische ID des Projekt-Zustands aus der ProjectState-Tabelle (z. B. aus hole_projekte oder verwalte_projekt_zustaende), in den die Aufgabe verschoben werden soll (optional)" },
+            zustandName: { type: SchemaType.STRING, description: "Alternativ zu zustandId: Name des Projekt-Zustands im Projekt (wird automatisch in die passende zustandId aufgelöst) (optional)" },
+            recurrence: { type: SchemaType.STRING, description: "Neues Wiederholungsintervall: 'daily', 'weekly', 'monthly', 'yearly' oder 'none' (optional)" },
             inPlanung: { type: SchemaType.BOOLEAN, description: "Ob die Aufgabe noch 'In Planung' / Vorschlag ist (optional)" },
             isStarred: { type: SchemaType.BOOLEAN, description: "Ob die Aufgabe mit einem Stern versehen und angepinnt werden soll (optional)" },
-            status: { type: SchemaType.STRING, description: "Status der Aufgabe: 'suggestion' (Vorschlag), 'in_progress' (In Arbeit) oder 'done' (Fertig) (optional)" },
+            status: { type: SchemaType.STRING, description: "Allgemeiner Status für Aufgaben ohne eigene Projekt-Zustände: 'suggestion' (Vorschlag), 'in_progress' (In Arbeit) oder 'done' (Fertig) (optional)" },
+            aufgabenlisteTitel: { type: SchemaType.STRING, description: "Nur für allgemeine Aufgaben ohne Projekt. NIEMALS für Projekt-Zustände verwenden (nutze dafür zustandId)!" },
             locationId: { type: SchemaType.INTEGER, description: "Optionale ID des zugeordneten Ortes aus dem Locations-Plugin" },
             personIds: { type: SchemaType.ARRAY, items: { type: SchemaType.INTEGER }, description: "Optionale IDs zugeordneter Personen" },
             mediaIds: { type: SchemaType.ARRAY, items: { type: SchemaType.INTEGER }, description: "Optionale IDs zugeordneter Medien/Dokumente" }
@@ -371,26 +448,72 @@ export const tasksPlugin: Plugin = {
       },
       handler: async (args, { prisma }) => {
         try {
+          const existingTask = await prisma.task.findUnique({ where: { id: Number(args.taskId) } });
+          if (!existingTask) {
+            return { status: "error", message: `Aufgabe mit ID ${args.taskId} nicht gefunden.` };
+          }
+
           const updateData: any = {};
           if (args.titel !== undefined) updateData.title = args.titel;
           if (args.notizen !== undefined) updateData.notes = args.notizen || null;
           if (args.datum !== undefined) {
             updateData.due = args.datum && args.datum !== "null" ? new Date(args.datum) : null;
           }
-          if (args.aufgabenlisteTitel !== undefined) updateData.listTitle = args.aufgabenlisteTitel || "Standard";
           if (args.inPlanung !== undefined) updateData.isPlanned = !!args.inPlanung;
           if (args.isStarred !== undefined) updateData.isStarred = !!args.isStarred;
+
+          const effectiveProjectId = args.projectId !== undefined
+            ? (args.projectId === "null" || args.projectId === null ? null : Number(args.projectId))
+            : existingTask.projectId;
+
+          if (args.projectId !== undefined) {
+            updateData.projectId = effectiveProjectId;
+            if (!effectiveProjectId) {
+              updateData.stateId = null;
+            }
+          }
+
+          if (effectiveProjectId) {
+            const wantsStateUpdate =
+              args.zustandId !== undefined ||
+              (args as any).stateId !== undefined ||
+              args.zustandName !== undefined ||
+              args.status !== undefined ||
+              (args.aufgabenlisteTitel !== undefined && String(args.aufgabenlisteTitel).toLowerCase() !== "standard") ||
+              (args.projectId !== undefined && existingTask.projectId !== effectiveProjectId);
+
+            if (wantsStateUpdate) {
+              const resolvedState = await resolveProjectStateForTask(
+                prisma,
+                effectiveProjectId,
+                args.zustandId ?? (args as any).stateId,
+                args.zustandName,
+                args.status,
+                args.aufgabenlisteTitel,
+                args.projectId !== undefined && existingTask.projectId !== effectiveProjectId
+              );
+              if (resolvedState) {
+                updateData.stateId = resolvedState.id;
+                updateData.listTitle = "Standard";
+              }
+            }
+          } else if (args.aufgabenlisteTitel !== undefined) {
+            updateData.listTitle = args.aufgabenlisteTitel || "Standard";
+          }
+
           if (args.status !== undefined) {
-            updateData.status = args.status;
             if (args.status === "done") {
+              updateData.status = "done";
               updateData.completed = true;
               updateData.completedAt = new Date();
               updateData.isPlanned = false;
             } else if (args.status === "suggestion") {
+              updateData.status = "suggestion";
               updateData.completed = false;
               updateData.completedAt = null;
               updateData.isPlanned = true;
             } else if (args.status === "in_progress") {
+              updateData.status = "in_progress";
               updateData.completed = false;
               updateData.completedAt = null;
               updateData.isPlanned = false;
@@ -398,18 +521,11 @@ export const tasksPlugin: Plugin = {
           }
           if (args.recurrence !== undefined) {
             updateData.recurrence = args.recurrence === "none" ? null : args.recurrence.toLowerCase();
-            // If recurrence is set but there's no due date, default to today
-            if (updateData.recurrence && args.datum === undefined) {
-              const existing = await prisma.task.findUnique({ where: { id: Number(args.taskId) } });
-              if (existing && !existing.due) {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                updateData.due = today;
-              }
+            if (updateData.recurrence && args.datum === undefined && !existingTask.due) {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              updateData.due = today;
             }
-          }
-          if (args.projectId !== undefined) {
-            updateData.projectId = args.projectId === "null" || args.projectId === null ? null : Number(args.projectId);
           }
           if (args.locationId !== undefined) {
             updateData.locationId = args.locationId === "null" || args.locationId === null ? null : Number(args.locationId);
@@ -417,7 +533,8 @@ export const tasksPlugin: Plugin = {
 
           const updatedTask = await prisma.task.update({
             where: { id: Number(args.taskId) },
-            data: updateData
+            data: updateData,
+            include: { state: true, project: true }
           });
 
           if (args.personIds !== undefined) {
@@ -441,12 +558,15 @@ export const tasksPlugin: Plugin = {
           }
           return {
             status: "success",
-            message: "Aufgabe erfolgreich aktualisiert.",
+            message: `Aufgabe erfolgreich aktualisiert.${(updatedTask as any).state ? ` Aktueller Projekt-Zustand: '${(updatedTask as any).state.name}' (zustandId: ${updatedTask.stateId}).` : ""}`,
             aufgabe: {
               id: String(updatedTask.id),
               titel: updatedTask.title,
               notizen: updatedTask.notes || "",
               faellig: updatedTask.due ? updatedTask.due.toISOString() : null,
+              projectId: updatedTask.projectId || null,
+              zustandId: updatedTask.stateId || null,
+              zustandName: (updatedTask as any).state ? (updatedTask as any).state.name : null,
               inPlanung: updatedTask.isPlanned,
               isStarred: updatedTask.isStarred,
               status: updatedTask.status,
@@ -474,6 +594,12 @@ export const tasksPlugin: Plugin = {
     return prisma.task.findUnique({
       where: { id: Number(id) },
       include: {
+        project: {
+          include: {
+            states: { orderBy: { sortOrder: "asc" } }
+          }
+        },
+        state: true,
         location: true,
         persons: {
           include: {

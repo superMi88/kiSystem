@@ -19,6 +19,7 @@ import { getSettings, saveSettings, AVAILABLE_TRIGGERS, saveAgentConfig, deleteA
 import { runAutomaticMigration } from "./migrate.js";
 import { getEventsForRange, getTimelineRangeData } from "./plugins/Calendar/index.js";
 import { calculateNextDueDate } from "./plugins/Tasks/index.js";
+import { syncProjectStates } from "./plugins/Projects/index.js";
 import { getDaySummaryData, getRangeSummaryData, parseLocalDate } from "./plugins/Journal/index.js";
 import { MailService } from "./plugins/Mail/service.js";
 import { runTrainTripMonitor } from "./plugins/Mail/dbBahnService.js";
@@ -1050,31 +1051,43 @@ app.get("/api/projects/:id", async (req, res) => {
     const project = await prisma.project.findUnique({
       where: { id },
       include: {
-        tasks: { where: { isDeleted: false }, orderBy: [{ isStarred: "desc" }, { createdAt: "desc" }] },
+        states: { orderBy: { sortOrder: "asc" } },
+        tasks: { where: { isDeleted: false }, include: { state: true }, orderBy: [{ isStarred: "desc" }, { createdAt: "desc" }] },
         notes: { where: { isDeleted: false }, orderBy: { updatedAt: "desc" } }
       }
     });
     if (!project) return res.status(404).json({ error: "Projekt nicht gefunden." });
-    res.json(project);
+    const pStates = (project as any).states || [];
+    const defState = pStates.find((s: any) => s.isDefault) || pStates[0] || null;
+    const syncedCats = pStates.length > 0
+      ? { items: pStates.map((s: any) => ({ id: s.id, name: s.name, icon: s.icon, isDefault: s.isDefault })), defaultId: defState.id }
+      : null;
+    res.json({
+      ...project,
+      categories: syncedCats
+    });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
 });
 
-app.post("/api/projects/:id/categories", async (req, res) => {
+const handleSaveProjectStates = async (req: any, res: any) => {
   try {
     const id = Number(req.params.id);
-    const { categories } = req.body;
-    const updated = await prisma.project.update({
+    const rawInput = req.body.states !== undefined ? req.body.states : req.body.categories;
+    const states = await syncProjectStates(prisma, id, rawInput || null);
+    const updated = await prisma.project.findUnique({
       where: { id },
-      data: { categories: categories || null }
+      include: { states: { orderBy: { sortOrder: "asc" } } }
     });
-    res.json({ success: true, project: updated });
+    res.json({ success: true, project: updated, states });
   } catch (e: any) {
-    console.error("Fehler beim Speichern der Projekt-Kategorien:", e);
+    console.error("Fehler beim Speichern der Projekt-Zustände:", e);
     res.status(500).json({ error: e.message });
   }
-});
+};
+app.post("/api/projects/:id/categories", handleSaveProjectStates);
+app.post("/api/projects/:id/states", handleSaveProjectStates);
 
 const handleTaskPin = async (req: any, res: any) => {
   try {
@@ -1102,28 +1115,43 @@ app.post("/api/tasks/:id/pin", handleTaskPin);
 app.post("/api/tasks/:id/status", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { status } = req.body;
-    if (!status || typeof status !== 'string') {
-      return res.status(400).json({ error: "Gültiger status erforderlich." });
+    const rawVal = req.body.stateId !== undefined ? req.body.stateId : req.body.status;
+    if (rawVal === undefined || rawVal === null || String(rawVal).trim() === "") {
+      return res.status(400).json({ error: "Gültiger status oder stateId erforderlich." });
     }
+    const statusStr = String(rawVal).trim();
     const now = new Date();
-    const updateData: any = { status };
-    if (status === 'done') {
-      updateData.completed = true;
-      updateData.completedAt = now;
-      updateData.isPlanned = false;
-    } else if (status === 'suggestion') {
-      updateData.completed = false;
-      updateData.completedAt = null;
-      updateData.isPlanned = true;
-    } else if (status === 'in_progress') {
-      updateData.completed = false;
-      updateData.completedAt = null;
-      updateData.isPlanned = false;
+    const updateData: any = {};
+
+    if (/^\d+$/.test(statusStr)) {
+      const numStateId = Number(statusStr);
+      const stateRecord = await (prisma as any).projectState.findUnique({ where: { id: numStateId } });
+      if (stateRecord) {
+        updateData.stateId = stateRecord.id;
+      } else {
+        updateData.status = statusStr;
+      }
+    } else {
+      updateData.status = statusStr;
+      if (statusStr === 'done') {
+        updateData.completed = true;
+        updateData.completedAt = now;
+        updateData.isPlanned = false;
+      } else if (statusStr === 'suggestion') {
+        updateData.completed = false;
+        updateData.completedAt = null;
+        updateData.isPlanned = true;
+      } else if (statusStr === 'in_progress') {
+        updateData.completed = false;
+        updateData.completedAt = null;
+        updateData.isPlanned = false;
+      }
     }
+
     const updated = await prisma.task.update({
       where: { id },
-      data: updateData
+      data: updateData,
+      include: { state: true }
     });
     res.json({ success: true, task: updated });
   } catch (e: any) {
@@ -3299,6 +3327,18 @@ Du hast Zugriff auf ein Medien- und Dateisystem (Media):
 - Wenn der Benutzer nach Bildern von bestimmten Personen oder Projekten fragt, filtere sie mit 'suche_dateien' gezielt nach Person oder Projekt.
 - Beschreibungen zu Bildern und Dokumenten ("was ist darauf abgebildet") können mit 'aktualisiere_datei_beschreibung' ergänzt werden.
 
+PROJEKTE, PROJEKT-ZUSTÄNDE (ProjectState-Tabelle) & AUFGABEN (STRENGSTE PFLICHT):
+- Jedes Projekt kann eigene Projekt-Zustände (Spalten/Phasen wie z. B. "Geplant", "Beworben", "Abgelehnt" oder "Offen", "In Arbeit", "Fertig") besitzen.
+- Diese Projekt-Zustände sind in einer EIGENEN Datenbanktabelle ('ProjectState') gespeichert und haben jeweils eine eindeutige numerische ID ('zustandId' / 'stateId').
+- Zustände eines Projekts anlegen, ändern oder löschen:
+  * Nutze IMMER das Werkzeug 'verwalte_projekt_zustaende' (oder den Parameter 'zustaende' bei 'erstelle_projekt' / 'bearbeite_projekt').
+  * 'verwalte_projekt_zustaende' legt die Zustände als echte Datensätze in der Tabelle 'ProjectState' an und gibt dir die zugehörigen numerischen IDs ('zustandId') zurück.
+- Aufgaben in einem Projekt erstellen oder einem Projekt-Zustand zuordnen:
+  * Jede Aufgabe in einem Projekt wird über ihre 'projectId' dem Projekt und über ihre numerische 'zustandId' ('stateId') exakt einem Projekt-Zustand aus der 'ProjectState'-Tabelle zugeordnet!
+  * Übergib bei 'erstelle_aufgabe' und 'aktualisiere_aufgabe' IMMER 'projectId' UND 'zustandId' (die numerische ID des Zustands aus 'hole_projekte' oder 'verwalte_projekt_zustaende'; alternativ 'zustandName', das automatisch in die 'zustandId' aufgelöst wird).
+  * VERWENDE NIEMALS 'aufgabenlisteTitel' ('listTitle') oder Tags für Projekt-Zustände! 'aufgabenlisteTitel' hat nichts mit Projekt-Zuständen zu tun!
+  * Prüfe bei Fragen zu einem Projekt zuerst per 'hole_projekte' die tatsächlichen 'zustaende' (mit ihren 'zustandId's) und die 'zustandId' / 'zustandName' der Aufgaben.
+
 E-MAIL-ENTWÜRFE, ANTWORTEN & ANHÄNGE (STRENGSTE PFLICHT):
 - Wenn der Benutzer eine E-Mail verfassen, vorbereiten, vorschlagen oder mit Anhang versenden möchte:
   * Rufe IMMER das Werkzeug 'schlage_mail_vor' auf (oder 'schlage_mail_antwort_vor' beim Antworten auf eingegangene Mails)!
@@ -3419,13 +3459,47 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
               const numId = parseInt(rawId, 10);
               let taskRecord: any = null;
               if (!isNaN(numId)) {
-                taskRecord = await prisma.task.findUnique({ where: { id: numId }, include: { project: true } });
+                taskRecord = await prisma.task.findUnique({
+                  where: { id: numId },
+                  include: {
+                    project: { include: { states: { orderBy: { sortOrder: "asc" } } } },
+                    state: true
+                  }
+                });
               }
               if (taskRecord) {
                 const dueStr = taskRecord.due
                   ? `${formatGermanDate(new Date(taskRecord.due))} um ${formatGermanTime(new Date(taskRecord.due))} Uhr (deutsche Lokalzeit)`
                   : "Keine Fälligkeit";
-                resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: Aufgabe\nTitel: "${taskRecord.title}" (ID: ${taskRecord.id})\nFälligkeit: ${dueStr}\nStatus: ${taskRecord.completed ? "Erledigt" : "Offen"}\nProjekt: ${taskRecord.project?.name || "Kein Projekt"}\nNotizen: ${taskRecord.notes || "Keine"}\n`;
+                const stateInfo = taskRecord.state
+                  ? `${taskRecord.state.icon} ${taskRecord.state.name} (zustandId: ${taskRecord.state.id})`
+                  : "Kein Projekt-Zustand zugeordnet (zustandId: null)";
+                const availStates = taskRecord.project?.states?.length
+                  ? taskRecord.project.states.map((s: any) => `${s.icon} "${s.name}" (zustandId: ${s.id})`).join(", ")
+                  : "Keine eigenen Projekt-Zustände eingerichtet";
+                resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: Aufgabe\nTitel: "${taskRecord.title}" (ID: ${taskRecord.id})\nFälligkeit: ${dueStr}\nErledigt: ${taskRecord.completed ? "Ja" : "Nein"}\nProjekt: ${taskRecord.project ? `"${taskRecord.project.name}" (projectId: ${taskRecord.project.id})` : "Kein Projekt"}\nAktueller Projekt-Zustand: ${stateInfo}\nVerfügbare Zustände im Projekt: ${availStates}\nNotizen: ${taskRecord.notes || "Keine"}\n`;
+              }
+            } else if (type === "project") {
+              const numId = parseInt(rawId, 10);
+              let projRecord: any = null;
+              if (!isNaN(numId)) {
+                projRecord = await prisma.project.findUnique({
+                  where: { id: numId },
+                  include: {
+                    states: { orderBy: { sortOrder: "asc" } },
+                    tasks: { where: { isDeleted: false }, include: { state: true } },
+                    notes: { where: { isDeleted: false } }
+                  }
+                });
+              }
+              if (projRecord) {
+                const statesStr = projRecord.states?.length
+                  ? projRecord.states.map((s: any) => `${s.icon} "${s.name}" (zustandId: ${s.id}${s.isDefault ? ", Standard" : ""})`).join(", ")
+                  : "Keine eigenen Projekt-Zustände in ProjectState-Tabelle eingerichtet";
+                const tasksStr = projRecord.tasks?.length
+                  ? projRecord.tasks.map((t: any) => `  * [ID ${t.id}] "${t.title}" -> zustandId: ${t.stateId ?? "null"} (${t.state ? t.state.name : "kein Zustand"}), erledigt: ${t.completed}`).join("\n")
+                  : "  Keine Aufgaben";
+                resolvedContext += `\n--- Verlinktes Element: [${linkText}] (${fullUrl}) ---\nTyp: Projekt\nName: "${projRecord.name}" (projectId: ${projRecord.id})\nKonfigurierte Projekt-Zustände (ProjectState): ${statesStr}\nAufgaben im Projekt:\n${tasksStr}\n`;
               }
             } else if (type === "timer") {
               const numId = parseInt(rawId, 10);
