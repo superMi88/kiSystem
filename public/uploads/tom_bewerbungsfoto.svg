@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
-    <rect width="400" height="400" fill="#1e1e2e"/>
-    <circle cx="200" cy="150" r="80" fill="#89b4fa"/>
-    <ellipse cx="200" cy="310" rx="130" ry="90" fill="#89b4fa"/>
-    <text x="200" y="380" font-family="sans-serif" font-size="20" fill="#cdd6f4" text-anchor="middle">Tom - Bewerbungsfoto</text>
-  </svg>

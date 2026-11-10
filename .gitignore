@@ -48,3 +48,5 @@ temp/
 # Local configuration
 settings.json
 public/env-config.js
+public/uploads/
+dynamic-tools.json

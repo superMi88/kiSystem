@@ -3836,11 +3836,11 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`KI-System Server läuft auf Port ${PORT}`);
 
+  // Automatische Datenmigration zuerst ausführen (stellt sicher, dass alle Tabellen/Spalten existieren)
+  await runAutomaticMigration(prisma);
+
   // Dynamische Tools initialisieren
   await pluginManager.init();
-
-  // Automatische Datenmigration ausführen
-  await runAutomaticMigration(prisma);
 
   // Agent Run Hook für neu eingehende E-Mails registrieren
   MailService.onNewEmail = (createdMail, dbPrisma) => {

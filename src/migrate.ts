@@ -1,8 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 
 /**
- * Führt eine automatische Datenmigration für das Personengedächtnis aus,
- * falls noch alte 'name'-Spaltenwerte in der Datenbank vorhanden sind.
+ * Führt eine automatische Datenmigration für das Personengedächtnis und neue Datenbanktabellen/-spalten aus.
  */
 export async function runAutomaticMigration(prisma: PrismaClient) {
   console.log("[Migration] Überprüfe, ob eine Datenmigration für das Personengedächtnis erforderlich ist...");
@@ -16,49 +15,48 @@ export async function runAutomaticMigration(prisma: PrismaClient) {
     });
 
     if (peopleToMigrate.length === 0) {
-      console.log("[Migration] Keine veralteten Personendaten gefunden. Keine Migration erforderlich.");
-      return;
-    }
+      console.log("[Migration] Keine veralteten Personendaten gefunden. Keine Personen-Migration erforderlich.");
+    } else {
+      console.log(`[Migration] Gefunden: ${peopleToMigrate.length} zu migrierende Personen.`);
 
-    console.log(`[Migration] Gefunden: ${peopleToMigrate.length} zu migrierende Personen.`);
+      for (const person of peopleToMigrate) {
+        const oldName = person.name;
+        if (!oldName) continue;
 
-    for (const person of peopleToMigrate) {
-      const oldName = person.name;
-      if (!oldName) continue;
+        console.log(`[Migration] Migriere '${oldName}' (ID: ${person.id})...`);
 
-      console.log(`[Migration] Migriere '${oldName}' (ID: ${person.id})...`);
+        // 1. Prüfen, ob für diese Person bereits ein primärer Alias mit diesem Namen existiert
+        const existingAlias = await prisma.personAlias.findUnique({
+          where: { name: oldName }
+        });
 
-      // 1. Prüfen, ob für diese Person bereits ein primärer Alias mit diesem Namen existiert
-      const existingAlias = await prisma.personAlias.findUnique({
-        where: { name: oldName }
-      });
+        if (!existingAlias) {
+          await prisma.personAlias.create({
+            data: {
+              personId: person.id,
+              name: oldName,
+              isPrimary: true
+            }
+          });
+          console.log(`[Migration] Primärer Alias '${oldName}' für Person ID ${person.id} wurde angelegt.`);
+        } else {
+          console.log(`[Migration] Alias '${oldName}' existiert bereits (ID: ${existingAlias.id}).`);
+        }
 
-      if (!existingAlias) {
-        await prisma.personAlias.create({
+        // 2. Biografie befüllen aus notes (falls notes vorhanden und biography leer ist)
+        //    und die alten deprecated Spalten 'name' und 'notes' auf null setzen.
+        await prisma.person.update({
+          where: { id: person.id },
           data: {
-            personId: person.id,
-            name: oldName,
-            isPrimary: true
+            biography: person.biography || person.notes || "",
+            name: null,
+            notes: null
           }
         });
-        console.log(`[Migration] Primärer Alias '${oldName}' für Person ID ${person.id} wurde angelegt.`);
-      } else {
-        console.log(`[Migration] Alias '${oldName}' existiert bereits (ID: ${existingAlias.id}).`);
       }
 
-      // 2. Biografie befüllen aus notes (falls notes vorhanden und biography leer ist)
-      //    und die alten deprecated Spalten 'name' und 'notes' auf null setzen.
-      await prisma.person.update({
-        where: { id: person.id },
-        data: {
-          biography: person.biography || person.notes || "",
-          name: null,
-          notes: null
-        }
-      });
+      console.log("[Migration] Alle Personendaten wurden erfolgreich in das neue Alias-Schema migriert!");
     }
-
-    console.log("[Migration] Alle Personendaten wurden erfolgreich in das neue Alias-Schema migriert!");
   } catch (error: any) {
     console.error("[Migration] Fehler bei der automatischen Migration des Personengedächtnisses:", error);
   }
@@ -91,6 +89,7 @@ export async function runAutomaticMigration(prisma: PrismaClient) {
         "id" SERIAL PRIMARY KEY,
         "name" TEXT NOT NULL UNIQUE,
         "description" TEXT NOT NULL,
+        "detailedInstructions" TEXT,
         "parameters" JSONB NOT NULL,
         "returnValues" JSONB,
         "endpointUrl" TEXT NOT NULL,
@@ -103,6 +102,7 @@ export async function runAutomaticMigration(prisma: PrismaClient) {
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "DynamicTool" ADD COLUMN IF NOT EXISTS "detailedInstructions" TEXT;`);
     console.log("[Migration] Tabelle DynamicTool erfolgreich verifiziert/erstellt.");
   } catch (toolTableErr: any) {
     console.warn("[Migration] Hinweis: Tabelle DynamicTool:", toolTableErr.message);
@@ -130,6 +130,11 @@ export async function runAutomaticMigration(prisma: PrismaClient) {
         "id" SERIAL PRIMARY KEY,
         "title" TEXT NOT NULL,
         "message" TEXT NOT NULL,
+        "reasoning" TEXT,
+        "agentName" TEXT,
+        "agentAvatar" TEXT,
+        "agentColor" TEXT,
+        "actionData" JSONB,
         "type" TEXT NOT NULL DEFAULT 'info',
         "priority" TEXT NOT NULL DEFAULT 'normal',
         "sourceType" TEXT NOT NULL DEFAULT 'mail',
@@ -145,9 +150,151 @@ export async function runAutomaticMigration(prisma: PrismaClient) {
     `);
     await prisma.$executeRawUnsafe(`ALTER TABLE "AgentNotification" ADD COLUMN IF NOT EXISTS "reasoning" TEXT;`);
     await prisma.$executeRawUnsafe(`ALTER TABLE "AgentNotification" ADD COLUMN IF NOT EXISTS "agentName" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "AgentNotification" ADD COLUMN IF NOT EXISTS "agentAvatar" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "AgentNotification" ADD COLUMN IF NOT EXISTS "agentColor" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "AgentNotification" ADD COLUMN IF NOT EXISTS "actionData" JSONB;`);
     console.log("[Migration] Tabelle AgentNotification erfolgreich verifiziert/erstellt.");
   } catch (notifErr: any) {
     console.warn("[Migration] Hinweis: Tabelle AgentNotification:", notifErr.message);
+  }
+
+  // Schema-Migration für Locations, Media & Verknüpfungstabellen
+  try {
+    console.log("[Migration] Überprüfe Tabellen für Locations & Media...");
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Location" (
+        "id" SERIAL PRIMARY KEY,
+        "name" TEXT NOT NULL,
+        "type" TEXT NOT NULL DEFAULT 'address',
+        "address" TEXT,
+        "postalCode" TEXT,
+        "city" TEXT,
+        "state" TEXT,
+        "country" TEXT DEFAULT 'Deutschland',
+        "formattedAddress" TEXT,
+        "notes" TEXT,
+        "lat" DOUBLE PRECISION,
+        "lng" DOUBLE PRECISION,
+        "isFavorite" BOOLEAN NOT NULL DEFAULT false,
+        "isDeleted" BOOLEAN NOT NULL DEFAULT false,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "PersonLocation" (
+        "id" SERIAL PRIMARY KEY,
+        "personId" INTEGER NOT NULL REFERENCES "Person"("id") ON DELETE CASCADE,
+        "locationId" INTEGER NOT NULL REFERENCES "Location"("id") ON DELETE CASCADE,
+        "relationType" TEXT NOT NULL DEFAULT 'residence',
+        "label" TEXT,
+        "isPrimary" BOOLEAN NOT NULL DEFAULT false,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "PersonLocation_personId_locationId_relationType_key"
+      ON "PersonLocation"("personId", "locationId", "relationType");
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "MediaItem" (
+        "id" SERIAL PRIMARY KEY,
+        "title" TEXT NOT NULL,
+        "fileName" TEXT NOT NULL,
+        "filePath" TEXT NOT NULL,
+        "fileType" TEXT NOT NULL,
+        "category" TEXT NOT NULL DEFAULT 'document',
+        "fileSize" INTEGER NOT NULL DEFAULT 0,
+        "description" TEXT,
+        "extractedText" TEXT,
+        "isFavorite" BOOLEAN NOT NULL DEFAULT false,
+        "isDeleted" BOOLEAN NOT NULL DEFAULT false,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "MediaPerson" (
+        "id" SERIAL PRIMARY KEY,
+        "mediaId" INTEGER NOT NULL REFERENCES "MediaItem"("id") ON DELETE CASCADE,
+        "personId" INTEGER NOT NULL REFERENCES "Person"("id") ON DELETE CASCADE,
+        "role" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "MediaPerson_mediaId_personId_key"
+      ON "MediaPerson"("mediaId", "personId");
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "MediaProject" (
+        "id" SERIAL PRIMARY KEY,
+        "mediaId" INTEGER NOT NULL REFERENCES "MediaItem"("id") ON DELETE CASCADE,
+        "projectId" INTEGER NOT NULL REFERENCES "Project"("id") ON DELETE CASCADE,
+        "tag" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "MediaProject_mediaId_projectId_key"
+      ON "MediaProject"("mediaId", "projectId");
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "EventPerson" (
+        "id" SERIAL PRIMARY KEY,
+        "eventId" INTEGER NOT NULL REFERENCES "Event"("id") ON DELETE CASCADE,
+        "personId" INTEGER NOT NULL REFERENCES "Person"("id") ON DELETE CASCADE,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "EventPerson_eventId_personId_key"
+      ON "EventPerson"("eventId", "personId");
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "TaskPerson" (
+        "id" SERIAL PRIMARY KEY,
+        "taskId" INTEGER NOT NULL REFERENCES "Task"("id") ON DELETE CASCADE,
+        "personId" INTEGER NOT NULL REFERENCES "Person"("id") ON DELETE CASCADE,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "TaskPerson_taskId_personId_key"
+      ON "TaskPerson"("taskId", "personId");
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "MediaEvent" (
+        "id" SERIAL PRIMARY KEY,
+        "mediaId" INTEGER NOT NULL REFERENCES "MediaItem"("id") ON DELETE CASCADE,
+        "eventId" INTEGER NOT NULL REFERENCES "Event"("id") ON DELETE CASCADE,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "MediaEvent_mediaId_eventId_key"
+      ON "MediaEvent"("mediaId", "eventId");
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "MediaTask" (
+        "id" SERIAL PRIMARY KEY,
+        "mediaId" INTEGER NOT NULL REFERENCES "MediaItem"("id") ON DELETE CASCADE,
+        "taskId" INTEGER NOT NULL REFERENCES "Task"("id") ON DELETE CASCADE,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "MediaTask_mediaId_taskId_key"
+      ON "MediaTask"("mediaId", "taskId");
+    `);
+
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "locationId" INTEGER REFERENCES "Location"("id") ON DELETE SET NULL;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "locationId" INTEGER REFERENCES "Location"("id") ON DELETE SET NULL;`);
+    console.log("[Migration] Locations & Media Tabellen erfolgreich verifiziert/erstellt.");
+  } catch (locMediaErr: any) {
+    console.warn("[Migration] Hinweis: Locations/Media Migration:", locMediaErr.message);
   }
 
   // Schema-Migration für Event Standort & Routenplanung
