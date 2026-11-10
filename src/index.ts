@@ -3758,7 +3758,24 @@ WICHTIGE VERHALTENSREGELN & VERHINDERUNG VON SCHEINERFOLGEN:
 
   } catch (error: any) {
     console.error("Detailed Error:", error);
-    res.status(500).json({ text: `Fehler: ${error.message || "Unbekannter Fehler"}` });
+    const errMessage = error?.message || String(error) || "Unbekannter Fehler";
+    const errStack = error?.stack || "";
+    const errDetails = JSON.stringify(
+      {
+        name: error?.name || "Error",
+        message: errMessage,
+        status: error?.status || error?.statusCode || undefined,
+        errorDetails: error?.errorDetails || undefined,
+        stack: errStack
+      },
+      null,
+      2
+    );
+    res.status(500).json({
+      text: `Fehler: ${errMessage}`,
+      error: errMessage,
+      details: errDetails
+    });
   }
 });
 

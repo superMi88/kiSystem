@@ -1763,7 +1763,99 @@ if (action === 'open_composer' || action === 'edit_mail') {
                 }
             }, 300);
 
-            let res;
+        function addErrorMessage(summaryText, detailText = "") {
+            const msg = document.createElement('div');
+            const msgId = `msg-${Date.now()}-${messageIdCounter++}`;
+            msg.id = msgId;
+            msg.className = 'message ai error-message';
+            msg.setAttribute('data-msg-id', msgId);
+            msg.setAttribute('data-msg-role', 'ai');
+            const fullCopyText = detailText ? `${summaryText}\n\n${detailText}` : summaryText;
+            msg.setAttribute('data-msg-text', fullCopyText);
+
+            const headerDiv = document.createElement('div');
+            headerDiv.style.display = 'flex';
+            headerDiv.style.alignItems = 'center';
+            headerDiv.style.gap = '8px';
+            headerDiv.style.color = '#f38ba8';
+            headerDiv.style.fontWeight = '600';
+            headerDiv.innerHTML = `<span>⚠️</span><span>${escapeHtml(summaryText)}</span>`;
+            msg.appendChild(headerDiv);
+
+            if (detailText) {
+                const detailsEl = document.createElement('details');
+                detailsEl.className = 'chat-error-details';
+                detailsEl.style.marginTop = '10px';
+                detailsEl.style.border = '1px solid rgba(243, 139, 168, 0.35)';
+                detailsEl.style.background = 'rgba(17, 17, 27, 0.75)';
+                detailsEl.style.borderRadius = '8px';
+                detailsEl.style.padding = '8px 10px';
+                detailsEl.style.fontSize = '0.78rem';
+
+                const summaryEl = document.createElement('summary');
+                summaryEl.style.cursor = 'pointer';
+                summaryEl.style.color = '#f38ba8';
+                summaryEl.style.fontWeight = '600';
+                summaryEl.style.userSelect = 'none';
+                summaryEl.style.display = 'flex';
+                summaryEl.style.alignItems = 'center';
+                summaryEl.style.justifyContent = 'space-between';
+                summaryEl.innerHTML = `<span>Fehlerdetails anzeigen</span>`;
+
+                const copyDetailBtn = document.createElement('button');
+                copyDetailBtn.type = 'button';
+                copyDetailBtn.textContent = '📋 Kopieren';
+                copyDetailBtn.style.background = 'rgba(243, 139, 168, 0.15)';
+                copyDetailBtn.style.border = '1px solid rgba(243, 139, 168, 0.4)';
+                copyDetailBtn.style.color = '#f38ba8';
+                copyDetailBtn.style.borderRadius = '6px';
+                copyDetailBtn.style.padding = '3px 8px';
+                copyDetailBtn.style.fontSize = '0.72rem';
+                copyDetailBtn.style.cursor = 'pointer';
+                copyDetailBtn.onclick = async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    try {
+                        await navigator.clipboard.writeText(fullCopyText);
+                        copyDetailBtn.textContent = '✓ Kopiert!';
+                        setTimeout(() => { copyDetailBtn.textContent = '📋 Kopieren'; }, 1800);
+                    } catch (_) {
+                        const ta = document.createElement('textarea');
+                        ta.value = fullCopyText;
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        ta.remove();
+                        copyDetailBtn.textContent = '✓ Kopiert!';
+                        setTimeout(() => { copyDetailBtn.textContent = '📋 Kopieren'; }, 1800);
+                    }
+                };
+                summaryEl.appendChild(copyDetailBtn);
+                detailsEl.appendChild(summaryEl);
+
+                const preEl = document.createElement('pre');
+                preEl.style.marginTop = '8px';
+                preEl.style.paddingTop = '8px';
+                preEl.style.borderTop = '1px dashed rgba(243, 139, 168, 0.25)';
+                preEl.style.whiteSpace = 'pre-wrap';
+                preEl.style.wordBreak = 'break-word';
+                preEl.style.fontFamily = "'JetBrains Mono', 'Fira Code', monospace";
+                preEl.style.fontSize = '0.73rem';
+                preEl.style.color = '#cdd6f4';
+                preEl.style.maxHeight = '260px';
+                preEl.style.overflowY = 'auto';
+                preEl.style.userSelect = 'text';
+                preEl.textContent = detailText;
+                detailsEl.appendChild(preEl);
+
+                msg.appendChild(detailsEl);
+            }
+
+            chatBox.appendChild(msg);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        let res;
             try {
                 res = await fetch(getApiUrl('/chat'), {
                     method: 'POST',
@@ -1777,7 +1869,8 @@ if (action === 'open_composer' || action === 'edit_mail') {
             } catch (networkErr) {
                 clearInterval(pollInterval);
                 thinkingDiv.remove();
-                addMessage("Fehler beim Senden der Nachricht: Netzwerkverbindung fehlgeschlagen.", false);
+                const netDetail = `URL: ${getApiUrl('/chat')}\nFehler: ${networkErr?.message || networkErr}\nStack: ${networkErr?.stack || '-'}`;
+                addErrorMessage("Fehler beim Senden der Nachricht: Netzwerkverbindung fehlgeschlagen.", netDetail);
                 return;
             }
 
@@ -1786,11 +1879,29 @@ if (action === 'open_composer' || action === 'edit_mail') {
 
             if (!res.ok) {
                 let errMsg = "Fehler beim Verarbeiten der Nachricht auf dem Server.";
+                let errDetail = `HTTP Status: ${res.status} ${res.statusText || ''}\nURL: ${getApiUrl('/chat')}`;
                 try {
-                    const errData = await res.json();
-                    if (errData && errData.error) errMsg = errData.error;
-                } catch (_) {}
-                addMessage(errMsg, false);
+                    const rawBody = await res.text();
+                    try {
+                        const errData = JSON.parse(rawBody);
+                        const serverMsg = errData.error || errData.text || errData.message;
+                        if (serverMsg) {
+                            errDetail += `\nServer-Meldung: ${serverMsg}`;
+                        }
+                        if (errData.details) {
+                            errDetail += `\n\nDetails:\n${typeof errData.details === 'string' ? errData.details : JSON.stringify(errData.details, null, 2)}`;
+                        } else {
+                            errDetail += `\n\nResponse JSON:\n${JSON.stringify(errData, null, 2)}`;
+                        }
+                    } catch (_) {
+                        if (rawBody) {
+                            errDetail += `\n\nServer-Antwort:\n${rawBody}`;
+                        }
+                    }
+                } catch (readErr) {
+                    errDetail += `\nFehler beim Lesen der Antwort: ${readErr?.message || readErr}`;
+                }
+                addErrorMessage(errMsg, errDetail);
                 return;
             }
 
