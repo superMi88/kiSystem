@@ -1310,6 +1310,45 @@ if (action === 'open_composer' || action === 'edit_mail') {
 
         let messageIdCounter = 1;
 
+        async function navigateToCreatedProject(projectName, projectId = null) {
+            let targetId = projectId;
+
+            if (!targetId && window.lastProjectsData && Array.isArray(window.lastProjectsData.projects)) {
+                const match = window.lastProjectsData.projects.find(
+                    p => (p.name || '').trim().toLowerCase() === (projectName || '').trim().toLowerCase()
+                );
+                if (match) targetId = match.id;
+            }
+
+            if (!targetId) {
+                try {
+                    const res = await fetch(getApiUrl('/widgets'));
+                    if (res.ok) {
+                        const widgets = await res.json();
+                        const projWidget = widgets.find(w => w.type === 'custom' && w.data && w.data.widgetType === 'projects_list');
+                        if (projWidget && Array.isArray(projWidget.data.projects)) {
+                            window.lastProjectsData = projWidget.data;
+                            const match = projWidget.data.projects.find(
+                                p => (p.name || '').trim().toLowerCase() === (projectName || '').trim().toLowerCase()
+                            );
+                            if (match) targetId = match.id;
+                        }
+                    }
+                } catch (err) {
+                    console.warn("Konnte Projekt-ID nicht nachladen:", err);
+                }
+            }
+
+            if (targetId && typeof window.openProjectDetailPage === 'function') {
+                window.openProjectDetailPage(targetId);
+            } else if (typeof window.navigateToProjects === 'function') {
+                window.navigateToProjects();
+            } else if (typeof focusWidget === 'function') {
+                focusWidget('projects');
+            }
+        }
+        window.navigateToCreatedProject = navigateToCreatedProject;
+
 
 
         function addMessage(text, isUser, widget = null, attachments = [], replyTo = null, notification = null) {
@@ -1464,6 +1503,40 @@ if (action === 'open_composer' || action === 'edit_mail') {
                         const textDiv = document.createElement('div');
                         textDiv.innerHTML = renderMarkdown(cleanText);
                         msg.appendChild(textDiv);
+
+                        // Wenn das Tool "erstelle_projekt" in dieser Nachricht ausgeführt wurde:
+                        // Länglichen Button "Zu <Name> Projekt" direkt unter der Nachricht anzeigen
+                        const projectMatches = [...cleanText.matchAll(/erstelle_projekt\(\s*name:\s*"([^"]+)"/gi)];
+                        if (projectMatches.length > 0) {
+                            const idMatch = cleanText.match(/\(ID:\s*(\d+)\)/i) || cleanText.match(/project\/(\d+)/i);
+                            const explicitProjectId = idMatch ? Number(idMatch[1]) : null;
+                            const seenProjectNames = new Set();
+
+                            projectMatches.forEach((m) => {
+                                const projName = (m[1] || '').trim();
+                                if (!projName || seenProjectNames.has(projName.toLowerCase())) return;
+                                seenProjectNames.add(projName.toLowerCase());
+
+                                const jumpBtn = document.createElement('button');
+                                jumpBtn.type = 'button';
+                                jumpBtn.className = 'chat-project-jump-btn';
+                                const displayLabel = projName.toLowerCase().includes('projekt')
+                                    ? `Zu ${projName}`
+                                    : `Zu ${projName} Projekt`;
+                                jumpBtn.innerHTML = `
+                                    <span class="jump-btn-left">
+                                        <span>📁</span>
+                                        <span class="jump-btn-label">${escapeHtml(displayLabel)}</span>
+                                    </span>
+                                    <span class="jump-btn-arrow">➔</span>
+                                `;
+                                jumpBtn.onclick = async (e) => {
+                                    e.stopPropagation();
+                                    await navigateToCreatedProject(projName, explicitProjectId);
+                                };
+                                msg.appendChild(jumpBtn);
+                            });
+                        }
                     }
 
                     if (notifObj) {
