@@ -1,3 +1,5 @@
+process.env.TZ = process.env.TZ || "Europe/Berlin";
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express from "express";
@@ -103,33 +105,50 @@ app.get("/sse", async (req, res) => {
  * Conversations API
  */
 app.get("/conversations", async (req, res) => {
-  const type = req.query.type as string | undefined;
-  const where: any = {};
-  if (type === 'agent_run') {
-    where.isAgentRun = true;
-  } else if (type === 'chat') {
-    where.isAgentRun = false;
-  }
-
-  const conversations = await prisma.conversation.findMany({
-    where,
-    orderBy: { createdAt: 'desc' },
-    include: {
-      notifications: {
-        where: { isDismissed: false },
-        select: { id: true, type: true, isDismissed: true }
-      }
+  try {
+    const type = req.query.type as string | undefined;
+    const where: any = {};
+    if (type === 'agent_run') {
+      where.isAgentRun = true;
+    } else if (type === 'chat') {
+      where.isAgentRun = false;
     }
-  });
-  res.json(conversations);
+
+    try {
+      const conversations = await prisma.conversation.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          notifications: {
+            where: { isDismissed: false },
+            select: { id: true, type: true, isDismissed: true }
+          }
+        }
+      });
+      return res.json(conversations);
+    } catch (innerErr) {
+      const fallbackConversations = await prisma.conversation.findMany({
+        orderBy: { createdAt: 'desc' }
+      });
+      return res.json(fallbackConversations);
+    }
+  } catch (e: any) {
+    console.error("[Conversations API] Fehler beim Laden des Verlaufs:", e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get("/conversations/:id", async (req, res) => {
-  const messages = await prisma.chatMessage.findMany({
-    where: { conversationId: req.params.id },
-    orderBy: { createdAt: 'asc' }
-  });
-  res.json(messages);
+  try {
+    const messages = await prisma.chatMessage.findMany({
+      where: { conversationId: req.params.id },
+      orderBy: { createdAt: 'asc' }
+    });
+    res.json(messages);
+  } catch (e: any) {
+    console.error("[Conversations API] Fehler beim Laden der Nachrichten:", e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get("/conversations/:id/meta", async (req, res) => {
@@ -144,10 +163,13 @@ app.get("/conversations/:id/meta", async (req, res) => {
       where: { conversationId: req.params.id },
       orderBy: { createdAt: 'asc' }
     });
-    const notifications = await prisma.agentNotification.findMany({
-      where: { conversationId: req.params.id },
-      orderBy: { createdAt: 'asc' }
-    });
+    let notifications: any[] = [];
+    try {
+      notifications = await prisma.agentNotification.findMany({
+        where: { conversationId: req.params.id },
+        orderBy: { createdAt: 'asc' }
+      });
+    } catch (_) {}
     res.json({ conversation, messages, notifications });
   } catch (e: any) {
     res.status(500).json({ error: e.message });

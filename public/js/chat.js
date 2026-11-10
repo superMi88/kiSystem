@@ -1464,7 +1464,10 @@ if (action === 'open_composer' || action === 'edit_mail') {
                                 if (n._rendered) return false;
                                 if (n.title && notifObj.title && (n.title === notifObj.title || n.title.includes(notifObj.title) || notifObj.title.includes(n.title))) return true;
                                 if (notifObj.actionData && n.actionData) {
-                                    let nAct = typeof n.actionData === 'string' ? JSON.parse(n.actionData) : n.actionData;
+                                    let nAct = n.actionData;
+                                    if (typeof nAct === 'string') {
+                                        try { nAct = JSON.parse(nAct); } catch (_) { nAct = null; }
+                                    }
                                     if (nAct && nAct.actionType === notifObj.actionData.actionType) return true;
                                 }
                                 if (n.sourceType === 'mail' && (notifObj.actionData?.actionType?.includes('mail') || (notifObj.title && notifObj.title.toLowerCase().includes('mail')))) return true;
@@ -1981,6 +1984,7 @@ if (action === 'open_composer' || action === 'edit_mail') {
             try {
                 const data = await res.json();
                 currentConversationId = data.conversationId;
+                window.currentConversationId = data.conversationId;
                 if (Array.isArray(data.notifications) && data.notifications.length > 0) {
                     currentConversationNotifications = data.notifications;
                     currentConversationNotifications.forEach(n => n._rendered = false);
@@ -1988,6 +1992,9 @@ if (action === 'open_composer' || action === 'edit_mail') {
                     currentConversationNotifications = [data.notification];
                 }
                 addMessage(data.text, false, data.widget, [], null, data.notification);
+                if (typeof loadHistory === 'function') {
+                    loadHistory();
+                }
                 if (typeof loadTopWidgets === 'function') {
                     loadTopWidgets();
                 }

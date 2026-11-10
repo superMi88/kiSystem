@@ -140,6 +140,51 @@ export function getGermanTimeContext(date: Date = new Date()) {
   };
 }
 
+export function getBerlinOffsetMinutes(atDate: Date): number {
+  const utcStr = atDate.toLocaleString("en-US", { timeZone: "UTC" });
+  const berlinStr = atDate.toLocaleString("en-US", { timeZone: "Europe/Berlin" });
+  return Math.round((new Date(berlinStr).getTime() - new Date(utcStr).getTime()) / 60000);
+}
+
+export function createGermanDate(
+  year: number,
+  monthIndex: number,
+  day: number,
+  h: number = 0,
+  m: number = 0,
+  s: number = 0,
+  ms: number = 0
+): Date {
+  const approxUtc = Date.UTC(year, monthIndex, day, h, m, s, ms);
+  const offset1 = getBerlinOffsetMinutes(new Date(approxUtc));
+  const candidate = new Date(approxUtc - offset1 * 60000);
+  const offset2 = getBerlinOffsetMinutes(candidate);
+  if (offset2 !== offset1) {
+    return new Date(approxUtc - offset2 * 60000);
+  }
+  return candidate;
+}
+
+export function getGermanDateParts(date: Date): {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+} {
+  const berlinStr = date.toLocaleString("en-US", { timeZone: "Europe/Berlin", hour12: false });
+  const d = new Date(berlinStr);
+  return {
+    year: d.getFullYear(),
+    month: d.getMonth(),
+    day: d.getDate(),
+    hour: d.getHours(),
+    minute: d.getMinutes(),
+    second: d.getSeconds()
+  };
+}
+
 export function parseFlexibleDate(val: Date | string | null | undefined, baseDate?: Date): Date | null {
   if (!val) return null;
   if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
@@ -152,9 +197,8 @@ export function parseFlexibleDate(val: Date | string | null | undefined, baseDat
     const h = parseInt(timeOnlyMatch[1], 10);
     const m = parseInt(timeOnlyMatch[2], 10);
     const s = timeOnlyMatch[3] ? parseInt(timeOnlyMatch[3], 10) : 0;
-    const d = new Date(baseDate || new Date());
-    d.setHours(h, m, s, 0);
-    return d;
+    const baseParts = getGermanDateParts(baseDate || new Date());
+    return createGermanDate(baseParts.year, baseParts.month, baseParts.day, h, m, s, 0);
   }
 
   // 2. Reines Datum: z. B. '2026-10-08'
@@ -163,7 +207,7 @@ export function parseFlexibleDate(val: Date | string | null | undefined, baseDat
     const year = parseInt(dateOnlyMatch[1], 10);
     const month = parseInt(dateOnlyMatch[2], 10) - 1;
     const day = parseInt(dateOnlyMatch[3], 10);
-    return new Date(year, month, day, 0, 0, 0, 0);
+    return createGermanDate(year, month, day, 0, 0, 0, 0);
   }
 
   // 3. Datum + Uhrzeit ohne Zeitzone oder mit einfachem 'Z' (LLM-Artefakt ohne Millisekunden):
@@ -176,7 +220,7 @@ export function parseFlexibleDate(val: Date | string | null | undefined, baseDat
     const h = parseInt(dtNoTzMatch[4], 10);
     const m = parseInt(dtNoTzMatch[5], 10);
     const s = dtNoTzMatch[6] ? parseInt(dtNoTzMatch[6], 10) : 0;
-    return new Date(year, month, day, h, m, s, 0);
+    return createGermanDate(year, month, day, h, m, s, 0);
   }
 
   // 4. Standard Date fallback (für ISO-Strings mit Millisekunden .000Z oder explizitem Offset wie +02:00)

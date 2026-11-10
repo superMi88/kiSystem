@@ -62,6 +62,12 @@ body.electron-transparent {
     transform: translateY(-1px);
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
 }
+.message.user .entity-link {
+    background: rgba(17, 17, 27, 0.85) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.35) !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
 
 
 /* --- Google Icons & Material Symbols Utility Styles --- */

@@ -1,42 +1,65 @@
 import { Plugin } from "../types.js";
 import { SchemaType } from "@google/generative-ai";
-import { RouteService, TravelMode, parseFlexibleDate, formatGermanDate, formatGermanTime } from "../../services/routeService.js";
+import { RouteService, TravelMode, parseFlexibleDate, formatGermanDate, formatGermanTime, createGermanDate, getGermanDateParts } from "../../services/routeService.js";
+
+function getGermanDayBounds(dateInput?: Date | string | null, fallbackDate?: Date | null): { startOfDay: Date; endOfDay: Date; dateIso: string } {
+  let resolved: Date | null = null;
+  if (dateInput instanceof Date && !isNaN(dateInput.getTime())) {
+    resolved = dateInput;
+  } else if (typeof dateInput === "string" && dateInput.trim()) {
+    const s = dateInput.trim();
+    // Ignore pure time strings like "19:00" unless anchored to fallbackDate
+    if (!/^\d{1,2}:\d{2}(:\d{2})?$/.test(s)) {
+      resolved = parseFlexibleDate(s, fallbackDate || undefined);
+    } else if (fallbackDate && !isNaN(fallbackDate.getTime())) {
+      resolved = fallbackDate;
+    }
+  }
+  if (!resolved || isNaN(resolved.getTime())) {
+    resolved = (fallbackDate && !isNaN(fallbackDate.getTime())) ? fallbackDate : new Date();
+  }
+  const parts = getGermanDateParts(resolved);
+  const startOfDay = createGermanDate(parts.year, parts.month, parts.day, 0, 0, 0, 0);
+  const endOfDay = createGermanDate(parts.year, parts.month, parts.day, 23, 59, 59, 999);
+  const dateIso = `${parts.year}-${String(parts.month + 1).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+  return { startOfDay, endOfDay, dateIso };
+}
 
 function getFuzzyTimeRange(date: Date, fuzzy: string): { start: Date; end: Date } {
-  const start = new Date(date);
-  start.setSeconds(0);
-  start.setMilliseconds(0);
-  const end = new Date(date);
-  end.setSeconds(0);
-  end.setMilliseconds(0);
+  const parts = getGermanDateParts(date);
+  let startH = 12;
+  let endH = 13;
 
   switch (fuzzy.toLowerCase()) {
     case 'morgens':
-      start.setHours(8, 0);
-      end.setHours(10, 0);
+      startH = 8;
+      endH = 10;
       break;
     case 'vormittag':
-      start.setHours(10, 0);
-      end.setHours(12, 0);
+      startH = 10;
+      endH = 12;
       break;
     case 'mittags':
-      start.setHours(12, 0);
-      end.setHours(14, 0);
+      startH = 12;
+      endH = 14;
       break;
     case 'nachmittag':
-      start.setHours(15, 0);
-      end.setHours(17, 0);
+      startH = 15;
+      endH = 17;
       break;
     case 'abends':
-      start.setHours(18, 0);
-      end.setHours(21, 0);
+      startH = 18;
+      endH = 21;
       break;
     default:
-      start.setHours(12, 0);
-      end.setHours(13, 0);
+      startH = 12;
+      endH = 13;
       break;
   }
-  return { start, end };
+  return {
+    start: createGermanDate(parts.year, parts.month, parts.day, startH, 0, 0, 0),
+    end: createGermanDate(parts.year, parts.month, parts.day, endH, 0, 0, 0)
+  };
 }
 
 
@@ -48,7 +71,12 @@ function getOccurrences(pattern: any, startRange: Date, endRange: Date, override
   const recurrenceType = pattern.recurrenceType; // "DAILY" | "WEEKLY" | "MONTHLY"
   const recurrenceEnd = pattern.recurrenceEnd ? new Date(pattern.recurrenceEnd) : null;
 
-  let currentStart = new Date(originalStart);
+  const origParts = getGermanDateParts(originalStart);
+  let curYear = origParts.year;
+  let curMonth = origParts.month;
+  let curDay = origParts.day;
+
+  let currentStart = createGermanDate(curYear, curMonth, curDay, origParts.hour, origParts.minute, origParts.second, 0);
   const limitDate = recurrenceEnd && recurrenceEnd < endRange ? recurrenceEnd : endRange;
 
   let loops = 0;
@@ -58,11 +86,12 @@ function getOccurrences(pattern: any, startRange: Date, endRange: Date, override
 
     if (occurrenceEnd >= startRange && currentStart <= endRange) {
       const occurrenceStartMs = currentStart.getTime();
-      const override = overrides.find((o: any) => 
-        o.recurrenceId === pattern.id && 
-        o.originalOccurrenceDate && 
-        new Date(o.originalOccurrenceDate).getTime() === occurrenceStartMs
-      );
+      const occGermanDate = formatGermanDate(currentStart);
+      const override = overrides.find((o: any) => {
+        if (o.recurrenceId !== pattern.id || !o.originalOccurrenceDate) return false;
+        const ovDate = new Date(o.originalOccurrenceDate);
+        return ovDate.getTime() === occurrenceStartMs || formatGermanDate(ovDate) === occGermanDate;
+      });
 
       if (!override) {
         occurrences.push({
@@ -82,14 +111,15 @@ function getOccurrences(pattern: any, startRange: Date, endRange: Date, override
     }
 
     if (recurrenceType === 'DAILY') {
-      currentStart.setDate(currentStart.getDate() + 1);
+      curDay += 1;
     } else if (recurrenceType === 'WEEKLY') {
-      currentStart.setDate(currentStart.getDate() + 7);
+      curDay += 7;
     } else if (recurrenceType === 'MONTHLY') {
-      currentStart.setMonth(currentStart.getMonth() + 1);
+      curMonth += 1;
     } else {
       break;
     }
+    currentStart = createGermanDate(curYear, curMonth, curDay, origParts.hour, origParts.minute, origParts.second, 0);
   }
 
   return occurrences;
@@ -671,18 +701,13 @@ export const calendarPlugin: Plugin = {
         } as any
       },
       handler: async (args, { prisma }) => {
-        const baseD = parseFlexibleDate(args.datum) || new Date();
-        const startOfDay = new Date(baseD);
-        startOfDay.setHours(0, 0, 0, 0);
-        
-        const endOfDay = new Date(baseD);
-        endOfDay.setHours(23, 59, 59, 999);
+        const { startOfDay, endOfDay, dateIso } = getGermanDayBounds(args.datum);
 
         const events = await getEventsForRange(startOfDay, endOfDay, prisma);
 
         return {
           type: "calendar_widget",
-          date: args.datum,
+          date: dateIso,
           events: events.map(e => ({
             ...e,
             type: e.isBirthday ? "birthday" : "local"
@@ -720,11 +745,14 @@ export const calendarPlugin: Plugin = {
       },
       handler: async (args, { prisma }) => {
         let start = parseFlexibleDate(args.datum) || new Date();
-        let end = args.enddatum ? (parseFlexibleDate(args.enddatum) || new Date(start.getTime() + 60 * 60 * 1000)) : new Date(start.getTime() + 60 * 60 * 1000);
+        let end = args.enddatum ? (parseFlexibleDate(args.enddatum, start) || new Date(start.getTime() + 60 * 60 * 1000)) : new Date(start.getTime() + 60 * 60 * 1000);
+        if (end.getTime() <= start.getTime() && args.enddatum) {
+          end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+        }
 
         const isRecurring = !!args.wiederkehrend;
         const recurrenceType = args.wiederholungsTyp || "WEEKLY";
-        const recurrenceEnd = args.wiederholungsEnde ? new Date(args.wiederholungsEnde) : null;
+        const recurrenceEnd = args.wiederholungsEnde ? parseFlexibleDate(args.wiederholungsEnde) : null;
         const isAllDay = !!args.ganztaegig;
         const fuzzyTime = args.tageszeit || null;
         const location = args.standort || args.ort || null;
@@ -890,16 +918,13 @@ export const calendarPlugin: Plugin = {
             }
           }
 
-          const startOfDay = new Date(start);
-          startOfDay.setHours(0, 0, 0, 0);
-          const endOfDay = new Date(start);
-          endOfDay.setHours(23, 59, 59, 999);
+          const { startOfDay, endOfDay, dateIso } = getGermanDayBounds(start);
 
           const events = await getEventsForRange(startOfDay, endOfDay, prisma);
 
           return { 
             type: "calendar_widget",
-            date: args.datum.split('T')[0],
+            date: dateIso,
             message: `Termin '${args.titel}' wurde erstellt.`,
             events: events.map(e => ({
               ...e,
@@ -942,13 +967,23 @@ export const calendarPlugin: Plugin = {
           if (cleanId.startsWith('rec-')) {
             const parts = cleanId.split('-');
             recurrenceId = Number(parts[1]);
-            originalOccurrenceDate = new Date(Number(parts[2]));
+            const ts = Number(parts[2]);
+            originalOccurrenceDate = !isNaN(ts) && ts > 0 ? new Date(ts) : (args.datum ? parseFlexibleDate(args.datum) : null);
           } else if (/^\d+$/.test(cleanId)) {
             id = Number(cleanId);
             const ev = await prisma.event.findUnique({ where: { id } });
-            if (ev && ev.recurrenceId) {
-              recurrenceId = ev.recurrenceId;
-              originalOccurrenceDate = ev.originalOccurrenceDate;
+            if (ev) {
+              if (ev.recurrenceId) {
+                recurrenceId = ev.recurrenceId;
+                originalOccurrenceDate = ev.originalOccurrenceDate;
+              }
+            } else {
+              const pat = await prisma.recurrencePattern.findUnique({ where: { id } });
+              if (pat) {
+                recurrenceId = pat.id;
+                id = null;
+                if (args.datum) originalOccurrenceDate = parseFlexibleDate(args.datum);
+              }
             }
           }
 
@@ -1002,17 +1037,13 @@ export const calendarPlugin: Plugin = {
             }
           }
 
-          const dateStr = args.datum || (originalOccurrenceDate ? originalOccurrenceDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
-          const startOfDay = new Date(dateStr);
-          startOfDay.setHours(0, 0, 0, 0);
-          const endOfDay = new Date(dateStr);
-          endOfDay.setHours(23, 59, 59, 999);
+          const { startOfDay, endOfDay, dateIso } = getGermanDayBounds(args.datum, originalOccurrenceDate);
 
           const events = await getEventsForRange(startOfDay, endOfDay, prisma);
 
           return { 
             type: "calendar_widget",
-            date: dateStr,
+            date: dateIso,
             message: `Termin wurde gelöscht.`,
             events: events.map(e => ({
               ...e,
@@ -1038,20 +1069,33 @@ export const calendarPlugin: Plugin = {
       },
       handler: async (args, { prisma }) => {
         try {
+          let cleanId = String(args.eventId || "").trim();
+          if (cleanId.startsWith('app://event/')) cleanId = cleanId.replace('app://event/', '');
+          if (cleanId.startsWith('event-')) cleanId = cleanId.replace('event-', '');
+
           let id: number | null = null;
           let recurrenceId: number | null = null;
           let originalOccurrenceDate: Date | null = null;
 
-          if (args.eventId.startsWith('rec-')) {
-            const parts = args.eventId.split('-');
+          if (cleanId.startsWith('rec-')) {
+            const parts = cleanId.split('-');
             recurrenceId = Number(parts[1]);
-            originalOccurrenceDate = new Date(Number(parts[2]));
+            const ts = Number(parts[2]);
+            originalOccurrenceDate = !isNaN(ts) && ts > 0 ? new Date(ts) : null;
           } else {
-            id = Number(args.eventId);
+            id = Number(cleanId);
             const ev = await prisma.event.findUnique({ where: { id } });
-            if (ev && ev.recurrenceId) {
-              recurrenceId = ev.recurrenceId;
-              originalOccurrenceDate = ev.originalOccurrenceDate;
+            if (ev) {
+              if (ev.recurrenceId) {
+                recurrenceId = ev.recurrenceId;
+                originalOccurrenceDate = ev.originalOccurrenceDate;
+              }
+            } else {
+              const pat = await prisma.recurrencePattern.findUnique({ where: { id } });
+              if (pat) {
+                recurrenceId = pat.id;
+                id = null;
+              }
             }
           }
 
@@ -1125,25 +1169,44 @@ export const calendarPlugin: Plugin = {
       },
       handler: async (args, { prisma }) => {
         try {
-          const rawId = String(args.eventId || args.terminId || "");
+          const rawId = String(args.eventId || args.terminId || "").trim();
           if (!rawId) {
             return { status: "error", message: "Termin-ID fehlt." };
           }
+          let cleanId = rawId;
+          if (cleanId.startsWith('app://event/')) cleanId = cleanId.replace('app://event/', '');
+          if (cleanId.startsWith('event-')) cleanId = cleanId.replace('event-', '');
+
           let id: number | null = null;
           let recurrenceId: number | null = null;
           let originalOccurrenceDate: Date | null = null;
+          let currentEvent: any = null;
 
-          if (rawId.startsWith('rec-')) {
-            const parts = rawId.split('-');
+          if (cleanId.startsWith('rec-')) {
+            const parts = cleanId.split('-');
             recurrenceId = Number(parts[1]);
-            originalOccurrenceDate = new Date(Number(parts[2]));
-          } else {
-            id = Number(rawId);
-            const ev = await prisma.event.findUnique({ where: { id } });
-            if (ev && ev.recurrenceId) {
-              recurrenceId = ev.recurrenceId;
-              originalOccurrenceDate = ev.originalOccurrenceDate;
+            const ts = Number(parts[2]);
+            originalOccurrenceDate = !isNaN(ts) && ts > 0 ? new Date(ts) : (args.datum ? parseFlexibleDate(args.datum) : null);
+          } else if (/^\d+$/.test(cleanId)) {
+            id = Number(cleanId);
+            currentEvent = await prisma.event.findUnique({ where: { id } });
+            if (currentEvent) {
+              if (currentEvent.recurrenceId) {
+                recurrenceId = currentEvent.recurrenceId;
+                originalOccurrenceDate = currentEvent.originalOccurrenceDate;
+              }
+            } else {
+              const pat = await prisma.recurrencePattern.findUnique({ where: { id } });
+              if (pat) {
+                recurrenceId = pat.id;
+                id = null;
+                if (args.datum) originalOccurrenceDate = parseFlexibleDate(args.datum);
+              } else {
+                return { status: "error", message: `Termin mit ID '${rawId}' wurde nicht gefunden.` };
+              }
             }
+          } else {
+            return { status: "error", message: `Ungültige Termin-ID '${rawId}'.` };
           }
 
           let pattern: any = null;
@@ -1151,10 +1214,18 @@ export const calendarPlugin: Plugin = {
             pattern = await prisma.recurrencePattern.findUnique({ where: { id: recurrenceId } });
           }
 
+          let resolvedWidgetDate: Date | null = originalOccurrenceDate || currentEvent?.start || null;
+
           if (args.nurDiesesVorkommen) {
             if (recurrenceId && originalOccurrenceDate) {
-              const existingOverride = await prisma.event.findFirst({
-                where: { recurrenceId, originalOccurrenceDate }
+              const occGermanDate = formatGermanDate(originalOccurrenceDate);
+              const overridesForPattern = await prisma.event.findMany({
+                where: { recurrenceId }
+              });
+              const existingOverride = overridesForPattern.find((o: any) => {
+                if (!o.originalOccurrenceDate) return false;
+                const ovD = new Date(o.originalOccurrenceDate);
+                return ovD.getTime() === originalOccurrenceDate!.getTime() || formatGermanDate(ovD) === occGermanDate;
               });
 
               const data: any = {};
@@ -1172,30 +1243,48 @@ export const calendarPlugin: Plugin = {
                 data.locationId = (args.locationId === "null" || args.locationId === null || args.locationId === "") ? null : Number(args.locationId);
               }
 
+              const baseAnchor = existingOverride ? new Date(existingOverride.start) : originalOccurrenceDate;
+              const defaultDuration = pattern
+                ? Math.max(15 * 60 * 1000, new Date(pattern.originalEnd).getTime() - new Date(pattern.originalStart).getTime())
+                : (existingOverride ? Math.max(15 * 60 * 1000, new Date(existingOverride.end).getTime() - new Date(existingOverride.start).getTime()) : 60 * 60 * 1000);
+
               if (args.tageszeit !== undefined) {
                 const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
                 data.fuzzyTime = fuzzyVal;
                 if (fuzzyVal) {
-                  const baseDate = args.neues_datum ? (parseFlexibleDate(args.neues_datum) || (existingOverride ? existingOverride.start : originalOccurrenceDate)) : (existingOverride ? existingOverride.start : originalOccurrenceDate);
+                  const baseDate = args.neues_datum ? (parseFlexibleDate(args.neues_datum, baseAnchor) || baseAnchor) : baseAnchor;
                   const range = getFuzzyTimeRange(baseDate, fuzzyVal);
                   data.start = range.start;
                   data.end = range.end;
+                  resolvedWidgetDate = data.start;
                 } else {
                   data.fuzzyTime = null;
                 }
               } else if (args.neues_datum) {
-                const parsedNewDate = parseFlexibleDate(args.neues_datum);
+                const parsedNewDate = parseFlexibleDate(args.neues_datum, baseAnchor);
                 if (parsedNewDate) {
                   data.start = parsedNewDate;
-                  const parsedNewEnd = parseFlexibleDate(args.neues_enddatum);
-                  const duration = parsedNewEnd ? (parsedNewEnd.getTime() - data.start.getTime()) : (60 * 60 * 1000);
+                  resolvedWidgetDate = parsedNewDate;
+                  let parsedNewEnd = args.neues_enddatum ? parseFlexibleDate(args.neues_enddatum, parsedNewDate) : null;
+                  if (parsedNewEnd && parsedNewEnd.getTime() <= data.start.getTime()) {
+                    parsedNewEnd = new Date(parsedNewEnd.getTime() + 24 * 60 * 60 * 1000);
+                  }
+                  const duration = parsedNewEnd ? (parsedNewEnd.getTime() - data.start.getTime()) : defaultDuration;
                   data.end = new Date(data.start.getTime() + duration);
                   
                   data.originalStart = originalOccurrenceDate;
                   if (pattern) {
-                    const patternDuration = pattern.originalEnd.getTime() - pattern.originalStart.getTime();
-                    data.originalEnd = new Date(originalOccurrenceDate.getTime() + patternDuration);
+                    data.originalEnd = new Date(originalOccurrenceDate.getTime() + defaultDuration);
                   }
+                }
+              } else if (args.neues_enddatum) {
+                const startRef = existingOverride ? new Date(existingOverride.start) : originalOccurrenceDate;
+                let parsedNewEnd = parseFlexibleDate(args.neues_enddatum, startRef);
+                if (parsedNewEnd) {
+                  if (parsedNewEnd.getTime() <= startRef.getTime()) {
+                    parsedNewEnd = new Date(parsedNewEnd.getTime() + 24 * 60 * 60 * 1000);
+                  }
+                  data.end = parsedNewEnd;
                 }
               }
 
@@ -1212,7 +1301,7 @@ export const calendarPlugin: Plugin = {
                     title: pattern.title,
                     description: pattern.description,
                     start: originalOccurrenceDate,
-                    end: new Date(originalOccurrenceDate.getTime() + (pattern.originalEnd.getTime() - pattern.originalStart.getTime())),
+                    end: new Date(originalOccurrenceDate.getTime() + defaultDuration),
                     isAllDay: pattern.isAllDay,
                     recurrenceId,
                     originalOccurrenceDate,
@@ -1220,9 +1309,8 @@ export const calendarPlugin: Plugin = {
                   }
                 });
               }
-            } else if (id) {
+            } else if (id && currentEvent) {
               // Reschedule a one-off event as a single occurrence change
-              const currentEvent = await prisma.event.findUnique({ where: { id } });
               const data: any = {};
               if (args.neuer_titel !== undefined) data.title = args.neuer_titel;
               if (args.neue_beschreibung !== undefined) data.description = args.neue_beschreibung;
@@ -1235,28 +1323,42 @@ export const calendarPlugin: Plugin = {
                 data.location = args.standort === "" ? null : args.standort;
               }
 
+              const baseAnchor = new Date(currentEvent.start);
+              const existingDuration = Math.max(15 * 60 * 1000, new Date(currentEvent.end).getTime() - baseAnchor.getTime());
+
               if (args.tageszeit !== undefined) {
                 const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
                 data.fuzzyTime = fuzzyVal;
                 if (fuzzyVal) {
-                  const baseDate = args.neues_datum ? (parseFlexibleDate(args.neues_datum) || (currentEvent ? currentEvent.start : new Date())) : (currentEvent ? currentEvent.start : new Date());
+                  const baseDate = args.neues_datum ? (parseFlexibleDate(args.neues_datum, baseAnchor) || baseAnchor) : baseAnchor;
                   const range = getFuzzyTimeRange(baseDate, fuzzyVal);
                   data.start = range.start;
                   data.end = range.end;
+                  resolvedWidgetDate = data.start;
                 } else {
                   data.fuzzyTime = null;
                 }
               } else if (args.neues_datum) {
-                const parsedNewDate = parseFlexibleDate(args.neues_datum);
+                const parsedNewDate = parseFlexibleDate(args.neues_datum, baseAnchor);
                 if (parsedNewDate) {
-                  if (currentEvent) {
-                    data.originalStart = currentEvent.start;
-                    data.originalEnd = currentEvent.end;
-                  }
+                  data.originalStart = currentEvent.originalStart || currentEvent.start;
+                  data.originalEnd = currentEvent.originalEnd || currentEvent.end;
                   data.start = parsedNewDate;
-                  const parsedNewEnd = parseFlexibleDate(args.neues_enddatum);
-                  const duration = parsedNewEnd ? (parsedNewEnd.getTime() - data.start.getTime()) : (60 * 60 * 1000);
+                  resolvedWidgetDate = parsedNewDate;
+                  let parsedNewEnd = args.neues_enddatum ? parseFlexibleDate(args.neues_enddatum, parsedNewDate) : null;
+                  if (parsedNewEnd && parsedNewEnd.getTime() <= data.start.getTime()) {
+                    parsedNewEnd = new Date(parsedNewEnd.getTime() + 24 * 60 * 60 * 1000);
+                  }
+                  const duration = parsedNewEnd ? (parsedNewEnd.getTime() - data.start.getTime()) : existingDuration;
                   data.end = new Date(data.start.getTime() + duration);
+                }
+              } else if (args.neues_enddatum) {
+                let parsedNewEnd = parseFlexibleDate(args.neues_enddatum, baseAnchor);
+                if (parsedNewEnd) {
+                  if (parsedNewEnd.getTime() <= baseAnchor.getTime()) {
+                    parsedNewEnd = new Date(parsedNewEnd.getTime() + 24 * 60 * 60 * 1000);
+                  }
+                  data.end = parsedNewEnd;
                 }
               }
 
@@ -1287,7 +1389,7 @@ export const calendarPlugin: Plugin = {
             }
           } else {
             // Edit entire series or one-off
-            if (recurrenceId) {
+            if (recurrenceId && pattern) {
               const data: any = {};
               if (args.neuer_titel !== undefined) data.title = args.neuer_titel;
               if (args.neue_beschreibung !== undefined) data.description = args.neue_beschreibung;
@@ -1296,24 +1398,54 @@ export const calendarPlugin: Plugin = {
                 data.location = args.standort === "" ? null : args.standort;
               }
 
+              const patStart = new Date(pattern.originalStart);
+              const patEnd = new Date(pattern.originalEnd);
+              const patDuration = Math.max(15 * 60 * 1000, patEnd.getTime() - patStart.getTime());
+              const anchorForParse = originalOccurrenceDate || (args.datum ? parseFlexibleDate(args.datum) : null) || patStart;
+
               if (args.tageszeit !== undefined) {
                 const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
                 data.fuzzyTime = fuzzyVal;
                 if (fuzzyVal) {
-                  const baseDate = args.neues_datum ? (parseFlexibleDate(args.neues_datum) || (pattern ? pattern.originalStart : new Date())) : (pattern ? pattern.originalStart : new Date());
-                  const range = getFuzzyTimeRange(baseDate, fuzzyVal);
+                  const range = getFuzzyTimeRange(patStart, fuzzyVal);
                   data.originalStart = range.start;
                   data.originalEnd = range.end;
                 } else {
                   data.fuzzyTime = null;
                 }
               } else if (args.neues_datum) {
-                const parsedNewDate = parseFlexibleDate(args.neues_datum);
+                const parsedNewDate = parseFlexibleDate(args.neues_datum, anchorForParse);
                 if (parsedNewDate) {
-                  data.originalStart = parsedNewDate;
-                  const parsedNewEnd = parseFlexibleDate(args.neues_enddatum);
-                  const duration = parsedNewEnd ? (parsedNewEnd.getTime() - data.originalStart.getTime()) : (60 * 60 * 1000);
+                  const newParts = getGermanDateParts(parsedNewDate);
+                  const origParts = getGermanDateParts(patStart);
+                  const isTimeOnly = /^\d{1,2}:\d{2}(:\d{2})?$/.test(String(args.neues_datum).trim());
+                  const origWeekday = createGermanDate(origParts.year, origParts.month, origParts.day, 12, 0).getUTCDay();
+                  const newWeekday = createGermanDate(newParts.year, newParts.month, newParts.day, 12, 0).getUTCDay();
+
+                  // If changing time of the series (time-only or same weekday on a later occurrence), preserve original series start date so past/earlier occurrences remain intact
+                  if (isTimeOnly || (origWeekday === newWeekday && patStart.getTime() <= parsedNewDate.getTime())) {
+                    data.originalStart = createGermanDate(origParts.year, origParts.month, origParts.day, newParts.hour, newParts.minute, newParts.second, 0);
+                  } else {
+                    data.originalStart = parsedNewDate;
+                  }
+
+                  let parsedNewEnd = args.neues_enddatum ? parseFlexibleDate(args.neues_enddatum, parsedNewDate) : null;
+                  if (parsedNewEnd && parsedNewEnd.getTime() <= parsedNewDate.getTime()) {
+                    parsedNewEnd = new Date(parsedNewEnd.getTime() + 24 * 60 * 60 * 1000);
+                  }
+                  const duration = parsedNewEnd ? (parsedNewEnd.getTime() - parsedNewDate.getTime()) : patDuration;
                   data.originalEnd = new Date(data.originalStart.getTime() + duration);
+                }
+              } else if (args.neues_enddatum) {
+                let parsedNewEnd = parseFlexibleDate(args.neues_enddatum, patStart);
+                if (parsedNewEnd) {
+                  const endParts = getGermanDateParts(parsedNewEnd);
+                  const origParts = getGermanDateParts(patStart);
+                  let candidateEnd = createGermanDate(origParts.year, origParts.month, origParts.day, endParts.hour, endParts.minute, endParts.second, 0);
+                  if (candidateEnd.getTime() <= patStart.getTime()) {
+                    candidateEnd = new Date(candidateEnd.getTime() + 24 * 60 * 60 * 1000);
+                  }
+                  data.originalEnd = candidateEnd;
                 }
               }
 
@@ -1321,8 +1453,7 @@ export const calendarPlugin: Plugin = {
                 where: { id: recurrenceId },
                 data
               });
-            } else if (id) {
-              const currentEvent = await prisma.event.findUnique({ where: { id } });
+            } else if (id && currentEvent) {
               const data: any = {};
               if (args.neuer_titel !== undefined) data.title = args.neuer_titel;
               if (args.neue_beschreibung !== undefined) data.description = args.neue_beschreibung;
@@ -1334,28 +1465,42 @@ export const calendarPlugin: Plugin = {
                 data.location = args.standort === "" ? null : args.standort;
               }
 
+              const baseAnchor = new Date(currentEvent.start);
+              const existingDuration = Math.max(15 * 60 * 1000, new Date(currentEvent.end).getTime() - baseAnchor.getTime());
+
               if (args.tageszeit !== undefined) {
                 const fuzzyVal = args.tageszeit === "" ? null : args.tageszeit;
                 data.fuzzyTime = fuzzyVal;
                 if (fuzzyVal) {
-                  const baseDate = args.neues_datum ? (parseFlexibleDate(args.neues_datum) || (currentEvent ? currentEvent.start : new Date())) : (currentEvent ? currentEvent.start : new Date());
+                  const baseDate = args.neues_datum ? (parseFlexibleDate(args.neues_datum, baseAnchor) || baseAnchor) : baseAnchor;
                   const range = getFuzzyTimeRange(baseDate, fuzzyVal);
                   data.start = range.start;
                   data.end = range.end;
+                  resolvedWidgetDate = data.start;
                 } else {
                   data.fuzzyTime = null;
                 }
               } else if (args.neues_datum) {
-                const parsedNewDate = parseFlexibleDate(args.neues_datum);
+                const parsedNewDate = parseFlexibleDate(args.neues_datum, baseAnchor);
                 if (parsedNewDate) {
-                  if (currentEvent) {
-                    data.originalStart = currentEvent.start;
-                    data.originalEnd = currentEvent.end;
-                  }
+                  data.originalStart = currentEvent.originalStart || currentEvent.start;
+                  data.originalEnd = currentEvent.originalEnd || currentEvent.end;
                   data.start = parsedNewDate;
-                  const parsedNewEnd = parseFlexibleDate(args.neues_enddatum);
-                  const duration = parsedNewEnd ? (parsedNewEnd.getTime() - data.start.getTime()) : (60 * 60 * 1000);
+                  resolvedWidgetDate = parsedNewDate;
+                  let parsedNewEnd = args.neues_enddatum ? parseFlexibleDate(args.neues_enddatum, parsedNewDate) : null;
+                  if (parsedNewEnd && parsedNewEnd.getTime() <= data.start.getTime()) {
+                    parsedNewEnd = new Date(parsedNewEnd.getTime() + 24 * 60 * 60 * 1000);
+                  }
+                  const duration = parsedNewEnd ? (parsedNewEnd.getTime() - data.start.getTime()) : existingDuration;
                   data.end = new Date(data.start.getTime() + duration);
+                }
+              } else if (args.neues_enddatum) {
+                let parsedNewEnd = parseFlexibleDate(args.neues_enddatum, baseAnchor);
+                if (parsedNewEnd) {
+                  if (parsedNewEnd.getTime() <= baseAnchor.getTime()) {
+                    parsedNewEnd = new Date(parsedNewEnd.getTime() + 24 * 60 * 60 * 1000);
+                  }
+                  data.end = parsedNewEnd;
                 }
               }
 
@@ -1412,17 +1557,16 @@ export const calendarPlugin: Plugin = {
             }
           }
 
-          const targetDate = args.neues_datum || args.datum || (originalOccurrenceDate ? originalOccurrenceDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
-          const startOfDay = new Date(targetDate);
-          startOfDay.setHours(0, 0, 0, 0);
-          const endOfDay = new Date(targetDate);
-          endOfDay.setHours(23, 59, 59, 999);
+          const { startOfDay, endOfDay, dateIso } = getGermanDayBounds(
+            args.neues_datum || args.datum,
+            resolvedWidgetDate || (args.datum ? parseFlexibleDate(args.datum) : null) || originalOccurrenceDate || currentEvent?.start || pattern?.originalStart
+          );
 
           const events = await getEventsForRange(startOfDay, endOfDay, prisma);
 
           return { 
             type: "calendar_widget",
-            date: targetDate.split('T')[0],
+            date: dateIso,
             message: `Termin wurde aktualisiert.`,
             events: events.map(e => ({
               ...e,

@@ -410,7 +410,7 @@
                     if (mobNew) mobNew.classList.add('active');
                     if (mobHist) mobHist.classList.remove('active');
                     
-                    if (document.body.classList.contains('mobile-mode')) {
+                    if (typeof switchMobileView === 'function') {
                         switchMobileView('chat');
                     }
                 } else if (name === 'history') {
@@ -426,7 +426,7 @@
                     if (mobNew) mobNew.classList.remove('active');
                     if (mobHist) mobHist.classList.add('active');
                     
-                    if (document.body.classList.contains('mobile-mode')) {
+                    if (typeof switchMobileView === 'function') {
                         switchMobileView('history');
                     }
                 } else if (name === 'settings') {
@@ -437,7 +437,7 @@
                     navNew.classList.remove('active');
                     navHistory.classList.remove('active');
                     
-                    if (document.body.classList.contains('mobile-mode')) {
+                    if (typeof switchMobileView === 'function') {
                         switchMobileView('settings');
                     }
                 }
@@ -447,6 +447,7 @@
                 }
             }
         }
+        window.showSection = showSection;
 
 
 
@@ -483,7 +484,7 @@
 
         function applyHistoryFilter() {
             const query = (historyQuery ? historyQuery.value : '').toLowerCase().trim();
-            let filtered = allLoadedConversations;
+            let filtered = Array.isArray(allLoadedConversations) ? allLoadedConversations : [];
             if (currentHistoryFilter === 'chat') {
                 filtered = filtered.filter(c => !c.isAgentRun);
             } else if (currentHistoryFilter === 'agent_run') {
@@ -494,13 +495,14 @@
             }
             renderHistoryListOnly(filtered);
         }
+        window.applyHistoryFilter = applyHistoryFilter;
 
 
 
         function applyDrawerHistoryFilter() {
             const drawerQueryInput = document.getElementById('drawer-history-query');
             const query = (drawerQueryInput ? drawerQueryInput.value : '').toLowerCase().trim();
-            let filtered = allLoadedConversations;
+            let filtered = Array.isArray(allLoadedConversations) ? allLoadedConversations : [];
             if (currentDrawerHistoryFilter === 'chat') {
                 filtered = filtered.filter(c => !c.isAgentRun);
             } else if (currentDrawerHistoryFilter === 'agent_run') {
@@ -511,27 +513,34 @@
             }
             renderDrawerHistoryListOnly(filtered);
         }
+        window.applyDrawerHistoryFilter = applyDrawerHistoryFilter;
 
 
 
         async function loadHistory() {
             try {
                 const res = await fetch(getApiUrl('/conversations'));
-                allLoadedConversations = await res.json();
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}`);
+                }
+                const data = await res.json();
+                allLoadedConversations = Array.isArray(data) ? data : [];
                 applyHistoryFilter();
                 applyDrawerHistoryFilter();
             } catch (err) {
                 console.error("Fehler beim Laden des Verlaufs:", err);
             }
         }
+        window.loadHistory = loadHistory;
 
 
 
         function renderHistory(conversations) {
-            allLoadedConversations = conversations;
+            allLoadedConversations = Array.isArray(conversations) ? conversations : [];
             applyHistoryFilter();
             applyDrawerHistoryFilter();
         }
+        window.renderHistory = renderHistory;
 
 
 
@@ -651,24 +660,32 @@
 
 
         async function loadConversation(id) {
+            if (!id) return;
             let messages = [];
             let conversationMeta = null;
+            currentConversationNotifications = [];
             try {
                 const metaRes = await fetch(getApiUrl(`/conversations/${id}/meta`));
                 if (metaRes.ok) {
                     const data = await metaRes.json();
-                    conversationMeta = data.conversation;
-                    messages = data.messages || [];
-                    currentConversationNotifications = data.notifications || [];
+                    conversationMeta = data.conversation || null;
+                    messages = Array.isArray(data.messages) ? data.messages : [];
+                    currentConversationNotifications = Array.isArray(data.notifications) ? data.notifications : [];
                     currentConversationNotifications.forEach(n => n._rendered = false);
                 } else {
                     const res = await fetch(getApiUrl(`/conversations/${id}`));
-                    messages = await res.json();
+                    if (res.ok) {
+                        const rawMsgs = await res.json();
+                        messages = Array.isArray(rawMsgs) ? rawMsgs : [];
+                    }
                 }
             } catch (err) {
                 try {
                     const res = await fetch(getApiUrl(`/conversations/${id}`));
-                    messages = await res.json();
+                    if (res.ok) {
+                        const rawMsgs = await res.json();
+                        messages = Array.isArray(rawMsgs) ? rawMsgs : [];
+                    }
                 } catch (e2) {
                     console.error("Fehler beim Laden der Konversation:", e2);
                 }
@@ -676,6 +693,7 @@
             
             currentConversationId = id;
             window.currentConversationId = id;
+            showSection('chat');
             if (window.AppRouter && typeof window.AppRouter.updateUrl === 'function') {
                 window.AppRouter.updateUrl(`/chat/${id}`);
             }
@@ -761,7 +779,18 @@
                 chatBox.appendChild(banner);
             }
 
-            messages.forEach(msg => addMessage(msg.text, msg.role === 'user'));
+            if (messages.length === 0 && (!currentConversationNotifications || currentConversationNotifications.length === 0)) {
+                chatBox.innerHTML = '<div class="message ai" style="opacity: 0.7;">Keine Nachrichten in diesem Chatverlauf gefunden.</div>';
+            } else {
+                messages.forEach(msg => {
+                    try {
+                        addMessage(msg.text || '', msg.role === 'user');
+                    } catch (renderErr) {
+                        console.error("Fehler beim Rendern einer Nachricht:", renderErr);
+                    }
+                });
+            }
+
             if (currentConversationNotifications && currentConversationNotifications.length > 0) {
                 currentConversationNotifications.forEach(n => {
                     if (!n._rendered && !n.isDismissed) {
@@ -773,8 +802,11 @@
                     }
                 });
             }
-            showSection('chat');
+            setTimeout(() => {
+                if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+            }, 40);
         }
+        window.loadConversation = loadConversation;
 
 
 
