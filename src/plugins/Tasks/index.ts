@@ -163,6 +163,7 @@ export const tasksPlugin: Plugin = {
               aufgabenlisteId: t.listTitle,
               aufgabenlisteTitel: t.listTitle,
               wiederholung: t.recurrence || null,
+              recurrence: t.recurrence || null,
               erledigt: t.completed,
               geloescht: t.isDeleted,
               inPlanung: t.isPlanned,

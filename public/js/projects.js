@@ -9,6 +9,44 @@ window.projectArchiveSortOrder = 'desc';
 window.archivedTasksList = [];
 window.projectArchiveSearchQuery = '';
 
+window.isRecurringTasksActive = false;
+window.recurringTasksFilter = 'all';
+window.recurringTasksProjectFilter = 'all';
+window.recurringTasksSearchQuery = '';
+
+function getAllRecurringTasks(data) {
+    const d = data || window.lastProjectsData;
+    if (!d) return [];
+    const recurring = [];
+    const projects = d.projects || [];
+    const unassignedTasks = d.unassignedTasks || [];
+
+    projects.forEach(p => {
+        (p.tasks || []).forEach(t => {
+            if (t.recurrence && t.recurrence !== 'none' && !t.isDeleted) {
+                recurring.push({
+                    ...t,
+                    projectId: p.id,
+                    projectName: p.name
+                });
+            }
+        });
+    });
+
+    unassignedTasks.forEach(t => {
+        if (t.recurrence && t.recurrence !== 'none' && !t.isDeleted) {
+            recurring.push({
+                ...t,
+                projectId: null,
+                projectName: null
+            });
+        }
+    });
+
+    return recurring;
+}
+window.getAllRecurringTasks = getAllRecurringTasks;
+
 function getProjectArchiveFilterLabel(filterVal) {
     if (filterVal === 'unassigned') return 'Offene Aufgaben';
     if (!filterVal || filterVal === 'all') return 'Alle Projekte';
@@ -25,6 +63,41 @@ function updateProjectsHeader(activeProject) {
     const addBtn = document.getElementById('header-project-add-btn');
     const archiveBtn = document.getElementById('header-project-archive-btn');
     const filterBtn = document.getElementById('header-project-filter-btn');
+
+    if (window.isRecurringTasksActive) {
+        if (titleContainer) {
+            titleContainer.innerHTML = `
+                <span style="cursor: pointer; opacity: 0.8; transition: opacity 0.2s; white-space: nowrap;" onclick="closeRecurringTasksView()" title="Zurück zu allen Projekten">📁 Projekte</span>
+                <span style="opacity: 0.4; font-size: 0.85rem; margin: 0 2px;">&gt;</span>
+                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; color: #ffffff;" title="Wiederholende Aufgaben">🔄 Wiederholende Aufgaben</span>
+            `;
+        }
+        if (filterBtn) {
+            filterBtn.style.display = 'none';
+            filterBtn.classList.remove('active');
+        }
+        if (editBtn) {
+            editBtn.style.display = 'none';
+            editBtn.onclick = null;
+        }
+        if (settingsBtn) {
+            settingsBtn.style.display = 'none';
+            settingsBtn.onclick = null;
+        }
+        if (archiveBtn) {
+            archiveBtn.style.display = 'inline-flex';
+            archiveBtn.style.background = '';
+            archiveBtn.style.borderColor = '';
+            archiveBtn.title = 'Aufgaben-Archiv';
+            archiveBtn.onclick = () => openProjectsArchive('all');
+        }
+        if (addBtn) {
+            addBtn.style.display = 'inline-flex';
+            addBtn.title = 'Neue wiederholende Aufgabe erstellen';
+            addBtn.onclick = () => openTaskModalForRecurring('weekly');
+        }
+        return;
+    }
 
     if (window.isProjectArchiveActive) {
         const filterVal = window.projectArchiveFilter || 'all';
@@ -209,6 +282,7 @@ window.switchProjectStatusTab = function (tab) {
 
 window.openProjectDetailPage = async function (id) {
     window.isProjectArchiveActive = false;
+    window.isRecurringTasksActive = false;
     window.activeProjectDetailId = id;
     const projects = (window.lastProjectsData && window.lastProjectsData.projects) || [];
     const proj = projects.find(p => String(p.id) === String(id));
@@ -417,6 +491,7 @@ window.saveProjectSettingsCategories = async function () {
 
 window.closeProjectDetail = async function () {
     window.isProjectArchiveActive = false;
+    window.isRecurringTasksActive = false;
     window.activeProjectDetailId = null;
     updateProjectsHeader(null);
     if (window.AppRouter && typeof window.AppRouter.updateUrl === 'function') {
@@ -429,6 +504,7 @@ window.closeProjectDetail = async function () {
 
 window.navigateToProjects = function () {
     window.isProjectArchiveActive = false;
+    window.isRecurringTasksActive = false;
     window.activeProjectDetailId = null;
     updateProjectsHeader(null);
     if (typeof focusWidget === 'function') {
@@ -552,6 +628,12 @@ window.openTaskModalForProject = function (projectId, status = 'in_progress') {
 function renderProjectsWidget(data, container) {
     window.lastProjectsData = data;
     window.lastProjectsContainer = container;
+
+    if (window.isRecurringTasksActive) {
+        updateProjectsHeader(null);
+        renderRecurringTasksFullPage(data, container);
+        return;
+    }
 
     if (window.isProjectArchiveActive) {
         if (!window.archivedTasksList || window.archivedTasksList.length === 0) {
@@ -688,6 +770,18 @@ function renderProjectsWidget(data, container) {
                 }
             }
 
+            let recBadge = '';
+            if (t.recurrence && t.recurrence !== 'none') {
+                const recMap = {
+                    'daily': 'Täglich',
+                    'weekly': 'Wöchentlich',
+                    'monthly': 'Monatlich',
+                    'yearly': 'Jährlich'
+                };
+                const recLabel = recMap[String(t.recurrence).toLowerCase()] || t.recurrence;
+                recBadge = `<span style="font-size: 0.65rem; color: #a6e3a1; font-weight: 600; background: rgba(166, 227, 161, 0.15); padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(166, 227, 161, 0.3); display: inline-flex; align-items: center; gap: 3px;" title="Wiederholung: ${escapeHtml(recLabel)}">🔄 ${escapeHtml(recLabel)}</span>`;
+            }
+
             let checkboxHtml = '';
             let catSelectHtml = '';
 
@@ -751,7 +845,7 @@ function renderProjectsWidget(data, container) {
                             ${archiveBtnHtml}
                         </div>
                     </div>
-                    ${(dueBadge || taskMetaChipsHtml) ? `<div style="margin-left: ${hasMultipleStates ? '4px' : '22px'}; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 4px;">${dueBadge || ''}${taskMetaChipsHtml}</div>` : ''}
+                    ${(dueBadge || recBadge || taskMetaChipsHtml) ? `<div style="margin-left: ${hasMultipleStates ? '4px' : '22px'}; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 4px;">${dueBadge || ''}${recBadge || ''}${taskMetaChipsHtml}</div>` : ''}
                 </div>
             `;
             const effectiveStatus = String((t.stateId !== undefined && t.stateId !== null ? t.stateId : null) || currentCol || t.status || 'in_progress');
@@ -908,7 +1002,9 @@ function renderProjectsWidget(data, container) {
                 <div style="text-align: left; padding: 0 0 15px 0;">
             `;
 
-    if (projects.length === 0 && unassignedTasks.length === 0 && unassignedNotes.length === 0) {
+    const allRecurring = getAllRecurringTasks(data);
+
+    if (projects.length === 0 && unassignedTasks.length === 0 && unassignedNotes.length === 0 && allRecurring.length === 0) {
         html += `<p style="font-size: 0.8rem; opacity: 0.6; text-align: center; margin: 20px 0;">Keine Projekte oder Aufgaben vorhanden. Erstelle dein erstes Projekt!</p>`;
     } else {
         html += `<div class="projects-overview-grid">`;
@@ -1009,6 +1105,29 @@ function renderProjectsWidget(data, container) {
                     </div>
                 `;
 
+        // Render "Wiederholende Aufgaben"
+        const recurringCount = allRecurring.length;
+        const activeRecurring = allRecurring.filter(t => !t.completed && t.status !== 'done').length;
+
+        html += `
+                    <div class="project-overview-card" onclick="openRecurringTasksView()" style="border-style: dashed; border-color: rgba(166, 227, 161, 0.45); background: rgba(166, 227, 161, 0.03);">
+                        <div class="project-overview-header">
+                            <div class="project-overview-title" style="color: rgba(255,255,255,0.95); font-weight: 700;">
+                                <span>🔄</span>
+                                <span>Wiederholende Aufgaben</span>
+                            </div>
+                        </div>
+                        <div style="font-size: 0.74rem; color: rgba(255,255,255,0.5);">Aufgaben mit regelmäßiger Wiederholung</div>
+                        <div class="project-overview-badges">
+                            <span class="project-tag-badge" style="background: rgba(166, 227, 161, 0.15); color: #a6e3a1; border: 1px solid rgba(166, 227, 161, 0.3);">🔄 ${recurringCount} ${recurringCount === 1 ? 'Wiederholung' : 'Wiederholungen'}</span>
+                            ${activeRecurring < recurringCount ? `<span class="project-tag-badge done">✅ ${recurringCount - activeRecurring} erledigt</span>` : ''}
+                        </div>
+                        <div style="font-size: 0.75rem; color: #a6e3a1; display: flex; align-items: center; gap: 4px; font-weight: 600; margin-top: auto; padding-top: 4px;">
+                            Wiederholungen ansehen ➔
+                        </div>
+                    </div>
+                `;
+
         html += `</div>`;
     }
 
@@ -1020,6 +1139,7 @@ function renderProjectsWidget(data, container) {
 
 window.openProjectsArchive = async function (filter) {
     window.isProjectArchiveActive = true;
+    window.isRecurringTasksActive = false;
     if (filter !== undefined && filter !== null) {
         window.projectArchiveFilter = String(filter);
     } else if (window.activeProjectDetailId) {
@@ -1041,6 +1161,7 @@ window.openProjectsArchive = async function (filter) {
 
 window.closeProjectsArchive = async function (forceOverview = false) {
     window.isProjectArchiveActive = false;
+    window.isRecurringTasksActive = false;
     window.projectArchiveFilterOpen = false;
     const addBtn = document.getElementById('header-project-add-btn');
     if (addBtn) addBtn.style.display = 'inline-flex';
@@ -1293,4 +1414,322 @@ window.restoreTaskFromArchive = async function (taskId) {
         console.error("Fehler beim Wiederherstellen der archivierten Aufgabe:", e);
         alert("Fehler beim Wiederherstellen: " + (e.message || e));
     }
+};
+
+// --- DEDICATED FULL-PAGE RECURRING TASKS VIEW ---
+
+window.openRecurringTasksView = async function () {
+    window.isRecurringTasksActive = true;
+    window.isProjectArchiveActive = false;
+    window.activeProjectDetailId = null;
+
+    if (typeof focusWidget === 'function') {
+        focusWidget('projects');
+    }
+    if (window.AppRouter && typeof window.AppRouter.updateUrl === 'function') {
+        window.AppRouter.updateUrl('/projekte/wiederholend');
+    }
+
+    updateProjectsHeader(null);
+    const container = window.lastProjectsContainer || document.getElementById('widget-projects');
+    if (window.lastProjectsData && container) {
+        renderRecurringTasksFullPage(window.lastProjectsData, container);
+    } else if (typeof loadTopWidgets === 'function') {
+        await loadTopWidgets();
+    }
+};
+
+window.closeRecurringTasksView = async function () {
+    window.isRecurringTasksActive = false;
+    updateProjectsHeader(null);
+    if (window.AppRouter && typeof window.AppRouter.updateUrl === 'function') {
+        window.AppRouter.updateUrl('/projekte');
+    }
+    const container = window.lastProjectsContainer || document.getElementById('widget-projects');
+    if (window.lastProjectsData && container) {
+        renderProjectsWidget(window.lastProjectsData, container);
+    } else if (typeof loadTopWidgets === 'function') {
+        await loadTopWidgets();
+    }
+};
+
+window.changeRecurringTasksFilter = function (filter) {
+    window.recurringTasksFilter = filter;
+    renderRecurringTasksFullPage(window.lastProjectsData, window.lastProjectsContainer);
+};
+
+window.changeRecurringTasksProjectFilter = function (projId) {
+    window.recurringTasksProjectFilter = projId;
+    renderRecurringTasksList();
+};
+
+window.handleRecurringTasksSearch = function (val) {
+    window.recurringTasksSearchQuery = val;
+    renderRecurringTasksList();
+};
+
+window.resetRecurringTasksFilter = function () {
+    window.recurringTasksFilter = 'all';
+    window.recurringTasksProjectFilter = 'all';
+    window.recurringTasksSearchQuery = '';
+    renderRecurringTasksFullPage(window.lastProjectsData, window.lastProjectsContainer);
+};
+
+window.openTaskModalForRecurring = function (recurrence = 'weekly') {
+    openTaskModal(null, '', '', '', 'Standard', recurrence, null, false, 'in_progress', false);
+};
+
+window.renderRecurringTasksFullPage = function (data, container) {
+    if (!container) container = document.getElementById('widget-projects') || window.lastProjectsContainer;
+    if (!container) return;
+
+    window.lastProjectsContainer = container;
+    updateProjectsHeader(null);
+
+    const allRecurring = getAllRecurringTasks(data);
+    const projects = (data && data.projects) || (window.lastProjectsData && window.lastProjectsData.projects) || [];
+    const currentFilter = window.recurringTasksFilter || 'all';
+    const currentProjFilter = window.recurringTasksProjectFilter || 'all';
+
+    const countAll = allRecurring.length;
+    const countDaily = allRecurring.filter(t => String(t.recurrence).toLowerCase() === 'daily').length;
+    const countWeekly = allRecurring.filter(t => String(t.recurrence).toLowerCase() === 'weekly').length;
+    const countMonthly = allRecurring.filter(t => String(t.recurrence).toLowerCase() === 'monthly').length;
+    const countYearly = allRecurring.filter(t => String(t.recurrence).toLowerCase() === 'yearly').length;
+
+    const hasActiveFilter = (currentFilter !== 'all') || (currentProjFilter !== 'all') || Boolean(window.recurringTasksSearchQuery);
+
+    let html = `
+        <div class="recurring-tasks-fullpage" style="padding: 4px 0 20px 0; text-align: left; display: flex; flex-direction: column; gap: 12px;">
+            <!-- Filter Bar -->
+            <div class="locations-filter-bar" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 2px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08); padding: 10px 12px; border-radius: 12px; width: 100%;">
+                <!-- Interval Filter Pills -->
+                <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; width: 100%; scrollbar-width: none;">
+                    <button type="button" onclick="changeRecurringTasksFilter('all')" class="locations-filter-pill ${currentFilter === 'all' ? 'active' : ''}">
+                        <span>✨ Alle</span>
+                        <span class="locations-filter-count">${countAll}</span>
+                    </button>
+                    <button type="button" onclick="changeRecurringTasksFilter('daily')" class="locations-filter-pill ${currentFilter === 'daily' ? 'active' : ''}">
+                        <span>🔄 Täglich</span>
+                        <span class="locations-filter-count">${countDaily}</span>
+                    </button>
+                    <button type="button" onclick="changeRecurringTasksFilter('weekly')" class="locations-filter-pill ${currentFilter === 'weekly' ? 'active' : ''}">
+                        <span>🔄 Wöchentlich</span>
+                        <span class="locations-filter-count">${countWeekly}</span>
+                    </button>
+                    <button type="button" onclick="changeRecurringTasksFilter('monthly')" class="locations-filter-pill ${currentFilter === 'monthly' ? 'active' : ''}">
+                        <span>🔄 Monatlich</span>
+                        <span class="locations-filter-count">${countMonthly}</span>
+                    </button>
+                    <button type="button" onclick="changeRecurringTasksFilter('yearly')" class="locations-filter-pill ${currentFilter === 'yearly' ? 'active' : ''}">
+                        <span>🔄 Jährlich</span>
+                        <span class="locations-filter-count">${countYearly}</span>
+                    </button>
+                </div>
+                <!-- Controls Row: Search, Project Filter, Reset -->
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; width: 100%;">
+                    <div style="display: flex; align-items: center; position: relative; flex: 1; min-width: 170px;">
+                        <input type="text" id="recurring-tasks-search-input" value="${escapeHtml(window.recurringTasksSearchQuery || '')}" placeholder="Wiederholende Aufgaben durchsuchen..." oninput="handleRecurringTasksSearch(this.value)" class="media-filter-select" style="width: 100%; height: 32px; padding: 4px 10px 4px 28px; font-size: 0.8rem; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid rgba(255,255,255,0.12); outline: none;">
+                        <span style="position: absolute; left: 9px; font-size: 0.75rem; opacity: 0.5; pointer-events: none;">🔍</span>
+                    </div>
+                    <select class="media-filter-select" onchange="changeRecurringTasksProjectFilter(this.value)" style="height: 32px; font-size: 0.78rem;" title="Nach Projekt filtern">
+                        <option value="all" ${currentProjFilter === 'all' ? 'selected' : ''}>📁 Alle Projekte</option>
+                        <option value="unassigned" ${currentProjFilter === 'unassigned' ? 'selected' : ''}>📋 Ohne Projekt</option>
+                        ${projects.map(p => `
+                            <option value="${p.id}" ${String(currentProjFilter) === String(p.id) ? 'selected' : ''}>📁 ${escapeHtml(p.name)}</option>
+                        `).join('')}
+                    </select>
+                    ${hasActiveFilter ? `
+                        <button type="button" class="media-filter-reset-btn" onclick="resetRecurringTasksFilter()" title="Filter zurücksetzen" style="height: 32px; padding: 0 10px; font-size: 0.75rem; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: var(--accent); cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;">
+                            ✕ Zurücksetzen
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+
+            <!-- Dynamic Tasks Container -->
+            <div id="recurring-tasks-list-container" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        </div>
+    `;
+
+    container.innerHTML = html;
+    renderRecurringTasksList();
+};
+
+window.renderRecurringTasksList = function () {
+    const listContainer = document.getElementById('recurring-tasks-list-container');
+    if (!listContainer) return;
+
+    const allTasks = getAllRecurringTasks();
+    const filter = window.recurringTasksFilter || 'all';
+    const projFilter = window.recurringTasksProjectFilter || 'all';
+    const query = (window.recurringTasksSearchQuery || '').trim().toLowerCase();
+
+    // 1. Filter by Interval
+    let filtered = allTasks.filter(t => {
+        if (filter !== 'all') {
+            return String(t.recurrence).toLowerCase() === filter.toLowerCase();
+        }
+        return true;
+    });
+
+    // 2. Filter by Project
+    if (projFilter === 'unassigned') {
+        filtered = filtered.filter(t => !t.projectId);
+    } else if (projFilter !== 'all') {
+        filtered = filtered.filter(t => String(t.projectId) === String(projFilter));
+    }
+
+    // 3. Filter by Search Query
+    if (query) {
+        filtered = filtered.filter(t => {
+            const titelMatch = t.title && t.title.toLowerCase().includes(query);
+            const notizenMatch = t.notes && t.notes.toLowerCase().includes(query);
+            const projMatch = t.projectName && t.projectName.toLowerCase().includes(query);
+            return titelMatch || notizenMatch || projMatch;
+        });
+    }
+
+    // Sort: due date ascending (earliest next due first)
+    filtered.sort((a, b) => {
+        if (!a.due && !b.due) return 0;
+        if (!a.due) return 1;
+        if (!b.due) return -1;
+        return new Date(a.due).getTime() - new Date(b.due).getTime();
+    });
+
+    if (filtered.length === 0) {
+        if (allTasks.length === 0) {
+            listContainer.innerHTML = `
+                <div style="padding: 40px 20px; text-align: center; color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.02); border: 1px dashed rgba(166, 227, 161, 0.3); border-radius: 12px; font-size: 0.85rem; margin-top: 6px;">
+                    <div style="font-size: 2.2rem; margin-bottom: 8px;">🔄</div>
+                    <div style="font-weight: 700; font-size: 1rem; color: #ffffff; margin-bottom: 6px;">Keine wiederholenden Aufgaben</div>
+                    <div style="font-size: 0.78rem; color: rgba(255,255,255,0.55); max-width: 340px; margin: 0 auto 16px auto; line-height: 1.4;">
+                        Hier findest du alle Aufgaben mit täglicher, wöchentlicher, monatlicher oder jährlicher Wiederholung auf einen Blick.
+                    </div>
+                    <button type="button" onclick="openTaskModalForRecurring('weekly')" style="margin: 0 auto; display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; padding: 8px 16px; border-radius: 8px; background: rgba(166, 227, 161, 0.2); color: #a6e3a1; border: 1px solid rgba(166, 227, 161, 0.4); cursor: pointer; font-weight: 600;">
+                        <span>+</span> Neue wiederholende Aufgabe erstellen
+                    </button>
+                </div>
+            `;
+        } else {
+            listContainer.innerHTML = `
+                <div style="padding: 35px 20px; text-align: center; color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.1); border-radius: 10px; font-size: 0.85rem; margin-top: 6px;">
+                    <div style="font-size: 1.6rem; margin-bottom: 8px;">🔍</div>
+                    Keine wiederholenden Aufgaben für die ausgewählten Filterkriterien gefunden.
+                </div>
+            `;
+        }
+        return;
+    }
+
+    let itemsHtml = `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 2px 4px; font-size: 0.75rem; color: rgba(255,255,255,0.5);">
+            <span>${filtered.length} ${filtered.length === 1 ? 'wiederholende Aufgabe' : 'wiederholende Aufgaben'}</span>
+            <span style="font-size: 0.7rem; opacity: 0.8;">Sortierung: Nächste Fälligkeit zuerst</span>
+        </div>
+    `;
+
+    filtered.forEach(t => {
+        const rawId = String(t.id).replace('task-', '');
+        const escT = escapeHtml(t.title || 'Aufgabe');
+        const escN = escapeHtml(t.notes || '');
+        const isDone = t.status === 'done' || !!t.completed;
+        const checkedAttr = isDone ? 'checked' : '';
+        const textStyle = isDone ? 'text-decoration: line-through; opacity: 0.55;' : '';
+
+        // Recurrence badge
+        const recMap = {
+            'daily': { label: 'Täglich', color: '#a6e3a1', bg: 'rgba(166, 227, 161, 0.15)', border: 'rgba(166, 227, 161, 0.35)' },
+            'weekly': { label: 'Wöchentlich', color: '#89b4fa', bg: 'rgba(137, 180, 250, 0.15)', border: 'rgba(137, 180, 250, 0.35)' },
+            'monthly': { label: 'Monatlich', color: '#cba6f7', bg: 'rgba(203, 166, 247, 0.15)', border: 'rgba(203, 166, 247, 0.35)' },
+            'yearly': { label: 'Jährlich', color: '#fab387', bg: 'rgba(250, 179, 135, 0.15)', border: 'rgba(250, 179, 135, 0.35)' }
+        };
+        const recInfo = recMap[String(t.recurrence).toLowerCase()] || { label: t.recurrence, color: '#a6e3a1', bg: 'rgba(166, 227, 161, 0.15)', border: 'rgba(166, 227, 161, 0.35)' };
+        const recBadgeHtml = `<span style="font-size: 0.7rem; color: ${recInfo.color}; background: ${recInfo.bg}; border: 1px solid ${recInfo.border}; padding: 2px 7px; border-radius: 6px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">🔄 ${escapeHtml(recInfo.label)}</span>`;
+
+        // Due badge
+        const dueObj = t.due ? new Date(t.due) : null;
+        let dueBadge = '';
+        if (dueObj && !isNaN(dueObj.getTime())) {
+            const todayStr = getLocalDateString();
+            const dueStr = dueObj.toISOString().split('T')[0];
+            if (dueStr < todayStr) {
+                dueBadge = `<span style="font-size: 0.68rem; color: #f38ba8; font-weight: bold; background: rgba(243, 139, 168, 0.15); border: 1px solid rgba(243, 139, 168, 0.3); padding: 2px 7px; border-radius: 6px;">⚠️ Überfällig (${dueObj.toLocaleDateString('de-DE')})</span>`;
+            } else if (dueStr === todayStr) {
+                dueBadge = `<span style="font-size: 0.68rem; color: var(--accent); font-weight: bold; background: rgba(137, 180, 250, 0.15); border: 1px solid rgba(137, 180, 250, 0.3); padding: 2px 7px; border-radius: 6px;">📅 Heute fällig</span>`;
+            } else {
+                dueBadge = `<span style="font-size: 0.68rem; opacity: 0.75; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); padding: 2px 7px; border-radius: 6px;">📅 Nächste: ${dueObj.toLocaleDateString('de-DE')}</span>`;
+            }
+        }
+
+        // Project label
+        const projLabel = t.projectName
+            ? `<span class="clickable-tag" onclick="event.stopPropagation(); openProjectDetailPage(${t.projectId});" style="font-size: 0.7rem; color: var(--accent); background: rgba(137, 180, 250, 0.12); padding: 2px 7px; border-radius: 6px; border: 1px solid rgba(137, 180, 250, 0.25); cursor: pointer; display: inline-flex; align-items: center; gap: 3px;" title="Zum Projekt: ${escapeHtml(t.projectName)}">📁 ${escapeHtml(t.projectName)}</span>`
+            : `<span style="font-size: 0.7rem; color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.05); padding: 2px 7px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);">📋 Ohne Projekt</span>`;
+
+        // Meta chips
+        let taskMetaChipsHtml = '';
+        if (t.locationObj) {
+            const locId = t.locationObj.id;
+            const locName = t.locationObj.name || t.locationObj.formattedAddress;
+            taskMetaChipsHtml += `<span class="meta-chip location" onclick="event.stopPropagation(); handleEntityClick(event, 'location', ${locId});" title="Ort: ${escapeHtml(locName)}">📍 ${escapeHtml(locName)}</span>`;
+        }
+        if (t.persons && t.persons.length > 0) {
+            t.persons.forEach(p => {
+                taskMetaChipsHtml += `<span class="meta-chip person" onclick="event.stopPropagation(); openPersonProfileModal(${p.id});" title="Person: ${escapeHtml(p.name)}">👤 ${escapeHtml(p.name)}</span>`;
+            });
+        }
+
+        const editArgs = [
+            `'${rawId}'`,
+            `'${escT.replace(/'/g, "\\'")}'`,
+            `'${escN.replace(/'/g, "\\'")}'`,
+            `'${t.due || ''}'`,
+            `'${escapeHtml(t.listTitle || 'Standard')}'`,
+            `'${t.recurrence || 'none'}'`,
+            t.projectId ? t.projectId : 'null',
+            !!t.isPlanned,
+            `'${escapeHtml(t.status || 'in_progress')}'`,
+            !!t.isStarred,
+            t.locationId || (t.locationObj ? t.locationObj.id : 'null'),
+            JSON.stringify((t.persons || []).map(p => p.id)),
+            JSON.stringify((t.media || []).map(m => m.id))
+        ].join(', ');
+
+        const cardInner = `
+            <div class="archive-task-card" style="display: flex; align-items: flex-start; justify-content: space-between; padding: 12px 14px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; gap: 12px; transition: background 0.2s;">
+                <div style="display: flex; align-items: flex-start; gap: 10px; min-width: 0; flex: 1;">
+                    <input type="checkbox" class="task-checkbox" data-task-id="${rawId}" data-tasklist-id="Standard" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 3px;" onclick="event.stopPropagation()" title="Als erledigt markieren (erstellt Wiederholung)">
+                    <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                            <span style="font-size: 0.9rem; font-weight: 600; color: #ffffff; cursor: pointer; ${textStyle}">${escT}</span>
+                            ${t.isStarred ? `<span class="pinned-task-indicator" title="Angepinnt">📌</span>` : ''}
+                        </div>
+                        ${t.notes ? `<div style="font-size: 0.75rem; color: rgba(255,255,255,0.6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 480px;">${escN}</div>` : ''}
+                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px;">
+                            ${recBadgeHtml}
+                            ${projLabel}
+                            ${dueBadge}
+                            ${taskMetaChipsHtml}
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;" onclick="event.stopPropagation()">
+                    <button type="button" onclick="openTaskModal(${editArgs})" class="save" style="padding: 6px 11px; font-size: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.85); cursor: pointer; display: inline-flex; align-items: center; gap: 4px;" title="Wiederholende Aufgabe bearbeiten">
+                        ✏️ Bearbeiten
+                    </button>
+                    <button type="button" onclick="archiveSingleTask('${rawId}', event)" class="task-archive-quick-btn" title="Ins Archiv verschieben" style="background: transparent; border: none; color: rgba(255,255,255,0.38); cursor: pointer; padding: 4px; font-size: 0.9rem; border-radius: 4px;" onmouseover="this.style.color='#fab387'" onmouseout="this.style.color='rgba(255,255,255,0.38)'">
+                        📦
+                    </button>
+                </div>
+            </div>
+        `;
+
+        const extraData = `data-task-id="${rawId}" data-task-title="${escT.replace(/"/g, '&quot;')}" data-task-notes="${escN.replace(/"/g, '&quot;')}" data-task-due="${t.due || ''}" data-task-list="Standard" data-task-recurrence="${t.recurrence || 'none'}" data-task-project="${t.projectId || ''}" data-task-project-id="${t.projectId || ''}" data-task-state-id="${t.stateId || ''}" data-task-status="${t.status || 'in_progress'}" data-task-completed="${isDone}" data-task-starred="${!!t.isStarred}" data-task-planned="${!!(t.isPlanned || t.status === 'suggestion')}" data-task-location-id="${t.locationId || (t.locationObj ? t.locationObj.id : '')}" data-task-location-obj="${escapeHtml(JSON.stringify(t.locationObj || null))}" data-task-persons="${escapeHtml(JSON.stringify(t.persons || []))}" data-task-media="${escapeHtml(JSON.stringify(t.media || []))}"`;
+
+        itemsHtml += renderSwipeLinkWrapper(cardInner, t.title, 'task', rawId, '', '', 'margin-bottom: 0;', extraData);
+    });
+
+    listContainer.innerHTML = itemsHtml;
 };

@@ -84,6 +84,12 @@
         if (document.body.classList.contains('mail-read-active') && window.currentReadMailId) {
             return `/mail/${window.currentReadMailId}`;
         }
+        if (window.isRecurringTasksActive) {
+            return '/projekte/wiederholend';
+        }
+        if (window.isProjectArchiveActive) {
+            return '/projekte/archiv';
+        }
         if (window.activeProjectDetailId) {
             return `/projekte/${window.activeProjectDetailId}`;
         }
@@ -176,6 +182,10 @@
                         if (typeof openProjectsArchive === 'function') {
                             openProjectsArchive();
                         }
+                    } else if (route.id === 'wiederholend' || route.id === 'recurring') {
+                        if (typeof openRecurringTasksView === 'function') {
+                            openRecurringTasksView();
+                        }
                     } else if (route.id) {
                         if (typeof openProjectDetailPage === 'function') {
                             openProjectDetailPage(route.id);
@@ -183,6 +193,8 @@
                     } else {
                         if (window.isProjectArchiveActive && typeof closeProjectsArchive === 'function') {
                             closeProjectsArchive();
+                        } else if (window.isRecurringTasksActive && typeof closeRecurringTasksView === 'function') {
+                            closeRecurringTasksView();
                         } else if (window.activeProjectDetailId && typeof closeProjectDetail === 'function') {
                             closeProjectDetail();
                         } else {
@@ -340,6 +352,10 @@
             targetPath = `/mail/${params.mailId || window.currentReadMailId}`;
         } else if (viewName === 'projects' && (params.projectId || window.activeProjectDetailId)) {
             targetPath = `/projekte/${params.projectId || window.activeProjectDetailId}`;
+        } else if (viewName === 'projects' && window.isRecurringTasksActive) {
+            targetPath = '/projekte/wiederholend';
+        } else if (viewName === 'projects' && window.isProjectArchiveActive) {
+            targetPath = '/projekte/archiv';
         } else if (viewName === 'calendar' && params.date) {
             targetPath = `/kalender/${params.date}`;
         }
