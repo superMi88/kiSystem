@@ -7,163 +7,182 @@
                 topWidgetsContainer.innerHTML = '';
                 
                 // 1. Kalender (Neuer Hauptkalender an Stelle von 'Heute')
-                const calDiv = document.createElement('div');
-                calDiv.id = 'widget-calendar';
-                calDiv.style.marginBottom = '15px';
-                const calWidget = widgets.find(w => w.type === 'calendar_overview');
-                renderTimelineWidget(calWidget ? calWidget.data : null, calDiv, window.currentCalendarDate, widgets);
-                topWidgetsContainer.appendChild(calDiv);
+                try {
+                    const calDiv = document.createElement('div');
+                    calDiv.id = 'widget-calendar';
+                    calDiv.style.marginBottom = '15px';
+                    const calWidget = widgets.find(w => w.type === 'calendar_overview');
+                    if (typeof renderTimelineWidget === 'function') {
+                        renderTimelineWidget(calWidget ? calWidget.data : null, calDiv, window.currentCalendarDate, widgets);
+                    }
+                    topWidgetsContainer.appendChild(calDiv);
+                } catch (calErr) {
+                    console.error("Fehler beim Rendern des Kalender-Widgets:", calErr);
+                }
 
                 // 2. Agent-Briefing Dashboard (Dedicated Tab)
-                const briefingDiv = document.createElement('div');
-                briefingDiv.id = 'widget-briefing';
-                briefingDiv.style.marginBottom = '15px';
-                renderBriefingWidget(widgets, briefingDiv);
-                topWidgetsContainer.appendChild(briefingDiv);
+                try {
+                    const briefingDiv = document.createElement('div');
+                    briefingDiv.id = 'widget-briefing';
+                    briefingDiv.style.marginBottom = '15px';
+                    if (typeof renderBriefingWidget === 'function') {
+                        renderBriefingWidget(widgets, briefingDiv);
+                    }
+                    topWidgetsContainer.appendChild(briefingDiv);
+                } catch (briefErr) {
+                    console.error("Fehler beim Rendern des Briefing-Widgets:", briefErr);
+                }
 
                 // 3. Render normal widgets
                 widgets.forEach(widget => {
-                    if (widget.pluginName === 'Notifications') return;
-                    if (widget.type === 'calendar_overview') return; // Bereits an Stelle 1 gerendert
-                    const widgetDiv = document.createElement('div');
-                    widgetDiv.style.marginBottom = '15px';
-                    
-                    if (widget.pluginName) {
-                        widgetDiv.id = 'widget-' + widget.pluginName.toLowerCase();
-                    } else if (widget.type === 'timer_list') {
-                        widgetDiv.id = 'widget-timer';
-                    }
-                    
-                    if (widget.type === 'timer_list' || widget.pluginName === 'Timer') {
-                        widgetDiv.id = 'widget-timer';
-                        let html = `<div class="timer-list-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%; padding: 4px 0;">`;
-                        if (!widget.data || !widget.data.timers || widget.data.timers.length === 0) {
-                            html += `
-                                <div style="text-align: center; padding: 40px 16px; color: rgba(255, 255, 255, 0.45); font-size: 0.85rem; font-weight: 500;">
-                                    Keine aktiven Wecker oder Timer.
-                                </div>
-                            `;
-                        } else {
-                            widget.data.timers.forEach(t => {
-                                const escTitle = escapeHtml(t.title).replace(/"/g, '&quot;');
-                                const expDate = new Date(t.expiresAt);
-                                const isToday = expDate.toDateString() === new Date().toDateString();
-                                const timeStr = expDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                                const dateStr = isToday ? 'Heute' : expDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-
-                                const timerContent = `
-                                    <div class="timer-card" id="timer-card-${t.id}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" style="padding: 12px 14px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); width: 100%; position: relative;">
-                                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; gap: 8px;">
-                                            <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
-                                                <span style="font-size: 1rem;">⏰</span>
-                                                <span style="font-size: 0.88rem; font-weight: 700; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(t.title)}</span>
-                                            </div>
-                                            <button type="button" onclick="event.stopPropagation(); deleteTimer('${t.id}')" style="background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 0.85rem; opacity: 0.75; padding: 2px 4px; transition: opacity 0.2s;" title="Wecker / Timer löschen">🗑️</button>
-                                        </div>
-                                        <div class="timer-countdown" style="font-family: monospace; font-size: 1.25rem; font-weight: 800; color: var(--accent); margin-bottom: 6px; letter-spacing: 1px;">--:--:--</div>
-                                        <div class="timer-progress-bg" style="width: 100%; height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
-                                            <div class="timer-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--on)); border-radius: 3px; transition: width 0.5s linear;"></div>
-                                        </div>
-                                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Zielzeit: ${dateStr}, ${timeStr} Uhr</div>
+                    try {
+                        if (widget.pluginName === 'Notifications') return;
+                        if (widget.type === 'calendar_overview') return; // Bereits an Stelle 1 gerendert
+                        const widgetDiv = document.createElement('div');
+                        widgetDiv.style.marginBottom = '15px';
+                        
+                        if (widget.pluginName) {
+                            widgetDiv.id = 'widget-' + widget.pluginName.toLowerCase();
+                        } else if (widget.type === 'timer_list') {
+                            widgetDiv.id = 'widget-timer';
+                        }
+                        
+                        if (widget.type === 'timer_list' || widget.pluginName === 'Timer') {
+                            widgetDiv.id = 'widget-timer';
+                            let html = `<div class="timer-list-container" style="display: flex; flex-direction: column; gap: 10px; width: 100%; padding: 4px 0;">`;
+                            if (!widget.data || !widget.data.timers || widget.data.timers.length === 0) {
+                                html += `
+                                    <div style="text-align: center; padding: 40px 16px; color: rgba(255, 255, 255, 0.45); font-size: 0.85rem; font-weight: 500;">
+                                        Keine aktiven Wecker oder Timer.
                                     </div>
                                 `;
-                                const extraTimerData = `data-timer-id="${t.id}" data-timer-title="${escTitle}"`;
-                                html += renderSwipeLinkWrapper(timerContent, t.title, 'timer', t.id, '', '', '', extraTimerData);
-                            });
-                        }
-                        html += `</div>`;
-                        widgetDiv.innerHTML = html;
-                    } else if (widget.type === 'custom') {
-                        if (widget.data.widgetType === 'projects_list') {
-                            widgetDiv.id = 'widget-projects';
-                            renderProjectsWidget(widget.data, widgetDiv);
-                        } else if (widget.data.widgetType === 'memory_people_list') {
-                            widgetDiv.id = 'widget-memory';
-                            currentMemoryPeopleList = widget.data.people || [];
-                            let html = `<div id="memory-people-list-container" style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 8px;">`;
-                            html += getFilteredPeopleListHtml(currentMemoryPeopleList, personSearchQuery);
-                            html += `</div>`;
-                            widgetDiv.innerHTML = html;
-                        } else if (widget.data.widgetType === 'locations_list') {
-                            widgetDiv.id = 'widget-locations';
-                            if (typeof renderLocationsWidget === 'function') {
-                                renderLocationsWidget(widget.data, widgetDiv);
-                            }
-                        } else if (widget.data.widgetType === 'photos_gallery') {
-                            widgetDiv.id = 'widget-photos';
-                            if (typeof renderPhotosWidget === 'function') {
-                                renderPhotosWidget(widget.data, widgetDiv);
-                            }
-                        } else if (widget.data.widgetType === 'docs_overview') {
-                            widgetDiv.id = 'widget-docs';
-                            if (typeof renderDocsWidget === 'function') {
-                                renderDocsWidget(widget.data, widgetDiv);
-                            }
-                        } else if (widget.data.widgetType === 'media_gallery') {
-                            widgetDiv.id = 'widget-media';
-                            if (typeof renderMediaWidget === 'function') {
-                                renderMediaWidget(widget.data, widgetDiv);
-                            }
-                        } else if (widget.data.widgetType === 'tasks_overview') {
-                            let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">`;
-                            
-                            html += `<button onclick="openTaskModal()" class="nav-btn" style="width: 100%; font-size: 0.8rem; margin-bottom: 5px;">➕ Neue Aufgabe</button>`;
-                            
-                            if (!widget.data.tasks || widget.data.tasks.length === 0) {
-                                html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine offenen Aufgaben.</p>`;
                             } else {
-                                const today = new Date();
-                                today.setHours(0, 0, 0, 0);
+                                widget.data.timers.forEach(t => {
+                                    const escTitle = escapeHtml(t.title).replace(/"/g, '&quot;');
+                                    const expDate = new Date(t.expiresAt);
+                                    const isToday = expDate.toDateString() === new Date().toDateString();
+                                    const timeStr = expDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                                    const dateStr = isToday ? 'Heute' : expDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
 
-                                const overdueTasks = [];
-                                const activeTasks = [];
-
-                                widget.data.tasks.forEach(t => {
-                                    if (t.due) {
-                                        const dueObj = new Date(t.due);
-                                        dueObj.setHours(0, 0, 0, 0);
-                                        if (dueObj < today) {
-                                            overdueTasks.push(t);
-                                            return;
-                                        }
-                                    }
-                                    activeTasks.push(t);
-                                });
-
-                                if (overdueTasks.length > 0) {
-                                    html += `<div style="font-weight: 600; font-size: 0.7rem; color: var(--off); margin: 8px 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px;">⚠️ Überfällig</div>`;
-                                    html += `<div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">`;
-                                    overdueTasks.forEach(t => {
-                                        html += renderSingleTaskHtml(t, true);
-                                    });
-                                    html += `</div>`;
-                                }
-
-                                const groupedTasks = {};
-                                activeTasks.forEach(t => {
-                                    const listName = t.listTitle || "Meine Aufgaben";
-                                    if (!groupedTasks[listName]) groupedTasks[listName] = [];
-                                    groupedTasks[listName].push(t);
-                                });
-  
-                                Object.keys(groupedTasks).forEach(listName => {
-                                    html += `<div style="font-weight: 600; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin: 8px 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px;">${listName}</div>`;
-                                    html += `<div style="display: flex; flex-direction: column; gap: 4px;">`;
-                                    groupedTasks[listName].forEach(t => {
-                                         html += renderSingleTaskHtml(t, false);
-                                    });
-                                    html += `</div>`;
+                                    const timerContent = `
+                                        <div class="timer-card" id="timer-card-${t.id}" data-id="${t.id}" data-title="${escTitle}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" style="padding: 12px 14px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); width: 100%; position: relative;">
+                                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; gap: 8px;">
+                                                <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+                                                    <span style="font-size: 1rem;">⏰</span>
+                                                    <span class="timer-title" style="font-size: 0.88rem; font-weight: 700; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(t.title)}</span>
+                                                </div>
+                                                <button type="button" onclick="event.stopPropagation(); deleteTimer('${t.id}')" style="background: none; border: none; color: #f38ba8; cursor: pointer; font-size: 0.85rem; opacity: 0.75; padding: 2px 4px; transition: opacity 0.2s;" title="Wecker / Timer löschen">🗑️</button>
+                                            </div>
+                                            <div class="timer-countdown" style="font-family: monospace; font-size: 1.25rem; font-weight: 800; color: var(--accent); margin-bottom: 6px; letter-spacing: 1px;">--:--:--</div>
+                                            <div class="timer-progress-bg" style="width: 100%; height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
+                                                <div class="timer-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--on)); border-radius: 3px; transition: width 0.5s linear;"></div>
+                                            </div>
+                                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Zielzeit: ${dateStr}, ${timeStr} Uhr</div>
+                                        </div>
+                                    `;
+                                    const extraTimerData = `data-timer-id="${t.id}" data-timer-title="${escTitle}"`;
+                                    html += renderSwipeLinkWrapper(timerContent, t.title, 'timer', t.id, '', '', '', extraTimerData);
                                 });
                             }
                             html += `</div>`;
                             widgetDiv.innerHTML = html;
-                        } else if (widget.data.widgetType === 'mail_overview') {
-                            widgetDiv.id = 'widget-mail';
-                            renderMailWidget(widget.data, widgetDiv);
+                            if (typeof updateAllCountdowns === 'function') {
+                                updateAllCountdowns();
+                            }
+                        } else if (widget.type === 'custom') {
+                            if (widget.data.widgetType === 'projects_list') {
+                                widgetDiv.id = 'widget-projects';
+                                renderProjectsWidget(widget.data, widgetDiv);
+                            } else if (widget.data.widgetType === 'memory_people_list') {
+                                widgetDiv.id = 'widget-memory';
+                                currentMemoryPeopleList = widget.data.people || [];
+                                let html = `<div id="memory-people-list-container" style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 8px;">`;
+                                html += getFilteredPeopleListHtml(currentMemoryPeopleList, personSearchQuery);
+                                html += `</div>`;
+                                widgetDiv.innerHTML = html;
+                            } else if (widget.data.widgetType === 'locations_list') {
+                                widgetDiv.id = 'widget-locations';
+                                if (typeof renderLocationsWidget === 'function') {
+                                    renderLocationsWidget(widget.data, widgetDiv);
+                                }
+                            } else if (widget.data.widgetType === 'photos_gallery') {
+                                widgetDiv.id = 'widget-photos';
+                                if (typeof renderPhotosWidget === 'function') {
+                                    renderPhotosWidget(widget.data, widgetDiv);
+                                }
+                            } else if (widget.data.widgetType === 'docs_overview') {
+                                widgetDiv.id = 'widget-docs';
+                                if (typeof renderDocsWidget === 'function') {
+                                    renderDocsWidget(widget.data, widgetDiv);
+                                }
+                            } else if (widget.data.widgetType === 'media_gallery') {
+                                widgetDiv.id = 'widget-media';
+                                if (typeof renderMediaWidget === 'function') {
+                                    renderMediaWidget(widget.data, widgetDiv);
+                                }
+                            } else if (widget.data.widgetType === 'tasks_overview') {
+                                let html = `<div style="text-align: left; padding: 5px 0 15px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">`;
+                                
+                                html += `<button onclick="openTaskModal()" class="nav-btn" style="width: 100%; font-size: 0.8rem; margin-bottom: 5px;">➕ Neue Aufgabe</button>`;
+                                
+                                if (!widget.data.tasks || widget.data.tasks.length === 0) {
+                                    html += `<p style="font-size: 0.75rem; opacity: 0.6; text-align: center; margin: 10px 0;">Keine offenen Aufgaben.</p>`;
+                                } else {
+                                    const today = new Date();
+                                    today.setHours(0, 0, 0, 0);
+
+                                    const overdueTasks = [];
+                                    const activeTasks = [];
+
+                                    widget.data.tasks.forEach(t => {
+                                        if (t.due) {
+                                            const dueObj = new Date(t.due);
+                                            dueObj.setHours(0, 0, 0, 0);
+                                            if (dueObj < today) {
+                                                overdueTasks.push(t);
+                                                return;
+                                            }
+                                        }
+                                        activeTasks.push(t);
+                                    });
+
+                                    if (overdueTasks.length > 0) {
+                                        html += `<div style="font-weight: 600; font-size: 0.7rem; color: var(--off); margin: 8px 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px;">⚠️ Überfällig</div>`;
+                                        html += `<div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">`;
+                                        overdueTasks.forEach(t => {
+                                            html += renderSingleTaskHtml(t, true);
+                                        });
+                                        html += `</div>`;
+                                    }
+
+                                    const groupedTasks = {};
+                                    activeTasks.forEach(t => {
+                                        const listName = t.listTitle || "Meine Aufgaben";
+                                        if (!groupedTasks[listName]) groupedTasks[listName] = [];
+                                        groupedTasks[listName].push(t);
+                                    });
+      
+                                    Object.keys(groupedTasks).forEach(listName => {
+                                        html += `<div style="font-weight: 600; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin: 8px 0 4px 0; text-transform: uppercase; letter-spacing: 0.5px;">${listName}</div>`;
+                                        html += `<div style="display: flex; flex-direction: column; gap: 4px;">`;
+                                        groupedTasks[listName].forEach(t => {
+                                             html += renderSingleTaskHtml(t, false);
+                                        });
+                                        html += `</div>`;
+                                    });
+                                }
+                                html += `</div>`;
+                                widgetDiv.innerHTML = html;
+                            } else if (widget.data.widgetType === 'mail_overview') {
+                                widgetDiv.id = 'widget-mail';
+                                renderMailWidget(widget.data, widgetDiv);
+                            }
                         }
+                        
+                        topWidgetsContainer.appendChild(widgetDiv);
+                    } catch (singleWidgetErr) {
+                        console.error("Fehler beim Rendern eines Widgets (" + (widget.pluginName || widget.type) + "):", singleWidgetErr);
                     }
-                    
-                    topWidgetsContainer.appendChild(widgetDiv);
                 });
 
                 // Append guaranteed bottom scroll spacer for mobile/single-column mode
@@ -173,10 +192,22 @@
                 topWidgetsContainer.appendChild(topWidgetsSpacer);
                 
                 // Update navigation badges and visibility based on active plugins
-                updateBadges(widgets);
+                try {
+                    updateBadges(widgets);
+                } catch (bErr) {
+                    console.error("Fehler beim Aktualisieren der Badges:", bErr);
+                }
                 
                 // Sofort prüfen, ob ein Widget (wie Calendar) Fehler geworfen hat und Authentifizierung fordert
-                loadAlerts();
+                try {
+                    loadAlerts();
+                } catch (aErr) {
+                    console.error("Fehler bei loadAlerts:", aErr);
+                }
+
+                if (typeof updateAllCountdowns === 'function') {
+                    updateAllCountdowns();
+                }
             } catch (e) {
                 console.error("Fehler beim Laden der Top-Widgets:", e);
             }

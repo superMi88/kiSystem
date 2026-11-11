@@ -1127,6 +1127,14 @@ app.post("/api/tasks/:id/status", async (req, res) => {
 
     await ensureProjectStateSchema(prisma);
 
+    if (statusStr.toLowerCase() === "archive" || statusStr.toLowerCase() === "archiv") {
+      const updated = await prisma.task.update({
+        where: { id },
+        data: { isDeleted: true }
+      });
+      return res.json({ success: true, task: updated, isArchived: true });
+    }
+
     if (/^\d+$/.test(statusStr)) {
       const numStateId = Number(statusStr);
       const stRows: any[] = await (prisma as any).$queryRawUnsafe(

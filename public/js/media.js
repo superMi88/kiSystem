@@ -27,7 +27,7 @@
     window.currentLightboxImages = [];
     window.currentLightboxIndex = 0;
 
-    const escapeHtml = (str) => typeof window.escapeHtml === 'function' ? window.escapeHtml(str) : String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
 
     // Text-Dateien Erkennung
     function isTextMedia(m) {

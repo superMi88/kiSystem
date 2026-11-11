@@ -154,7 +154,7 @@
             if (projectWidget && projectWidget.data) {
                 allProjects = projectWidget.data.projects || [];
                 starredProjects = allProjects.filter(p => p.isStarred);
-                (projectWidget.data.unassignedTasks || []).forEach(t => allProjectTasks.push({ ...t, projectName: 'Allgemein' }));
+                (projectWidget.data.unassignedTasks || []).forEach(t => allProjectTasks.push({ ...t, projectName: 'Offene Aufgaben' }));
                 allProjects.forEach(p => {
                     if (p.tasks) {
                         p.tasks.forEach(t => allProjectTasks.push({ ...t, projectName: p.name, projectId: p.id }));
@@ -943,40 +943,6 @@
 
                 html += `
                             </div>
-                        </div>
-                    </div>
-                `;
-            }
-
-            // 5. Wecker & Timer (nur wenn vorhanden)
-            if (activeTimers.length > 0) {
-                html += `
-                    <div class="arbeitstisch-card">
-                        <div class="arbeitstisch-card-header">
-                            <div class="arbeitstisch-card-title">
-                                <span>⏱️</span>
-                                <h4>Timer</h4>
-                            </div>
-                            <button type="button" onclick="openTimerModal()" class="arbeitstisch-card-link" title="Neuen Timer erstellen">+ Timer</button>
-                        </div>
-                        <div class="arbeitstisch-card-body">
-                `;
-                activeTimers.forEach(t => {
-                    const escTitle = escapeHtml(t.title || 'Timer');
-                    html += `
-                        <div class="timer-card" id="timer-card-${t.id}" data-created="${t.createdAt}" data-expires="${t.expiresAt}" onclick="openTimerDetailModal('${t.id}', '${escTitle}', '${t.createdAt}', '${t.expiresAt}')" style="padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); width: 100%; min-width: 0; box-sizing: border-box; position: relative; cursor: pointer;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 6px;">
-                                <span style="font-size: 0.82rem; font-weight: bold; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escTitle}</span>
-                                <span style="font-size: 0.65rem; opacity: 0.5; flex-shrink: 0;">Bis ${new Date(t.expiresAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
-                            </div>
-                            <div class="timer-countdown" style="font-family: monospace; font-size: 1.05rem; font-weight: bold; color: var(--accent); margin-bottom: 4px;">--:--:--</div>
-                            <div class="timer-progress-bg" style="width: 100%; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden;">
-                                <div class="timer-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--on)); border-radius: 2px; transition: width 0.5s linear;"></div>
-                            </div>
-                        </div>
-                    `;
-                });
-                html += `
                         </div>
                     </div>
                 `;

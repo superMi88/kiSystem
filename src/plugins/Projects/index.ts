@@ -987,7 +987,7 @@ export const projectsPlugin: Plugin = {
     const projects = await attachProjectStatesToProjects(prisma, rawProjects);
 
     const unassignedTasks = await prisma.task.findMany({
-      where: { projectId: null, due: null, isDeleted: false },
+      where: { projectId: null, isDeleted: false },
       include: {
         location: true,
         persons: { include: { person: { include: { aliases: true } } } },

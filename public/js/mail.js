@@ -3105,22 +3105,3 @@
 
 
 
-        function playAlarmSound() {
-            if (window.AndroidWidgetInterface && typeof window.AndroidWidgetInterface.playAlarmSound === 'function') {
-                window.AndroidWidgetInterface.playAlarmSound();
-            } else if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetSettings && typeof window.Capacitor.Plugins.WidgetSettings.playAlarmSound === 'function') {
-                window.Capacitor.Plugins.WidgetSettings.playAlarmSound();
-            } else {
-                playAlarmBeep();
-            }
-        }
-
-
-
-        function stopAlarmSound() {
-            if (window.AndroidWidgetInterface && typeof window.AndroidWidgetInterface.stopAlarmSound === 'function') {
-                window.AndroidWidgetInterface.stopAlarmSound();
-            } else if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetSettings && typeof window.Capacitor.Plugins.WidgetSettings.stopAlarmSound === 'function') {
-                window.Capacitor.Plugins.WidgetSettings.stopAlarmSound();
-            }
-        }

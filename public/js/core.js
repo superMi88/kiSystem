@@ -1,4 +1,44 @@
 
+// Global Core Utilities
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+window.escapeHtml = escapeHtml;
+
+function getLocalDateString(d = new Date()) {
+    if (!(d instanceof Date) || isNaN(d.getTime())) {
+        d = new Date();
+    }
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+window.getLocalDateString = getLocalDateString;
+
+function getApiUrl(path) {
+    if (!path) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+        return path;
+    }
+    const cleanPath = path.startsWith('/') ? path : '/' + path;
+    if (window.location && window.location.protocol && window.location.protocol.startsWith('http') && !window.Capacitor) {
+        return cleanPath;
+    }
+    if (window.Capacitor || (window.location && (window.location.protocol === 'file:' || window.location.origin === 'null'))) {
+        const baseUrl = (typeof getServerUrl === 'function' ? getServerUrl() : (window.ENV_CONFIG && window.ENV_CONFIG.MOBILE_SERVER_URL) || '').replace(/\/+$/, '');
+        return baseUrl + cleanPath;
+    }
+    return cleanPath;
+}
+window.getApiUrl = getApiUrl;
+
 // Primary DOM References
 const chatBox = document.getElementById('chat-box');
 const userInput = document.getElementById('user-input');
@@ -597,9 +637,9 @@ function switchMobileView(viewName) {
             'dashboard': 'Kalender',
             'briefing': 'Agent-Briefing',
             'calendar': 'Kalender',
-            'timer': 'Timer & Wecker',
-            'projects': 'Projekte',
-            'memory': 'Personen & Gedächtnis',
+            'timer': 'Wecker',
+            'projects': 'Projekte & Aufgaben',
+            'memory': 'Personen',
             'locations': 'Orte',
             'photos': 'Fotos & Galerie',
             'docs': 'Dokumente & Dateien',
@@ -860,12 +900,6 @@ function toggleMobileView() {
 
 window.toggleMobileView = toggleMobileView;
 
-
-
-const escapeHtml = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-
-
 function focusWidget(name) {
     if (name === 'arbeitstisch' || name === 'heute' || name === 'dashboard') name = 'calendar';
     if (name === 'media') {
@@ -925,9 +959,12 @@ async function callTool(name, args) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, arguments: args })
         });
-        loadTopWidgets();
-        if (isElectron && ipcRenderer) {
-            ipcRenderer.send('widgets-updated');
+        const isReadOnly = typeof name === 'string' && (name.startsWith('hole_') || name.startsWith('suche_') || name.startsWith('lies_') || name.startsWith('get_'));
+        if (!isReadOnly) {
+            loadTopWidgets();
+            if (isElectron && ipcRenderer) {
+                ipcRenderer.send('widgets-updated');
+            }
         }
         if (res.ok) {
             return await res.json();
@@ -976,17 +1013,22 @@ function cancelScheduledTimerAlarm(timerId) {
 function playAlarmBeep() {
     try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
         function beep(freq, duration, delay) {
             setTimeout(() => {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-                gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-                osc.start();
-                osc.stop(audioCtx.currentTime + duration);
+                try {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                    gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + duration);
+                } catch (e) {}
             }, delay);
         }
         beep(880, 0.18, 0);
@@ -997,6 +1039,39 @@ function playAlarmBeep() {
         console.error("Audio beep error:", e);
     }
 }
+window.playAlarmBeep = playAlarmBeep;
+
+function playAlarmSound() {
+    if (window.AndroidWidgetInterface && typeof window.AndroidWidgetInterface.playAlarmSound === 'function') {
+        window.AndroidWidgetInterface.playAlarmSound();
+    } else if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetSettings && typeof window.Capacitor.Plugins.WidgetSettings.playAlarmSound === 'function') {
+        window.Capacitor.Plugins.WidgetSettings.playAlarmSound();
+    } else {
+        playAlarmBeep();
+    }
+}
+window.playAlarmSound = playAlarmSound;
+
+function stopAlarmSound(timerId) {
+    if (window.activeAlarmIntervals) {
+        if (timerId !== undefined && timerId !== null) {
+            const iv = window.activeAlarmIntervals.get(Number(timerId));
+            if (iv) {
+                clearInterval(iv);
+                window.activeAlarmIntervals.delete(Number(timerId));
+            }
+        } else {
+            window.activeAlarmIntervals.forEach(iv => clearInterval(iv));
+            window.activeAlarmIntervals.clear();
+        }
+    }
+    if (window.AndroidWidgetInterface && typeof window.AndroidWidgetInterface.stopAlarmSound === 'function') {
+        window.AndroidWidgetInterface.stopAlarmSound();
+    } else if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.WidgetSettings && typeof window.Capacitor.Plugins.WidgetSettings.stopAlarmSound === 'function') {
+        window.Capacitor.Plugins.WidgetSettings.stopAlarmSound();
+    }
+}
+window.stopAlarmSound = stopAlarmSound;
 
 
 
@@ -1306,6 +1381,8 @@ window.handleDrawerWecker = window.handleDrawerTimer;
 window.deleteTimer = async function(id) {
     if (confirm("Möchtest du diesen Wecker / Timer wirklich löschen?")) {
         try {
+            if (typeof stopAlarmSound === 'function') stopAlarmSound(id);
+            if (typeof cancelScheduledTimerAlarm === 'function') cancelScheduledTimerAlarm(Number(id));
             await callTool('loesche_timer', { id: Number(id) });
             loadTopWidgets();
         } catch (e) {
@@ -1386,45 +1463,22 @@ window.handleDrawerMedia = function () {
 
 
 
-window.openTaskTrashModal = async function () {
-    closeMobileDrawer();
-    const modal = document.getElementById('task-trash-modal');
-    const listEl = document.getElementById('task-trash-list');
-    if (!modal || !listEl) return;
-    modal.style.display = 'flex';
-    document.body.classList.add('modal-active');
-    listEl.innerHTML = '<p style="font-size: 0.8rem; opacity: 0.6; text-align: center; margin: 20px 0;">Lade gelöschte Aufgaben...</p>';
-    try {
-        const res = await callTool('hole_aufgaben', { zeigeGeloeschte: true });
-        if (res && res.tasks && res.tasks.length > 0) {
-            let html = '';
-            res.tasks.forEach(t => {
-                const dueText = t.faellig ? new Date(t.faellig).toLocaleDateString('de-DE') : 'Kein Fälligkeitsdatum';
-                html += `
-                            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; gap: 10px;">
-                                <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1;">
-                                    <span style="font-size: 0.85rem; font-weight: 600; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(t.titel)}</span>
-                                    <span style="font-size: 0.7rem; color: rgba(255,255,255,0.45);">📅 ${dueText} | ${escapeHtml(t.aufgabenlisteTitel || 'Standard')}</span>
-                                </div>
-                                <button onclick="restoreTaskFromTrash('${t.id}')" class="save" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; border: none; cursor: pointer; background: rgba(166, 227, 161, 0.2); color: #a6e3a1; border: 1px solid rgba(166, 227, 161, 0.4); font-weight: bold; flex-shrink: 0; transition: all 0.2s;">
-                                    ♻️ Wiederherstellen
-                                </button>
-                            </div>
-                        `;
-            });
-            listEl.innerHTML = html;
-        } else {
-            listEl.innerHTML = '<p style="font-size: 0.8rem; opacity: 0.6; text-align: center; margin: 25px 0;">Keine gelöschten Aufgaben im Papierkorb.</p>';
-        }
-    } catch (err) {
-        listEl.innerHTML = `<p style="font-size: 0.8rem; color: var(--off); text-align: center; margin: 20px 0;">Fehler: ${escapeHtml(err.message)}</p>`;
+window.openTaskArchiveModal = async function () {
+    if (typeof closeMobileDrawer === 'function') closeMobileDrawer();
+    if (typeof openProjectsArchive === 'function') {
+        openProjectsArchive();
     }
 };
 
+window.openTaskTrashModal = window.openTaskArchiveModal;
 
-
-window.closeTaskTrashModal = function () {
+window.closeTaskArchiveModal = function () {
+    if (typeof closeProjectsArchive === 'function') {
+        closeProjectsArchive();
+    }
     const modal = document.getElementById('task-trash-modal');
     if (modal) modal.style.display = 'none';
     document.body.classList.remove('modal-active');
 };
+
+window.closeTaskTrashModal = window.closeTaskArchiveModal;

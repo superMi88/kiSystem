@@ -172,12 +172,18 @@
                     if (document.body.classList.contains('mail-read-active') && typeof closeMailReadModal === 'function') {
                         closeMailReadModal(true);
                     }
-                    if (route.id) {
+                    if (route.id === 'archiv' || route.id === 'archive') {
+                        if (typeof openProjectsArchive === 'function') {
+                            openProjectsArchive();
+                        }
+                    } else if (route.id) {
                         if (typeof openProjectDetailPage === 'function') {
                             openProjectDetailPage(route.id);
                         }
                     } else {
-                        if (window.activeProjectDetailId && typeof closeProjectDetail === 'function') {
+                        if (window.isProjectArchiveActive && typeof closeProjectsArchive === 'function') {
+                            closeProjectsArchive();
+                        } else if (window.activeProjectDetailId && typeof closeProjectDetail === 'function') {
                             closeProjectDetail();
                         } else {
                             if (typeof focusWidget === 'function') {

@@ -1,10 +1,87 @@
 
 
+
+
+window.isProjectArchiveActive = false;
+window.projectArchiveFilter = 'all';
+window.projectArchiveFilterOpen = false;
+window.projectArchiveSortOrder = 'desc';
+window.archivedTasksList = [];
+window.projectArchiveSearchQuery = '';
+
+function getProjectArchiveFilterLabel(filterVal) {
+    if (filterVal === 'unassigned') return 'Offene Aufgaben';
+    if (!filterVal || filterVal === 'all') return 'Alle Projekte';
+    const projects = (window.lastProjectsData && window.lastProjectsData.projects) || [];
+    const p = projects.find(item => String(item.id) === String(filterVal));
+    return p ? (p.name || `Projekt #${filterVal}`) : `Projekt #${filterVal}`;
+}
+window.getProjectArchiveFilterLabel = getProjectArchiveFilterLabel;
+
 function updateProjectsHeader(activeProject) {
     const titleContainer = document.getElementById('header-projects-title-container');
     const editBtn = document.getElementById('header-project-edit-btn');
     const settingsBtn = document.getElementById('header-project-settings-btn');
     const addBtn = document.getElementById('header-project-add-btn');
+    const archiveBtn = document.getElementById('header-project-archive-btn');
+    const filterBtn = document.getElementById('header-project-filter-btn');
+
+    if (window.isProjectArchiveActive) {
+        const filterVal = window.projectArchiveFilter || 'all';
+        const label = getProjectArchiveFilterLabel(filterVal);
+        const iconPrefix = filterVal === 'unassigned' ? '📋 ' : '📁 ';
+
+        if (titleContainer) {
+            titleContainer.innerHTML = `
+                <span style="cursor: pointer; opacity: 0.8; transition: opacity 0.2s; white-space: nowrap;" onclick="closeProjectsArchive(true)" title="Zurück zu allen Projekten">📁 Projekte</span>
+                <span style="opacity: 0.4; font-size: 0.85rem; margin: 0 2px;">&gt;</span>
+                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; color: #ffffff;" title="${iconPrefix}${escapeHtml(label)}">${iconPrefix}${escapeHtml(label)}</span>
+                <span class="project-tag-badge" style="background: rgba(137, 180, 250, 0.2); color: #89b4fa; border: 1px solid rgba(137, 180, 250, 0.4); font-size: 0.72rem; padding: 2px 7px; border-radius: 12px; margin-left: 4px; font-weight: 600; vertical-align: middle; display: inline-flex; align-items: center; gap: 3px;">📦 Archiv</span>
+            `;
+        }
+        if (filterBtn) {
+            filterBtn.style.display = 'inline-flex';
+            filterBtn.title = 'Filter umschalten';
+            if (window.projectArchiveFilterOpen) filterBtn.classList.add('active');
+            else filterBtn.classList.remove('active');
+        }
+        if (editBtn) {
+            editBtn.style.display = 'none';
+            editBtn.onclick = null;
+        }
+        if (settingsBtn) {
+            settingsBtn.style.display = 'none';
+            settingsBtn.onclick = null;
+        }
+        if (addBtn) {
+            addBtn.style.display = 'none';
+            addBtn.onclick = null;
+        }
+        if (archiveBtn) {
+            archiveBtn.style.display = 'inline-flex';
+            archiveBtn.title = 'Archivansicht aktiv (Klicken zum Verlassen)';
+            archiveBtn.style.background = 'rgba(137, 180, 250, 0.25)';
+            archiveBtn.style.borderColor = 'rgba(137, 180, 250, 0.5)';
+            archiveBtn.onclick = () => closeProjectsArchive();
+        }
+        return;
+    }
+
+    if (filterBtn) {
+        filterBtn.style.display = 'none';
+        filterBtn.classList.remove('active');
+    }
+
+    if (archiveBtn) {
+        archiveBtn.style.display = 'inline-flex';
+        archiveBtn.style.background = '';
+        archiveBtn.style.borderColor = '';
+        archiveBtn.title = 'Aufgaben-Archiv';
+        archiveBtn.onclick = () => {
+            const curFilter = activeProject ? (activeProject.isUnassigned ? 'unassigned' : String(activeProject.id)) : 'all';
+            openProjectsArchive(curFilter);
+        };
+    }
 
     if (!activeProject) {
         if (titleContainer) {
@@ -19,16 +96,18 @@ function updateProjectsHeader(activeProject) {
             settingsBtn.onclick = null;
         }
         if (addBtn) {
+            addBtn.style.display = 'inline-flex';
             addBtn.title = 'Neues Projekt erstellen';
             addBtn.onclick = () => openProjectModal();
         }
     } else {
-        const escName = escapeHtml(activeProject.name || 'Projekt');
+        const escName = activeProject.isUnassigned ? 'Offene Aufgaben' : escapeHtml(activeProject.name || 'Projekt');
+        const iconPrefix = activeProject.isUnassigned ? '📋 ' : '';
         if (titleContainer) {
             titleContainer.innerHTML = `
                         <span style="cursor: pointer; opacity: 0.8; transition: opacity 0.2s; white-space: nowrap;" onclick="closeProjectDetail()" title="Zurück zu allen Projekten">📁 Projekte</span>
                         <span style="opacity: 0.4; font-size: 0.85rem; margin: 0 2px;">&gt;</span>
-                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; color: #ffffff;" title="${escName}">${escName}</span>
+                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; color: #ffffff;" title="${iconPrefix}${escName}">${iconPrefix}${escName}</span>
                     `;
         }
         if (activeProject.isUnassigned) {
@@ -43,7 +122,7 @@ function updateProjectsHeader(activeProject) {
         } else {
             if (settingsBtn) {
                 settingsBtn.style.display = 'inline-flex';
-                settingsBtn.title = 'Projekt-Zustände & Kategorien anpassen';
+                settingsBtn.title = 'Projekt-Zustände anpassen';
                 settingsBtn.onclick = () => openProjectSettingsModal(activeProject.id);
             }
             if (editBtn) {
@@ -53,6 +132,7 @@ function updateProjectsHeader(activeProject) {
             }
         }
         if (addBtn) {
+            addBtn.style.display = 'inline-flex';
             const targetStatus = (window.activeProjectStatusTab === 'all' || !window.activeProjectStatusTab) ? 'in_progress' : window.activeProjectStatusTab;
             addBtn.title = 'Neue Aufgabe erstellen';
             addBtn.onclick = () => openTaskModalForProject(activeProject.isUnassigned ? null : activeProject.id, targetStatus);
@@ -127,7 +207,8 @@ window.switchProjectStatusTab = function (tab) {
 };
 
 
-window.openProjectDetailPage = function (id) {
+window.openProjectDetailPage = async function (id) {
+    window.isProjectArchiveActive = false;
     window.activeProjectDetailId = id;
     const projects = (window.lastProjectsData && window.lastProjectsData.projects) || [];
     const proj = projects.find(p => String(p.id) === String(id));
@@ -143,7 +224,7 @@ window.openProjectDetailPage = function (id) {
     if (window.AppRouter && typeof window.AppRouter.updateUrl === 'function') {
         window.AppRouter.updateUrl(`/projekte/${id}`);
     }
-    loadTopWidgets();
+    await loadTopWidgets();
 };
 
 // --- PROJEKT-ZUSTÄNDE / KATEGORIEN SETTINGS MODAL ---
@@ -242,6 +323,16 @@ window.addProjectSettingCategoryRow = function (id = '', name = '', icon = '📌
     listEl.appendChild(row);
 };
 
+window.setProjectSettingsBewerbungTemplate = function () {
+    const listEl = document.getElementById('project-settings-categories-list');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    addProjectSettingCategoryRow('inPlanung', 'In Planung', '📋', true);
+    addProjectSettingCategoryRow('beworben', 'Beworben', '📨', false);
+    addProjectSettingCategoryRow('angenommen', 'Angenommen', '🎉', false);
+    addProjectSettingCategoryRow('abgelehnt', 'Abgelehnt', '❌', false);
+};
+
 window.setProjectSettingsDefaultTemplate = function () {
     const listEl = document.getElementById('project-settings-categories-list');
     if (!listEl) return;
@@ -324,18 +415,20 @@ window.saveProjectSettingsCategories = async function () {
 
 
 
-window.closeProjectDetail = function () {
+window.closeProjectDetail = async function () {
+    window.isProjectArchiveActive = false;
     window.activeProjectDetailId = null;
     updateProjectsHeader(null);
     if (window.AppRouter && typeof window.AppRouter.updateUrl === 'function') {
         window.AppRouter.updateUrl('/projekte');
     }
-    loadTopWidgets();
+    await loadTopWidgets();
 };
 
 
 
 window.navigateToProjects = function () {
+    window.isProjectArchiveActive = false;
     window.activeProjectDetailId = null;
     updateProjectsHeader(null);
     if (typeof focusWidget === 'function') {
@@ -417,9 +510,40 @@ window.updateTaskStatus = async function (id, status, ev) {
 
 
 
+window.onTaskStateSelectChange = async function (taskId, status, ev) {
+    if (ev) {
+        ev.stopPropagation();
+        ev.preventDefault();
+    }
+    const val = String(status || '').trim();
+    if (val === 'archive' || val === 'archiv') {
+        if (confirm("Möchtest du diese Aufgabe ins Archiv verschieben?")) {
+            await callTool('loesche_aufgabe', { taskId: String(taskId) });
+            if (typeof loadTopWidgets === 'function') loadTopWidgets();
+        } else {
+            if (typeof loadTopWidgets === 'function') loadTopWidgets();
+        }
+        return;
+    }
+    await updateTaskStatus(taskId, val, ev);
+};
+
+window.archiveSingleTask = async function (taskId, ev) {
+    if (ev) {
+        ev.stopPropagation();
+        ev.preventDefault();
+    }
+    if (confirm("Möchtest du diese Aufgabe ins Archiv verschieben?")) {
+        await callTool('loesche_aufgabe', { taskId: String(taskId) });
+        if (typeof loadTopWidgets === 'function') loadTopWidgets();
+    }
+};
+
 window.openTaskModalForProject = function (projectId, status = 'in_progress') {
     const statusStr = String(status || 'in_progress');
-    const targetStatus = (statusStr === 'all' || !statusStr) ? 'in_progress' : statusStr;
+    let targetStatus = (statusStr === 'all' || !statusStr) ? 'in_progress' : statusStr;
+    if (targetStatus === 'unerledigt') targetStatus = 'in_progress';
+    if (targetStatus === 'erledigt') targetStatus = 'done';
     openTaskModal(null, '', '', '', '', 'none', projectId, targetStatus === 'suggestion', targetStatus, false);
 };
 
@@ -428,6 +552,15 @@ window.openTaskModalForProject = function (projectId, status = 'in_progress') {
 function renderProjectsWidget(data, container) {
     window.lastProjectsData = data;
     window.lastProjectsContainer = container;
+
+    if (window.isProjectArchiveActive) {
+        if (!window.archivedTasksList || window.archivedTasksList.length === 0) {
+            refreshProjectsArchive();
+        } else {
+            renderProjectsArchiveFullPage(data, container);
+        }
+        return;
+    }
 
     const projects = data.projects || [];
     const unassignedTasks = data.unassignedTasks || [];
@@ -439,8 +572,8 @@ function renderProjectsWidget(data, container) {
     if (activeId === 'unassigned') {
         activeProject = {
             id: 'unassigned',
-            name: '📥 Allgemein / Inbox',
-            description: 'Aufgaben und Notizen ohne Projektzuordnung',
+            name: 'Offene Aufgaben',
+            description: 'Aufgaben ohne Projektzuordnung',
             isStarred: false,
             tasks: unassignedTasks,
             notes: unassignedNotes,
@@ -463,14 +596,13 @@ function renderProjectsWidget(data, container) {
         let catConfig = getProjectStateConfig(p);
         let customCats = (catConfig && Array.isArray(catConfig.items) && catConfig.items.length > 0) ? catConfig.items : null;
 
-        // For Inbox/Allgemein fallback to default 3 columns if not explicitly configured
-        if (p.isUnassigned && !customCats) {
+        // Für "Offene Aufgaben": Genau zwei Zustände – unerledigt und erledigt
+        if (p.isUnassigned) {
             customCats = [
-                { id: 'suggestion', name: 'Vorschläge', icon: '💡' },
-                { id: 'in_progress', name: 'In Arbeit', icon: '⏳' },
-                { id: 'done', name: 'Fertig', icon: '✅' }
+                { id: 'unerledigt', name: 'Unerledigt', icon: '⏳' },
+                { id: 'erledigt', name: 'Erledigt', icon: '✅' }
             ];
-            catConfig = { items: customCats, defaultId: 'in_progress' };
+            catConfig = { items: customCats, defaultId: 'unerledigt' };
         }
 
         let activeTab = String(window.activeProjectStatusTab || '');
@@ -488,44 +620,57 @@ function renderProjectsWidget(data, container) {
         const tasksByCat = {};
         if (customCats) {
             customCats.forEach(c => { tasksByCat[String(c.id)] = []; });
-            pTasks.forEach(t => {
-                const stateIdStr = t.stateId !== undefined && t.stateId !== null ? String(t.stateId) : null;
-                const st = t.status !== undefined && t.status !== null ? String(t.status) : null;
-                if (stateIdStr && tasksByCat[stateIdStr]) {
-                    tasksByCat[stateIdStr].push(t);
-                } else if (st && tasksByCat[st]) {
-                    tasksByCat[st].push(t);
-                } else if (tasksByCat['done'] && (t.completed || st === 'done')) {
-                    tasksByCat['done'].push(t);
-                } else if (tasksByCat['suggestion'] && (t.isPlanned || st === 'suggestion')) {
-                    tasksByCat['suggestion'].push(t);
-                } else if (tasksByCat['in_progress'] && (st === 'in_progress' || !st)) {
-                    tasksByCat['in_progress'].push(t);
-                } else {
-                    // Check if state name matches listTitle or status
-                    const matchedByName = customCats.find(c =>
-                        (t.listTitle && c.name.toLowerCase() === String(t.listTitle).toLowerCase()) ||
-                        (st && c.name.toLowerCase() === st.toLowerCase())
-                    );
-                    if (matchedByName && tasksByCat[String(matchedByName.id)]) {
-                        tasksByCat[String(matchedByName.id)].push(t);
+            if (p.isUnassigned) {
+                pTasks.forEach(t => {
+                    const isDone = !!t.completed || t.status === 'done';
+                    if (isDone) {
+                        tasksByCat['erledigt'].push(t);
                     } else {
-                        const fallbackCat = String((catConfig && catConfig.defaultId) || customCats[0].id);
-                        if (tasksByCat[fallbackCat]) {
-                            tasksByCat[fallbackCat].push(t);
+                        tasksByCat['unerledigt'].push(t);
+                    }
+                });
+            } else {
+                pTasks.forEach(t => {
+                    const stateIdStr = t.stateId !== undefined && t.stateId !== null ? String(t.stateId) : null;
+                    const st = t.status !== undefined && t.status !== null ? String(t.status) : null;
+                    if (stateIdStr && tasksByCat[stateIdStr]) {
+                        tasksByCat[stateIdStr].push(t);
+                    } else if (st && tasksByCat[st]) {
+                        tasksByCat[st].push(t);
+                    } else if (tasksByCat['done'] && (t.completed || st === 'done')) {
+                        tasksByCat['done'].push(t);
+                    } else if (tasksByCat['suggestion'] && (t.isPlanned || st === 'suggestion')) {
+                        tasksByCat['suggestion'].push(t);
+                    } else if (tasksByCat['in_progress'] && (st === 'in_progress' || !st)) {
+                        tasksByCat['in_progress'].push(t);
+                    } else {
+                        // Check if state name matches listTitle or status
+                        const matchedByName = customCats.find(c =>
+                            (t.listTitle && c.name.toLowerCase() === String(t.listTitle).toLowerCase()) ||
+                            (st && c.name.toLowerCase() === st.toLowerCase())
+                        );
+                        if (matchedByName && tasksByCat[String(matchedByName.id)]) {
+                            tasksByCat[String(matchedByName.id)].push(t);
                         } else {
-                            tasksByCat[String(customCats[0].id)].push(t);
+                            const fallbackCat = String((catConfig && catConfig.defaultId) || customCats[0].id);
+                            if (tasksByCat[fallbackCat]) {
+                                tasksByCat[fallbackCat].push(t);
+                            } else {
+                                tasksByCat[String(customCats[0].id)].push(t);
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
         }
+
+        const hasMultipleStates = !p.isUnassigned && customCats && customCats.length > 1;
 
         function renderColumnTask(t, currentCol) {
             const rawId = String(t.id).replace('task-', '');
             const escT = escapeHtml(t.title || 'Aufgabe');
             const escN = escapeHtml(t.notes || '');
-            const isDone = currentCol === 'done' || t.status === 'done' || !!t.completed;
+            const isDone = currentCol === 'erledigt' || currentCol === 'done' || t.status === 'done' || !!t.completed;
             const checkedAttr = isDone ? 'checked' : '';
             const textStyle = isDone ? 'text-decoration: line-through; opacity: 0.55;' : '';
 
@@ -543,19 +688,35 @@ function renderProjectsWidget(data, container) {
                 }
             }
 
+            let checkboxHtml = '';
             let catSelectHtml = '';
-            if (customCats && customCats.length > 1) {
+
+            if (hasMultipleStates) {
+                // Aufgaben mit mehreren Zuständen: KEINE Checkbox, sondern Dropdown-Menü
+                checkboxHtml = '';
                 const currentCatVal = String((t.stateId !== undefined && t.stateId !== null ? t.stateId : null) || currentCol || t.status || customCats[0].id);
                 catSelectHtml = `
-                            <select class="task-category-select" onclick="event.stopPropagation()" onchange="updateTaskStatus('${rawId}', this.value, event)" title="Zustand ändern" style="font-size: 0.68rem; padding: 2px 4px; border-radius: 6px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.85); cursor: pointer; outline: none; max-width: 110px;">
-                                ${customCats.map(c => `
-                                    <option value="${escapeHtml(String(c.id))}" ${String(c.id) === currentCatVal ? 'selected' : ''} style="background: #1e1e2e; color: #fff;">
-                                        ${escapeHtml(c.icon || '📌')} ${escapeHtml(c.name)}
-                                    </option>
-                                `).join('')}
-                            </select>
-                        `;
+                    <select class="task-category-select" onclick="event.stopPropagation()" onchange="onTaskStateSelectChange('${rawId}', this.value, event)" title="Zustand ändern" style="font-size: 0.72rem; padding: 2px 6px; border-radius: 6px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.18); color: rgba(255,255,255,0.92); cursor: pointer; outline: none; max-width: 140px;">
+                        ${customCats.map(c => `
+                            <option value="${escapeHtml(String(c.id))}" ${String(c.id) === currentCatVal ? 'selected' : ''} style="background: #1e1e2e; color: #fff;">
+                                ${escapeHtml(c.icon || '📌')} ${escapeHtml(c.name)}
+                            </option>
+                        `).join('')}
+                        <option value="archive" style="background: #1e1e2e; color: #fab387;">📦 Ins Archiv</option>
+                    </select>
+                `;
+            } else {
+                // Offene Aufgaben oder Projekt ohne mehrere Zustände: Checkbox vorhanden, kein Dropdown
+                checkboxHtml = `
+                    <input type="checkbox" class="task-checkbox" data-task-id="${rawId}" data-tasklist-id="Standard" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 2px;" onclick="event.stopPropagation()">
+                `;
             }
+
+            const archiveBtnHtml = `
+                <button type="button" class="task-archive-quick-btn" onclick="archiveSingleTask('${rawId}', event)" title="Ins Archiv verschieben" style="background: transparent; border: none; color: rgba(255,255,255,0.38); cursor: pointer; padding: 2px 4px; font-size: 0.85rem; border-radius: 4px; transition: color 0.2s;" onmouseover="this.style.color='#fab387'" onmouseout="this.style.color='rgba(255,255,255,0.38)'">
+                    📦
+                </button>
+            `;
 
             let taskMetaChipsHtml = '';
             if (t.locationObj) {
@@ -576,22 +737,23 @@ function renderProjectsWidget(data, container) {
             }
 
             const itemHtml = `
-                        <div class="project-task-item">
-                            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
-                                <div style="display: flex; align-items: flex-start; gap: 8px; min-width: 0; flex: 1;">
-                                    <input type="checkbox" class="task-checkbox" data-task-id="${rawId}" data-tasklist-id="Standard" onchange="completeTask(this)" ${checkedAttr} style="margin-top: 2px;" onclick="event.stopPropagation()">
-                                    <span style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; word-break: break-word; font-size: 0.82rem; line-height: 1.35; flex: 1; cursor: pointer; ${textStyle}">
-                                        ${escT}
-                                    </span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
-                                    ${catSelectHtml}
-                                    ${t.isStarred ? `<span class="pinned-task-indicator" title="Angepinnt">📌</span>` : ''}
-                                </div>
-                            </div>
-                            ${(dueBadge || taskMetaChipsHtml) ? `<div style="margin-left: 22px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 4px;">${dueBadge || ''}${taskMetaChipsHtml}</div>` : ''}
+                <div class="project-task-item">
+                    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
+                        <div style="display: flex; align-items: flex-start; gap: 8px; min-width: 0; flex: 1;">
+                            ${checkboxHtml}
+                            <span style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; word-break: break-word; font-size: 0.82rem; line-height: 1.35; flex: 1; cursor: pointer; ${textStyle}">
+                                ${escT}
+                            </span>
                         </div>
-                    `;
+                        <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                            ${catSelectHtml}
+                            ${t.isStarred ? `<span class="pinned-task-indicator" title="Angepinnt">📌</span>` : ''}
+                            ${archiveBtnHtml}
+                        </div>
+                    </div>
+                    ${(dueBadge || taskMetaChipsHtml) ? `<div style="margin-left: ${hasMultipleStates ? '4px' : '22px'}; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 4px;">${dueBadge || ''}${taskMetaChipsHtml}</div>` : ''}
+                </div>
+            `;
             const effectiveStatus = String((t.stateId !== undefined && t.stateId !== null ? t.stateId : null) || currentCol || t.status || 'in_progress');
             const extraData = `data-task-id="${rawId}" data-task-title="${escT.replace(/"/g, '&quot;')}" data-task-notes="${escN.replace(/"/g, '&quot;')}" data-task-due="${t.due || ''}" data-task-list="Standard" data-task-recurrence="${t.recurrence || 'none'}" data-task-project="${p.id}" data-task-project-id="${p.isUnassigned ? '' : p.id}" data-task-state-id="${t.stateId || ''}" data-task-status="${effectiveStatus}" data-task-completed="${isDone}" data-task-starred="${!!t.isStarred}" data-task-planned="${!!(t.isPlanned || t.status === 'suggestion')}" data-task-location-id="${t.locationId || (t.locationObj ? t.locationObj.id : '')}" data-task-location-obj="${escapeHtml(JSON.stringify(t.locationObj || null))}" data-task-persons="${escapeHtml(JSON.stringify(t.persons || []))}" data-task-media="${escapeHtml(JSON.stringify(t.media || []))}"`;
             return renderSwipeLinkWrapper(itemHtml, t.title, 'task', rawId, '', '', 'margin-bottom: 0;', extraData);
@@ -824,32 +986,28 @@ function renderProjectsWidget(data, container) {
                     `;
         });
 
-        // Render "Allgemein / Inbox"
-        if (unassignedTasks.length > 0 || unassignedNotes.length > 0) {
-            const sugCount = unassignedTasks.filter(t => !t.completed && (t.status === 'suggestion' || t.isPlanned)).length;
-            const inProgCount = unassignedTasks.filter(t => !t.completed && t.status !== 'suggestion' && !t.isPlanned && t.status !== 'done').length;
-            const doneCount = unassignedTasks.filter(t => t.completed || t.status === 'done').length;
+        // Render "Offene Aufgaben"
+        const uncompletedCount = unassignedTasks.filter(t => !t.completed && t.status !== 'done').length;
+        const doneCount = unassignedTasks.filter(t => t.completed || t.status === 'done').length;
 
-            html += `
-                        <div class="project-overview-card" onclick="openProjectDetailPage('unassigned')" style="border-style: dashed; border-color: rgba(255,255,255,0.15);">
-                            <div class="project-overview-header">
-                                <div class="project-overview-title" style="color: rgba(255,255,255,0.8);">
-                                    <span>📥</span>
-                                    <span>Allgemein / Inbox</span>
-                                </div>
-                            </div>
-                            <div style="font-size: 0.74rem; color: rgba(255,255,255,0.5);">Aufgaben & Notizen ohne Projekt</div>
-                            <div class="project-overview-badges">
-                                <span class="project-tag-badge suggestion">💡 ${sugCount} Vorschläge</span>
-                                <span class="project-tag-badge in_progress">⏳ ${inProgCount} in Arbeit</span>
-                                <span class="project-tag-badge done">✅ ${doneCount} fertig</span>
-                            </div>
-                            <div style="font-size: 0.75rem; color: var(--accent); display: flex; align-items: center; gap: 4px; font-weight: 600; margin-top: auto; padding-top: 4px;">
-                                Aufgaben ansehen ➔
+        html += `
+                    <div class="project-overview-card" onclick="openProjectDetailPage('unassigned')" style="border-style: dashed; border-color: rgba(255,255,255,0.22);">
+                        <div class="project-overview-header">
+                            <div class="project-overview-title" style="color: rgba(255,255,255,0.95); font-weight: 700;">
+                                <span>📋</span>
+                                <span>Offene Aufgaben</span>
                             </div>
                         </div>
-                    `;
-        }
+                        <div style="font-size: 0.74rem; color: rgba(255,255,255,0.5);">Aufgaben ohne Projektzuordnung</div>
+                        <div class="project-overview-badges">
+                            <span class="project-tag-badge in_progress">⏳ ${uncompletedCount} unerledigt</span>
+                            <span class="project-tag-badge done">✅ ${doneCount} erledigt</span>
+                        </div>
+                        <div style="font-size: 0.75rem; color: var(--accent); display: flex; align-items: center; gap: 4px; font-weight: 600; margin-top: auto; padding-top: 4px;">
+                            Aufgaben ansehen ➔
+                        </div>
+                    </div>
+                `;
 
         html += `</div>`;
     }
@@ -857,3 +1015,282 @@ function renderProjectsWidget(data, container) {
     html += `</div>`;
     container.innerHTML = html;
 }
+
+// --- DEDICATED FULL-PAGE PROJECTS ARCHIVE ---
+
+window.openProjectsArchive = async function (filter) {
+    window.isProjectArchiveActive = true;
+    if (filter !== undefined && filter !== null) {
+        window.projectArchiveFilter = String(filter);
+    } else if (window.activeProjectDetailId) {
+        window.projectArchiveFilter = String(window.activeProjectDetailId);
+    } else {
+        window.projectArchiveFilter = 'all';
+    }
+
+    if (typeof focusWidget === 'function') {
+        focusWidget('projects');
+    }
+    if (window.AppRouter && typeof window.AppRouter.updateUrl === 'function') {
+        window.AppRouter.updateUrl('/projekte/archiv');
+    }
+
+    updateProjectsHeader(null);
+    await refreshProjectsArchive();
+};
+
+window.closeProjectsArchive = async function (forceOverview = false) {
+    window.isProjectArchiveActive = false;
+    window.projectArchiveFilterOpen = false;
+    const addBtn = document.getElementById('header-project-add-btn');
+    if (addBtn) addBtn.style.display = 'inline-flex';
+    const returnTarget = (!forceOverview && window.projectArchiveFilter && window.projectArchiveFilter !== 'all')
+        ? window.projectArchiveFilter
+        : (window.activeProjectDetailId || null);
+
+    if (returnTarget) {
+        await openProjectDetailPage(returnTarget);
+    } else {
+        window.activeProjectDetailId = null;
+        updateProjectsHeader(null);
+        if (window.AppRouter && typeof window.AppRouter.updateUrl === 'function') {
+            window.AppRouter.updateUrl('/projekte');
+        }
+        await loadTopWidgets();
+    }
+};
+
+window.toggleProjectsArchiveFilter = function () {
+    window.projectArchiveFilterOpen = !window.projectArchiveFilterOpen;
+    const filterBtn = document.getElementById('header-project-filter-btn');
+    if (filterBtn) {
+        if (window.projectArchiveFilterOpen) filterBtn.classList.add('active');
+        else filterBtn.classList.remove('active');
+    }
+    const filterBar = document.getElementById('project-archive-filter-bar');
+    if (filterBar) {
+        filterBar.style.display = window.projectArchiveFilterOpen ? 'flex' : 'none';
+    }
+};
+
+window.changeProjectArchiveFilter = function (newFilter) {
+    window.projectArchiveFilter = String(newFilter || 'all');
+    updateProjectsHeader(null);
+    renderProjectsArchiveFullPage(window.lastProjectsData, window.lastProjectsContainer);
+};
+
+window.resetProjectArchiveFilter = function () {
+    window.projectArchiveFilter = 'all';
+    window.projectArchiveSearchQuery = '';
+    updateProjectsHeader(null);
+    renderProjectsArchiveFullPage(window.lastProjectsData, window.lastProjectsContainer);
+};
+
+window.changeProjectArchiveSort = function (order) {
+    window.projectArchiveSortOrder = order || 'desc';
+    renderProjectsArchiveTasksList();
+};
+
+window.handleProjectArchiveSearch = function (val) {
+    window.projectArchiveSearchQuery = String(val || '');
+    renderProjectsArchiveTasksList();
+};
+
+window.refreshProjectsArchive = async function () {
+    const initialContainer = document.getElementById('widget-projects') || window.lastProjectsContainer;
+    if (initialContainer && (!window.archivedTasksList || window.archivedTasksList.length === 0)) {
+        initialContainer.innerHTML = `
+            <div style="padding: 40px 20px; text-align: center; color: rgba(255,255,255,0.7); font-size: 0.85rem;">
+                <div style="margin-bottom: 10px; font-size: 1.6rem;">📦</div>
+                Lade archivierte Aufgaben...
+            </div>
+        `;
+    }
+
+    try {
+        const res = await callTool('hole_aufgaben', { zeigeGeloeschte: true });
+        window.archivedTasksList = (res && Array.isArray(res.tasks)) ? res.tasks : [];
+    } catch (e) {
+        console.error("Fehler beim Laden des Aufgaben-Archivs:", e);
+        window.archivedTasksList = [];
+    }
+
+    const currentContainer = document.getElementById('widget-projects') || window.lastProjectsContainer;
+    if (currentContainer) {
+        renderProjectsArchiveFullPage(window.lastProjectsData, currentContainer);
+    }
+};
+
+window.renderProjectsArchiveFullPage = function (data, container) {
+    if (!container) container = document.getElementById('widget-projects') || window.lastProjectsContainer;
+    if (!container) return;
+
+    window.lastProjectsContainer = container;
+    updateProjectsHeader(null);
+
+    const projects = (data && data.projects) || (window.lastProjectsData && window.lastProjectsData.projects) || [];
+    const currentFilter = window.projectArchiveFilter || 'all';
+    const allTasks = window.archivedTasksList || [];
+    const allCount = allTasks.length;
+    const unassignedCount = allTasks.filter(t => !t.projectId).length;
+    const isFilterOpen = Boolean(window.projectArchiveFilterOpen);
+    const hasActiveFilter = Boolean((currentFilter && currentFilter !== 'all') || window.projectArchiveSearchQuery);
+
+    let pillsHtml = `
+        <button type="button" onclick="changeProjectArchiveFilter('all')" class="locations-filter-pill ${currentFilter === 'all' ? 'active' : ''}">
+            <span>✨ Alle</span>
+            <span class="locations-filter-count">${allCount}</span>
+        </button>
+        <button type="button" onclick="changeProjectArchiveFilter('unassigned')" class="locations-filter-pill ${currentFilter === 'unassigned' ? 'active' : ''}">
+            <span>📋 Offene Aufgaben</span>
+            <span class="locations-filter-count">${unassignedCount}</span>
+        </button>
+    `;
+    projects.forEach(p => {
+        const count = allTasks.filter(t => String(t.projectId) === String(p.id)).length;
+        pillsHtml += `
+            <button type="button" onclick="changeProjectArchiveFilter('${p.id}')" class="locations-filter-pill ${String(currentFilter) === String(p.id) ? 'active' : ''}">
+                <span>📁 ${escapeHtml(p.name)}</span>
+                <span class="locations-filter-count">${count}</span>
+            </button>
+        `;
+    });
+
+    let html = `
+        <div class="projects-archive-fullpage" style="padding: 4px 0 20px 0; text-align: left; display: flex; flex-direction: column; gap: 12px;">
+            <!-- Filter Bar (toggled by header filter button) -->
+            <div class="locations-filter-bar" id="project-archive-filter-bar" style="display: ${isFilterOpen ? 'flex' : 'none'}; flex-direction: column; gap: 10px; margin-bottom: 2px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08); padding: 10px 12px; border-radius: 12px; width: 100%;">
+                <!-- Pills Row -->
+                <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; width: 100%; scrollbar-width: none;">
+                    ${pillsHtml}
+                </div>
+                <!-- Controls Row: Search, Sort, Reset -->
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; width: 100%;">
+                    <div style="display: flex; align-items: center; position: relative; flex: 1; min-width: 170px;">
+                        <input type="text" id="project-archive-search-input" value="${escapeHtml(window.projectArchiveSearchQuery || '')}" placeholder="Archiv durchsuchen..." oninput="handleProjectArchiveSearch(this.value)" class="media-filter-select" style="width: 100%; height: 32px; padding: 4px 10px 4px 28px; font-size: 0.8rem; border-radius: 8px; background: rgba(0,0,0,0.3); color: white; border: 1px solid rgba(255,255,255,0.12); outline: none;">
+                        <span style="position: absolute; left: 9px; font-size: 0.75rem; opacity: 0.5; pointer-events: none;">🔍</span>
+                    </div>
+                    <select class="media-filter-select" onchange="changeProjectArchiveSort(this.value)" style="height: 32px; font-size: 0.78rem;" title="Sortierreihenfolge">
+                        <option value="desc" ${window.projectArchiveSortOrder === 'desc' ? 'selected' : ''}>⬇️ Neueste oben</option>
+                        <option value="asc" ${window.projectArchiveSortOrder === 'asc' ? 'selected' : ''}>⬆️ Älteste oben</option>
+                    </select>
+                    ${hasActiveFilter ? `
+                        <button type="button" class="media-filter-reset-btn" onclick="resetProjectArchiveFilter()" title="Filter zurücksetzen" style="height: 32px; padding: 0 10px; font-size: 0.75rem; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: var(--accent); cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;">
+                            ✕ Filter zurücksetzen
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+
+            <!-- Dynamic Tasks Container -->
+            <div id="project-archive-tasks-container" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        </div>
+    `;
+
+    container.innerHTML = html;
+    renderProjectsArchiveTasksList();
+};
+
+window.renderProjectsArchiveTasksList = function () {
+    const listContainer = document.getElementById('project-archive-tasks-container');
+    if (!listContainer) return;
+
+    const allTasks = window.archivedTasksList || [];
+    const filter = window.projectArchiveFilter || 'all';
+    const query = (window.projectArchiveSearchQuery || '').trim().toLowerCase();
+
+    // 1. Filter by Project
+    let filtered = allTasks.filter(t => {
+        if (filter === 'unassigned') {
+            return !t.projectId;
+        }
+        if (filter !== 'all') {
+            return String(t.projectId) === String(filter);
+        }
+        return true;
+    });
+
+    // 2. Filter by Search Query
+    if (query) {
+        filtered = filtered.filter(t => {
+            const titelMatch = t.titel && t.titel.toLowerCase().includes(query);
+            const notizenMatch = t.notizen && t.notizen.toLowerCase().includes(query);
+            const projMatch = t.projektName && t.projektName.toLowerCase().includes(query);
+            const zustandMatch = t.zustandName && t.zustandName.toLowerCase().includes(query);
+            return titelMatch || notizenMatch || projMatch || zustandMatch;
+        });
+    }
+
+    // 3. Sort: newest (oben) to oldest (unten) or vice versa
+    filtered.sort((a, b) => {
+        const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+        const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+        return window.projectArchiveSortOrder === 'asc' ? (timeA - timeB) : (timeB - timeA);
+    });
+
+    if (filtered.length === 0) {
+        const filterName = getProjectArchiveFilterLabel(filter);
+        listContainer.innerHTML = `
+            <div style="padding: 35px 20px; text-align: center; color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.1); border-radius: 10px; font-size: 0.85rem; margin-top: 6px;">
+                <div style="font-size: 1.6rem; margin-bottom: 8px;">📦</div>
+                ${query ? 'Keine archivierten Aufgaben für diese Suche gefunden.' : `Keine archivierten Aufgaben in „${escapeHtml(filterName)}“ vorhanden.`}
+            </div>
+        `;
+        return;
+    }
+
+    let itemsHtml = `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 2px 4px; font-size: 0.75rem; color: rgba(255,255,255,0.5);">
+            <span>${filtered.length} ${filtered.length === 1 ? 'archivierte Aufgabe' : 'archivierte Aufgaben'}</span>
+            <span style="font-size: 0.7rem; opacity: 0.8;">Sortierung: Neueste oben</span>
+        </div>
+    `;
+
+    filtered.forEach(t => {
+        const dateObj = t.updatedAt ? new Date(t.updatedAt) : (t.createdAt ? new Date(t.createdAt) : null);
+        const dateFormatted = dateObj ? dateObj.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+        const projLabel = t.projektName ? `📁 ${escapeHtml(t.projektName)}` : '📋 Offene Aufgaben';
+        const stateLabel = t.zustandName ? `📌 ${escapeHtml(t.zustandName)}` : '';
+        const dueText = t.faellig ? `📅 Fällig: ${new Date(t.faellig).toLocaleDateString('de-DE')}` : '';
+
+        itemsHtml += `
+            <div class="archive-task-card" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; gap: 12px; transition: background 0.2s;">
+                <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 0.88rem; font-weight: 600; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(t.titel || 'Aufgabe')}</span>
+                    </div>
+                    ${t.notizen ? `<div style="font-size: 0.74rem; color: rgba(255,255,255,0.6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 480px;">${escapeHtml(t.notizen)}</div>` : ''}
+                    <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px;">
+                        <span style="color: var(--accent); background: rgba(137, 180, 250, 0.12); padding: 1px 6px; border-radius: 6px; border: 1px solid rgba(137, 180, 250, 0.25); font-weight: 500;">${projLabel}</span>
+                        ${stateLabel ? `<span style="background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);">${stateLabel}</span>` : ''}
+                        ${dueText ? `<span style="color: #f38ba8; background: rgba(243, 139, 168, 0.1); padding: 1px 6px; border-radius: 6px; border: 1px solid rgba(243, 139, 168, 0.2);">${dueText}</span>` : ''}
+                        ${dateFormatted ? `<span style="opacity: 0.7; margin-left: auto;">📦 ${dateFormatted}</span>` : ''}
+                    </div>
+                </div>
+                <button type="button" id="restore-archive-btn-${t.id}" onclick="restoreTaskFromArchive('${t.id}')" class="save" style="padding: 7px 12px; font-size: 0.75rem; border-radius: 8px; border: none; cursor: pointer; background: rgba(166, 227, 161, 0.2); color: #a6e3a1; border: 1px solid rgba(166, 227, 161, 0.4); font-weight: bold; flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;" title="Aufgabe aus dem Archiv wiederherstellen">
+                    <span>♻️</span> Wiederherstellen
+                </button>
+            </div>
+        `;
+    });
+
+    listContainer.innerHTML = itemsHtml;
+};
+
+window.restoreTaskFromArchive = async function (taskId) {
+    try {
+        const btn = document.getElementById(`restore-archive-btn-${taskId}`);
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Wird wiederhergestellt...';
+        }
+        await callTool('wiederherstellen_aufgabe', { taskId: String(taskId) });
+        await refreshProjectsArchive();
+        if (typeof loadTopWidgets === 'function') {
+            loadTopWidgets();
+        }
+    } catch (e) {
+        console.error("Fehler beim Wiederherstellen der archivierten Aufgabe:", e);
+        alert("Fehler beim Wiederherstellen: " + (e.message || e));
+    }
+};

@@ -139,7 +139,7 @@ export const tasksPlugin: Plugin = {
         const stateById = new Map<number, any>();
         for (const s of allStates) stateById.set(Number(s.id), s);
         const taskStateRows: any[] = await (prisma as any).$queryRawUnsafe(
-          `SELECT "id", "stateId" FROM "Task" WHERE "isDeleted" = false`
+          `SELECT "id", "stateId" FROM "Task"`
         ).catch(() => []);
         const taskStateMap = new Map<number, number | null>();
         for (const r of taskStateRows) {
@@ -168,6 +168,8 @@ export const tasksPlugin: Plugin = {
               inPlanung: t.isPlanned,
               isStarred: t.isStarred,
               status: t.status || (t.completed ? "done" : (t.isPlanned ? "suggestion" : "in_progress")),
+              createdAt: t.createdAt ? t.createdAt.toISOString() : null,
+              updatedAt: t.updatedAt ? t.updatedAt.toISOString() : null,
               location: t.location ? t.location.name : null,
               locationId: t.locationId || null,
               locationObj: t.location ? { id: t.location.id, name: t.location.name, address: t.location.formattedAddress || t.location.address || t.location.name } : null,

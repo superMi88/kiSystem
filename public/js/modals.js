@@ -2100,7 +2100,7 @@
             {
                 name: 'Projects',
                 icon: '📁',
-                title: 'Projekte & Notizen',
+                title: 'Projekte & Aufgaben',
                 description: 'Projektordner, Dokumente und Notizen verwalten',
                 writeLabel: 'Erstellen & ändern',
                 readLabel: 'Lesen & einsehen',
@@ -3704,10 +3704,12 @@
 
 
         window.deleteTask = async function(taskId) {
-            if (confirm("Möchtest du diese Aufgabe wirklich löschen?")) {
+            if (confirm("Möchtest du diese Aufgabe wirklich ins Archiv verschieben?")) {
                 await callTool('loesche_aufgabe', { taskId: String(taskId) });
+                if (typeof loadTopWidgets === 'function') loadTopWidgets();
             }
         };
+        window.archiveTask = window.deleteTask;
 
 
 
@@ -3736,6 +3738,10 @@
             projectNameInput.value = name;
             const starredInput = document.getElementById('project-is-starred-input');
             if (starredInput) starredInput.checked = !!isStarred;
+            const tplGroup = document.getElementById('project-template-group');
+            const tplInput = document.getElementById('project-template-input');
+            if (tplGroup) tplGroup.style.display = id ? 'none' : 'block';
+            if (tplInput && !id) tplInput.value = 'none';
             projectModalTitle.textContent = id ? 'Projekt bearbeiten' : 'Projekt erstellen';
             projectModal.style.display = 'block';
             document.body.classList.add('modal-active');
@@ -3754,6 +3760,7 @@
             const id = projectIdInput.value;
             const name = projectNameInput.value.trim();
             const isStarred = document.getElementById('project-is-starred-input')?.checked || false;
+            const tplVal = document.getElementById('project-template-input')?.value || 'none';
             if (!name) {
                 alert("Projektname ist erforderlich.");
                 return;
@@ -3761,7 +3768,24 @@
             if (id) {
                 await callTool('bearbeite_projekt', { id: parseInt(id), name: name, isStarred: isStarred });
             } else {
-                await callTool('erstelle_projekt', { name: name, isStarred: isStarred });
+                let zustaende = undefined;
+                if (tplVal === 'bewerbung' || name.toLowerCase().includes('bewerbung')) {
+                    zustaende = [
+                        { name: 'In Planung', icon: '📋', isDefault: true },
+                        { name: 'Beworben', icon: '📨', isDefault: false },
+                        { name: 'Angenommen', icon: '🎉', isDefault: false },
+                        { name: 'Abgelehnt', icon: '❌', isDefault: false }
+                    ];
+                } else if (tplVal === 'standard3') {
+                    zustaende = [
+                        { name: 'Vorschläge', icon: '💡', isDefault: false },
+                        { name: 'In Arbeit', icon: '⏳', isDefault: true },
+                        { name: 'Fertig', icon: '✅', isDefault: false }
+                    ];
+                }
+                const payload = { name: name, isStarred: isStarred };
+                if (zustaende) payload.zustaende = zustaende;
+                await callTool('erstelle_projekt', payload);
             }
             closeProjectModal();
         };
@@ -3979,8 +4003,14 @@
         window.restoreTaskFromTrash = async function(taskId) {
             try {
                 await callTool('wiederherstellen_aufgabe', { taskId: String(taskId) });
-                openTaskTrashModal();
-                loadTopWidgets();
+                if (window.isProjectArchiveActive && typeof refreshProjectsArchive === 'function') {
+                    await refreshProjectsArchive();
+                } else if (typeof openTaskTrashModal === 'function') {
+                    openTaskTrashModal();
+                }
+                if (typeof loadTopWidgets === 'function') {
+                    loadTopWidgets();
+                }
             } catch (e) {
                 console.error("Fehler beim Wiederherstellen der Aufgabe:", e);
             }

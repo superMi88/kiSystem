@@ -73,7 +73,7 @@
                     <path d="M6.38 18.7 4 21"></path>
                     <path d="M17.64 18.67 20 21"></path>
                 </svg>
-                Wecker & Timer
+                Wecker
                 <span id="drawer-timer-badge"
                     style="display: none; margin-left: auto; background: var(--accent); color: #11111b; font-size: 0.65rem; padding: 1px 6px; border-radius: 10px; font-weight: 800;"></span>
             </button>
@@ -99,7 +99,7 @@
                     <line x1="16" y1="17" x2="8" y2="17"></line>
                     <polyline points="10 9 9 9 8 9"></polyline>
                 </svg>
-                Projekte & Notizen
+                Projekte & Aufgaben
             </button>
             <button class="drawer-item" onclick="handleDrawerMemory()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -109,7 +109,7 @@
                     <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
                     <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                 </svg>
-                Personen & Gedächtnis
+                Personen
             </button>
             <button class="drawer-item" onclick="handleDrawerLocations()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -145,14 +145,6 @@
                     <polyline points="22,6 12,13 2,6"></polyline>
                 </svg>
                 Mails
-            </button>
-            <button class="drawer-item" onclick="openTaskTrashModal()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                </svg>
-                Papierkorb (Aufgaben)
             </button>
             <button class="drawer-item" onclick="handleDrawerSettings()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -295,7 +287,7 @@
             <div id="header-context-timer" class="header-context">
                 <div
                     style="font-size: 0.95rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 6px;">
-                    <span>⏰ Wecker & Timer</span>
+                    <span>⏰ Wecker</span>
                 </div>
                 <button type="button" onclick="openTimerModal()" class="header-action-btn primary"
                     title="Neuen Wecker / Timer erstellen">
@@ -314,6 +306,13 @@
                     <span id="header-projects-title">📁 Projekte</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                    <button type="button" id="header-project-filter-btn" onclick="toggleProjectsArchiveFilter()" class="header-action-btn"
+                        title="Filter umschalten" style="display: none;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                        </svg>
+                    </button>
                     <button type="button" id="header-project-settings-btn" class="header-action-btn"
                         title="Zustände & Kategorien anpassen" style="display: none;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -328,6 +327,15 @@
                             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M12 20h9"></path>
                             <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                        </svg>
+                    </button>
+                    <button type="button" id="header-project-archive-btn" onclick="openProjectsArchive()"
+                        class="header-action-btn" title="Aufgaben-Archiv" style="display: inline-flex; align-items: center; justify-content: center;">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                            <rect x="1" y="3" width="22" height="5"></rect>
+                            <line x1="10" y1="12" x2="14" y2="12"></line>
                         </svg>
                     </button>
                     <button type="button" id="header-project-add-btn" onclick="openProjectModal()"
@@ -1047,8 +1055,8 @@
                     style="flex: 1.1; min-width: 100px; padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; color: var(--accent); font-weight: bold;">🔗
                     Verlinken</button>
                 <button id="task-detail-delete-btn" class="nav-btn"
-                    style="flex: 1; min-width: 80px; padding: 10px; border-radius: 6px; border: 1px solid rgba(243,139,168,0.3); color: var(--off); cursor: pointer; font-weight: bold;">✖️
-                    Löschen</button>
+                    style="flex: 1; min-width: 80px; padding: 10px; border-radius: 6px; border: 1px solid rgba(243,139,168,0.3); color: #fab387; cursor: pointer; font-weight: bold;">📦
+                    Archivieren</button>
                 <button id="task-detail-edit-btn" class="save"
                     style="flex: 1.2; min-width: 110px; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: var(--accent); color: #11111b; font-weight: bold;">✏️
                     Bearbeiten</button>
@@ -1293,7 +1301,16 @@
             <div class="settings-group" style="text-align: left; margin-bottom: 15px;">
                 <label
                     style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Projektname</label>
-                <input type="text" id="project-name-input" placeholder="Z.B. Einkaufsliste..." style="width: 100%;">
+                <input type="text" id="project-name-input" placeholder="Z.B. Bewerbung..." style="width: 100%;">
+            </div>
+            <div id="project-template-group" class="settings-group" style="text-align: left; margin-bottom: 15px;">
+                <label
+                    style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 6px;">Zustands-Vorlage</label>
+                <select id="project-template-input" style="width: 100%; padding: 8px 10px; border-radius: 6px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: white; outline: none; font-size: 0.85rem;">
+                    <option value="none">Standard (Einfache Aufgabenliste)</option>
+                    <option value="bewerbung">💼 Bewerbung (In Planung, Beworben, Angenommen, Abgelehnt)</option>
+                    <option value="standard3">✨ 3 Phasen (Vorschläge, In Arbeit, Fertig)</option>
+                </select>
             </div>
             <div style="display: none; align-items: center; gap: 8px; margin-bottom: 20px;">
                 <input type="checkbox" id="project-is-starred-input"
@@ -1335,6 +1352,9 @@
                 <button type="button" onclick="addProjectSettingCategoryRow()" class="nav-btn" style="padding: 6px 12px; font-size: 0.78rem;">
                     ➕ Zustand hinzufügen
                 </button>
+                <button type="button" onclick="setProjectSettingsBewerbungTemplate()" class="nav-btn" style="padding: 6px 12px; font-size: 0.78rem; color: #a6e3a1; border-color: rgba(166, 227, 161, 0.3);">
+                    💼 Bewerbung-Vorlage
+                </button>
                 <button type="button" onclick="setProjectSettingsDefaultTemplate()" class="nav-btn" style="padding: 6px 12px; font-size: 0.78rem; color: #fab387; border-color: rgba(250, 179, 135, 0.3);">
                     ✨ 3-Spalten-Vorlage
                 </button>
@@ -1349,27 +1369,30 @@
             </div>
         </div>
 
-        <!-- Task Trash Modal (Papierkorb) -->
+        <!-- Task Archive Modal (Archiv) -->
         <div id="task-trash-modal" class="glass-card"
-            style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 22px; border-radius: 14px; z-index: 310; width: 90%; max-width: 520px; max-height: 85vh; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px); flex-direction: column;">
+            style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); border: 1px solid var(--accent); padding: 22px; border-radius: 14px; z-index: 310; width: 92%; max-width: 580px; max-height: 85vh; box-shadow: 0 0 35px rgba(0,0,0,0.9); backdrop-filter: blur(20px); flex-direction: column;">
             <div
                 style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 14px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 1.15rem;">🗑️</span>
-                    <h3
-                        style="color: var(--accent); margin: 0; font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.8px;">
-                        Papierkorb (Gelöschte Aufgaben)</h3>
+                    <span style="font-size: 1.25rem;">📦</span>
+                    <div>
+                        <h3
+                            style="color: var(--accent); margin: 0; font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.8px;">
+                            Aufgaben-Archiv</h3>
+                        <div style="font-size: 0.72rem; opacity: 0.6;">Alle archivierten Aufgaben (von neu nach alt sortiert)</div>
+                    </div>
                 </div>
-                <button onclick="closeTaskTrashModal()"
+                <button onclick="closeTaskArchiveModal()"
                     style="background: transparent; border: none; color: var(--off); cursor: pointer; font-size: 1.2rem; padding: 2px 6px;"
                     title="Schließen">✖</button>
             </div>
             <div id="task-trash-list"
-                style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; max-height: 50vh; padding-right: 4px; margin-bottom: 14px;">
-                <!-- Dynamisch geladen -->
+                style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; max-height: 52vh; padding-right: 4px; margin-bottom: 14px;">
+                <!-- Dynamisch geladen von neu (oben) zu alt (unten) -->
             </div>
             <div style="display: flex; gap: 10px;">
-                <button class="cancel" onclick="closeTaskTrashModal()"
+                <button class="cancel" onclick="closeTaskArchiveModal()"
                     style="flex: 1; padding: 10px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.05); color: white;">Schließen</button>
             </div>
         </div>
@@ -3293,22 +3316,22 @@
     <!-- Old Floating Mobile Plugins Bar has been merged inside input-area -->
 
     <!-- Modular Frontend Application Scripts -->
-    <script src="js/core.js"></script>
-    <script src="js/selection.js"></script>
-    <script src="js/modals.js"></script>
-    <script src="js/chat.js"></script>
-    <script src="js/settings.js"></script>
-    <script src="js/history.js"></script>
-    <script src="js/calendar.js"></script>
-    <script src="js/dashboard.js"></script>
-    <script src="js/briefing.js"></script>
-    <script src="js/projects.js"></script>
-    <script src="js/timer.js"></script>
-    <script src="js/mail.js"></script>
-    <script src="js/locations.js"></script>
-    <script src="js/media.js"></script>
-    <script src="js/router.js"></script>
-    <script src="js/app.js"></script>
+    <script src="js/core.js?v=20261111_10"></script>
+    <script src="js/selection.js?v=20261111_10"></script>
+    <script src="js/modals.js?v=20261111_10"></script>
+    <script src="js/chat.js?v=20261111_10"></script>
+    <script src="js/settings.js?v=20261111_10"></script>
+    <script src="js/history.js?v=20261111_10"></script>
+    <script src="js/calendar.js?v=20261111_10"></script>
+    <script src="js/dashboard.js?v=20261111_10"></script>
+    <script src="js/briefing.js?v=20261111_10"></script>
+    <script src="js/projects.js?v=20261111_10"></script>
+    <script src="js/timer.js?v=20261111_10"></script>
+    <script src="js/mail.js?v=20261111_10"></script>
+    <script src="js/locations.js?v=20261111_10"></script>
+    <script src="js/media.js?v=20261111_10"></script>
+    <script src="js/router.js?v=20261111_10"></script>
+    <script src="js/app.js?v=20261111_10"></script>
 </body>
 
 </html>
